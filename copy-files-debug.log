@@ -1,46 +1,75 @@
-[00:27:11.129] === Sync Log Started: 2025-12-25T00:27:11-05:00 ===
-[00:27:11.129] Source: /Volumes/photo/lr-exports/shared/reorganized/2025/2025-01/
-[00:27:11.129] Destination: ./test_files
-[00:27:11.129] Workers: 4, Adaptive: true, Cache: true
-[00:27:11.129] 
-[00:27:11.204] Source cache validation: Cache valid: checked 10 sample files, all match
-[00:27:11.204] ✓ Using cached source scan (184 items, scanned 23m13s ago)
-[00:27:11.205] Destination cache validation: Cache valid: checked 20 sample files, all match
-[00:27:11.205] ✓ Using cached destination scan (184 items, scanned 12m48s ago)
-[00:27:11.205] Comparing files to determine sync plan (184 files to compare)...
-[00:27:11.205] Sample source paths:
-[00:27:11.205]   Source: 2025-01-25.0A0A0995.jpg
-[00:27:11.205]   Source: 2025-01-25.0A0A1009.jpg
-[00:27:11.205]   Source: 2025-01-11.0A0A0581.jpg
-[00:27:11.205]   Source: 2025-01-14.IMG_2540.mov
-[00:27:11.205]   Source: 2025-01-20.IMG_7491 (1).mov
-[00:27:11.205] Sample destination paths:
-[00:27:11.205]   Dest: 2025-01-11.0A0A0104.jpg
-[00:27:11.205]   Dest: 2025-01-15.IMG_7473.jpg
-[00:27:11.205]   Dest: 2025-01-20.IMG_7482 (1).jpg
-[00:27:11.205]   Dest: 2025-01-20.IMG_7497.jpg
-[00:27:11.205]   Dest: 2025-01-20.IMG_7510.jpg
-[00:27:11.205]   ✓ Already synced: 2025-01-21.IMG_0183 (1).jpg (size=720733, modtime=2025-04-19T15:53:36.7287785-04:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-22.IMG_7547.jpg (size=909695, modtime=2025-04-19T15:54:08.121567-04:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-25.IMG_7552.jpg (size=915174, modtime=2025-04-19T15:54:28.4377991-04:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-11.0A0A0016.jpg (size=838157, modtime=2025-01-19T10:20:37.8199396-05:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-21.IMG_0204 (1).jpg (size=542649, modtime=2025-04-19T15:53:46.3607383-04:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-22.IMG_0231 (1).jpg (size=647522, modtime=2025-04-19T15:53:58.8755903-04:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-11.0A0A0104.jpg (size=952195, modtime=2025-01-19T10:20:46.8000934-05:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-11.IMG_7449.jpg (size=860327, modtime=2025-01-19T10:20:24.122422-05:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-16.IMG_0154.jpg (size=364685, modtime=2025-04-19T15:51:01.0517146-04:00)
-[00:27:11.205]   ✓ Already synced: 2025-01-18.IMG_7479.jpg (size=728988, modtime=2025-01-19T10:21:54.2952165-05:00)
-[00:27:11.205] Compared 100 / 184 files...
-[00:27:11.205] Found 0 files to sync (0 B total)
-[00:27:11.205] 184 files already up-to-date
-[00:27:11.205] Comparison summary: 184 source files, 184 dest files, 0 need sync, 184 already synced
-[00:27:11.205] Analysis complete!
-[00:27:11.205] Starting sync phase (adaptive mode)...
-[00:27:11.205] Files to sync: 0
-[00:27:11.205] Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency
-[00:27:11.206] Updating destination cache incrementally (starting with 184 cached files)...
-[00:27:11.206] Cache update: processed 0 files, 0 complete, 0 skipped, total cache size: 184 files
-[00:27:11.206] ✓ Updated destination cache for next run
-[00:27:11.206] ✓ Updated destination cache for next run
-[00:27:11.206] 
-=== Sync Log Ended: 2025-12-25T00:27:11-05:00 ===
+[01:25:48.916] === Sync Log Started: 2025-12-25T01:25:48-05:00 ===
+[01:25:48.916] Source: /Volumes/photo/lr-exports/shared/reorganized/2025/2025-01/
+[01:25:48.916] Destination: ./test_files
+[01:25:48.916] Workers: 4, Adaptive: true, Cache: true
+[01:25:48.916] 
+[01:25:48.916] Source cache validation: Cache valid: checked 10 sample files, all match
+[01:25:48.916] ✓ Using cached source scan (184 items, scanned 24s ago)
+[01:25:48.916] Destination cache validation: Cache valid: checked 20 sample files, all match
+[01:25:48.916] ✓ Using cached destination scan (96 items, scanned 6s ago)
+[01:25:48.916] Comparing files to determine sync plan (184 files to compare)...
+[01:25:48.916] Sample source paths:
+[01:25:48.916]   Source: 2025-01-22.IMG_7545.jpg
+[01:25:48.916]   Source: 2025-01-28.0A0A2337.jpg
+[01:25:48.916]   Source: 2025-01-07.IMG_7446.mov
+[01:25:48.916]   Source: 2025-01-11.IMG_7449.jpg
+[01:25:48.916]   Source: 2025-01-20.IMG_7514.jpg
+[01:25:48.916] Sample destination paths:
+[01:25:48.916]   Dest: 2025-01-14.IMG_9692.mov
+[01:25:48.916]   Dest: 2025-01-21.IMG_0182 (1).jpg
+[01:25:48.916]   Dest: 2025-01-25.0A0A0832.jpg
+[01:25:48.916]   Dest: 2025-01-06.IMG_7442 (1).jpg
+[01:25:48.916]   Dest: 2025-01-11.IMG_0115.jpg
+[01:25:48.916]   ✓ Already synced: 2025-01-11.0A0A0083.jpg (size=700592, modtime=2025-01-19T10:20:41.3800006-05:00)
+[01:25:48.916]   → Need sync: 2025-01-11.0A0A0636.jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-11.IMG_0116.jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-18.IMG_7479 (1).jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-20.IMG_7482 (1).jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-20.IMG_7507.jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-24.IMG_0263.jpg (destination missing)
+[01:25:48.916]   ✓ Already synced: 2025-01-24.IMG_0264.jpg (size=561050, modtime=2025-04-19T15:54:11.7596782-04:00)
+[01:25:48.916]   → Need sync: 2025-01-11.0A0A9814.jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-20.IMG_7499.jpg (destination missing)
+[01:25:48.916]   ✓ Already synced: 2025-01-20.IMG_7505.jpg (size=820296, modtime=2025-04-19T15:53:11.1940857-04:00)
+[01:25:48.916]   → Need sync: 2025-01-21.IMG_0183 (1).jpg (destination missing)
+[01:25:48.916]   → Need sync: 2025-01-22.IMG_7545.jpg (destination missing)
+[01:25:48.916]   ✓ Already synced: 2025-01-07.IMG_7446.mov (size=98441908, modtime=2025-01-18T15:22:21.8722811-05:00)
+[01:25:48.916]   ✓ Already synced: 2025-01-08.IMG_7448 (1).jpg (size=656042, modtime=2025-04-19T15:50:44.6714162-04:00)
+[01:25:48.916]   ✓ Already synced: 2025-01-06.IMG_7442.jpg (size=832990, modtime=2025-01-19T10:20:21.5814048-05:00)
+[01:25:48.916]   ✓ Already synced: 2025-01-20.IMG_0174 (1).jpg (size=977844, modtime=2025-04-19T15:52:50.3837065-04:00)
+[01:25:48.916]   ✓ Already synced: 2025-01-20.IMG_7504.jpg (size=787090, modtime=2025-04-19T15:52:46.2236307-04:00)
+[01:25:48.916]   ✓ Already synced: 2025-01-22.IMG_0227 (1).jpg (size=469150, modtime=2025-04-19T15:53:51.9748286-04:00)
+[01:25:48.916]   ✓ Already synced: 2025-01-20.IMG_7506.jpg (size=426187, modtime=2025-04-19T15:53:09.2440501-04:00)
+[01:25:48.916] Compared 100 / 184 files...
+[01:25:48.917] Found 88 files to sync (372.8 MB total)
+[01:25:48.917] 96 files already up-to-date
+[01:25:48.917] Comparison summary: 184 source files, 96 dest files, 88 need sync, 96 already synced
+[01:25:48.917] Analysis complete!
+[01:25:48.917] Starting sync phase (adaptive mode)...
+[01:25:48.917] Files to sync: 88
+[01:25:48.917] Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency
+[01:25:49.078]   ✓ Copied: 2025-01-11.0A0A0636.jpg (404.8 KB)
+[01:25:49.232]   ✓ Copied: 2025-01-11.IMG_0116.jpg (538.6 KB)
+[01:25:49.466]   ✓ Copied: 2025-01-18.IMG_7479 (1).jpg (740.1 KB)
+[01:25:49.636]   ✓ Copied: 2025-01-20.IMG_7482 (1).jpg (693.8 KB)
+[01:25:49.752]   ✓ Copied: 2025-01-20.IMG_7507.jpg (428.2 KB)
+[01:25:49.908]   ✓ Copied: 2025-01-24.IMG_0263.jpg (991.4 KB)
+[01:25:49.917] Adaptive: Baseline established after 6 files, adding worker (1 -> 2)
+[01:25:50.085]   ✓ Copied: 2025-01-11.0A0A9814.jpg (559.4 KB)
+[01:25:50.100]   ✓ Copied: 2025-01-20.IMG_7499.jpg (812.3 KB)
+[01:25:50.292]   ✓ Copied: 2025-01-21.IMG_0183 (1).jpg (703.8 KB)
+[01:25:50.301]   ✓ Copied: 2025-01-22.IMG_7545.jpg (822.7 KB)
+[01:25:50.917] Adaptive: Evaluated 2 workers over 10 files in 1.0s - per-worker: 3.11 MB/s (prev: 0.00 MB/s)
+[01:25:50.917] Adaptive: First measurement complete, adding worker (2 -> 3)
+[01:25:55.917] Adaptive: Evaluated 3 workers over 15 files in 5.0s - per-worker: 2.88 MB/s (prev: 3.11 MB/s)
+[01:25:55.917] Adaptive: ↓ Per-worker speed decreased (-7.5%), not adding workers - will re-evaluate at 3 workers
+[01:26:03.917] Adaptive: Evaluated 3 workers over 23 files in 8.0s - per-worker: 3.79 MB/s (prev: 2.88 MB/s)
+[01:26:03.917] Adaptive: ↑ Per-worker speed improved (+31.9%), adding worker (3 -> 4)
+[01:26:07.917] Adaptive: Evaluated 4 workers over 21 files in 4.0s - per-worker: 4.90 MB/s (prev: 3.79 MB/s)
+[01:26:07.917] Adaptive: ↑ Per-worker speed improved (+29.1%), adding worker (4 -> 5)
+[01:26:13.815] Updating destination cache incrementally (starting with 96 cached files)...
+[01:26:13.816] Cache update: processed 88 files, 88 complete, 0 skipped, total cache size: 184 files
+[01:26:13.816] ✓ Updated destination cache for next run
+[01:26:13.816] ✓ Updated destination cache for next run
+[01:26:13.816] 
+=== Sync Log Ended: 2025-12-25T01:26:13-05:00 ===
