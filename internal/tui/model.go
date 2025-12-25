@@ -116,15 +116,11 @@ func NewModel(cfg *config.Config) Model {
 	}
 }
 
-// Init initializes the model
+// Init initializes the model and returns initial commands
 func (m Model) Init() tea.Cmd {
-	if m.needsInput {
-		return textinput.Blink
-	}
-	// If not in input mode, trigger engine initialization
-	return func() tea.Msg {
-		return InitializeEngineMsg{}
-	}
+	// Always start with blink for text inputs
+	// Update() will handle initialization logic based on state
+	return textinput.Blink
 }
 
 
