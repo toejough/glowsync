@@ -1,0 +1,54 @@
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - unconvert
+    - unparam
+    - gocritic
+    - gocyclo
+    - revive
+    - gosec
+    - bodyclose
+    - gocognit
+    - nestif
+    - prealloc
+    - predeclared
+    - whitespace
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  gocognit:
+    min-complexity: 20
+  nestif:
+    min-complexity: 5
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: package-comments
+        disabled: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
