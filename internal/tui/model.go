@@ -69,14 +69,10 @@ func NewModel(cfg *config.Config) Model {
 	sourceInput := textinput.New()
 	sourceInput.Placeholder = "/path/to/source"
 	sourceInput.Focus()
-	sourceInput.CharLimit = 256
-	sourceInput.Width = 60
 	sourceInput.Prompt = "▶ "
 
 	destInput := textinput.New()
 	destInput.Placeholder = "/path/to/destination"
-	destInput.CharLimit = 256
-	destInput.Width = 60
 	destInput.Prompt = "  "
 
 	s := spinner.New()
@@ -85,12 +81,10 @@ func NewModel(cfg *config.Config) Model {
 
 	overallProg := progress.New(
 		progress.WithDefaultGradient(),
-		progress.WithWidth(60),
 	)
 
 	fileProg := progress.New(
 		progress.WithDefaultGradient(),
-		progress.WithWidth(60),
 	)
 
 	// Determine initial state based on whether we need input
@@ -170,8 +164,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.overallProgress.Width = minInt(msg.Width-20, 80)
-		m.fileProgress.Width = minInt(msg.Width-20, 80)
+		// Set progress bar widths to use most of available width (minus padding and borders)
+		// Leave some margin for box borders and padding
+		progressWidth := msg.Width - 10
+		if progressWidth < 20 {
+			progressWidth = 20
+		}
+		// Cap at a reasonable maximum for readability
+		if progressWidth > 100 {
+			progressWidth = 100
+		}
+		m.overallProgress.Width = progressWidth
+		m.fileProgress.Width = progressWidth
 		return m, nil
 
 	case tickMsg:
@@ -241,6 +245,18 @@ func (m Model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		// Set input widths to use most of the available width (minus padding and borders)
+		inputWidth := msg.Width - 10
+		if inputWidth < 20 {
+			inputWidth = 20
+		}
+		m.sourceInput.Width = inputWidth
+		m.destInput.Width = inputWidth
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":

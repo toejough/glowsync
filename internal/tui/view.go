@@ -463,13 +463,14 @@ func (m Model) renderSyncingView() string {
 			startIdx = len(m.status.Errors) - maxErrors
 		}
 
+		maxWidth := m.getMaxPathWidth()
 		for i := startIdx; i < len(m.status.Errors); i++ {
 			fileErr := m.status.Errors[i]
-			b.WriteString(fmt.Sprintf("  ✗ %s\n", fileErr.FilePath))
+			b.WriteString(fmt.Sprintf("  ✗ %s\n", m.truncatePath(fileErr.FilePath, maxWidth)))
 			// Truncate error message if too long
 			errMsg := fileErr.Error.Error()
-			if len(errMsg) > 60 {
-				errMsg = errMsg[:57] + "..."
+			if len(errMsg) > maxWidth {
+				errMsg = errMsg[:maxWidth-3] + "..."
 			}
 			b.WriteString(fmt.Sprintf("    %s\n", errMsg))
 		}
@@ -580,13 +581,9 @@ func (m Model) renderCompleteView() string {
 			b.WriteString("\n")
 			b.WriteString(labelStyle.Render("Recently Completed:"))
 			b.WriteString("\n")
+			maxWidth := m.getMaxPathWidth()
 			for _, file := range m.status.RecentlyCompleted {
-				// Truncate long paths
-				displayPath := file
-				if len(displayPath) > 60 {
-					displayPath = "..." + displayPath[len(displayPath)-57:]
-				}
-				b.WriteString(fmt.Sprintf("  ✓ %s\n", displayPath))
+				b.WriteString(fmt.Sprintf("  ✓ %s\n", m.truncatePath(file, maxWidth)))
 			}
 		}
 
@@ -723,12 +720,9 @@ func (m Model) renderCancellingView() string {
 			b.WriteString("\n")
 			b.WriteString(labelStyle.Render("Finishing:"))
 			b.WriteString("\n")
+			maxWidth := m.getMaxPathWidth()
 			for _, file := range m.status.CurrentFiles {
-				displayPath := file
-				if len(displayPath) > 60 {
-					displayPath = "..." + displayPath[len(displayPath)-57:]
-				}
-				b.WriteString(fmt.Sprintf("  ⏳ %s\n", displayPath))
+				b.WriteString(fmt.Sprintf("  ⏳ %s\n", m.truncatePath(file, maxWidth)))
 			}
 
 			b.WriteString("\n")
@@ -826,13 +820,9 @@ func (m Model) renderCancelledView() string {
 				b.WriteString("\n")
 				b.WriteString(labelStyle.Render("Recently Completed:"))
 				b.WriteString("\n")
+				maxWidth := m.getMaxPathWidth()
 				for _, file := range m.status.RecentlyCompleted {
-					// Truncate long paths
-					displayPath := file
-					if len(displayPath) > 60 {
-						displayPath = "..." + displayPath[len(displayPath)-57:]
-					}
-					b.WriteString(fmt.Sprintf("  ✓ %s\n", displayPath))
+					b.WriteString(fmt.Sprintf("  ✓ %s\n", m.truncatePath(file, maxWidth)))
 				}
 			}
 		} else {
@@ -1085,4 +1075,26 @@ func getBaseName(path string) string {
 		return path
 	}
 	return path[idx+1:]
+}
+
+// truncatePath truncates a path to fit within the given width
+func (m Model) truncatePath(path string, maxWidth int) string {
+	if len(path) <= maxWidth {
+		return path
+	}
+	// Show the end of the path (more useful for file paths)
+	return "..." + path[len(path)-(maxWidth-3):]
+}
+
+// getMaxPathWidth returns the maximum width for displaying paths based on terminal width
+func (m Model) getMaxPathWidth() int {
+	// Use terminal width minus some margin for borders, padding, and prefixes
+	maxWidth := m.width - 20
+	if maxWidth < 30 {
+		maxWidth = 30 // Minimum reasonable width
+	}
+	if maxWidth > 80 {
+		maxWidth = 80 // Cap at reasonable maximum for readability
+	}
+	return maxWidth
 }
