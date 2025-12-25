@@ -83,9 +83,8 @@ func (m Model) View() string {
 }
 
 func (m Model) renderInputView() string {
-	hintStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		Italic(true)
+	completionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")) // Brighter gray for visibility
 
 	content := titleStyle.Render("🚀 File Sync Tool") + "\n\n" +
 		subtitleStyle.Render("Configure your sync operation") + "\n\n" +
@@ -94,7 +93,7 @@ func (m Model) renderInputView() string {
 
 	// Show completion list for source
 	if m.focusIndex == 0 && m.showCompletions && len(m.completions) > 0 {
-		content += formatCompletionList(m.completions, m.completionIndex, hintStyle) + "\n"
+		content += formatCompletionList(m.completions, m.completionIndex, completionStyle) + "\n"
 	}
 
 	content += "\n" +
@@ -103,7 +102,7 @@ func (m Model) renderInputView() string {
 
 	// Show completion list for dest
 	if m.focusIndex == 1 && m.showCompletions && len(m.completions) > 0 {
-		content += formatCompletionList(m.completions, m.completionIndex, hintStyle) + "\n"
+		content += formatCompletionList(m.completions, m.completionIndex, completionStyle) + "\n"
 	}
 
 	content += "\n" +
@@ -1069,12 +1068,25 @@ func formatCompletionList(completions []string, currentIndex int, style lipgloss
 
 // getBaseName returns the base name of a path (helper to avoid importing filepath in view)
 func getBaseName(path string) string {
+	// Remove trailing slash if present
+	trimmed := strings.TrimSuffix(path, "/")
+
 	// Simple basename extraction
-	idx := strings.LastIndex(path, "/")
+	idx := strings.LastIndex(trimmed, "/")
 	if idx == -1 {
+		// No slash found - return the whole path (with trailing slash if it was a dir)
+		if strings.HasSuffix(path, "/") {
+			return trimmed + "/"
+		}
 		return path
 	}
-	return path[idx+1:]
+
+	// Return basename with trailing slash if it was a directory
+	base := trimmed[idx+1:]
+	if strings.HasSuffix(path, "/") {
+		return base + "/"
+	}
+	return base
 }
 
 // truncatePath truncates a path to fit within the given width
