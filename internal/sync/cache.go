@@ -159,6 +159,13 @@ func IsCacheValid(cache *ScanCache, dirPath string, isDestination bool, validati
 	}
 	checked := 0
 
+	// If cache has files, we must be able to verify at least some of them
+	// Otherwise the cache is invalid (e.g., files were deleted)
+	expectedToCheck := len(cache.Files)
+	if expectedToCheck > sampleSize {
+		expectedToCheck = sampleSize
+	}
+
 	for relPath, cachedInfo := range cache.Files {
 		if checked >= sampleSize {
 			break
@@ -186,6 +193,12 @@ func IsCacheValid(cache *ScanCache, dirPath string, isDestination bool, validati
 		}
 
 		checked++
+	}
+
+	// If cache claimed to have files but we couldn't verify any, it's invalid
+	if len(cache.Files) > 0 && checked == 0 {
+		log(fmt.Sprintf("Cache invalid: expected to check %d files but verified 0", expectedToCheck))
+		return false
 	}
 
 	log(fmt.Sprintf("Cache valid: checked %d sample files, all match", checked))

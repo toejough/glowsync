@@ -159,3 +159,154 @@ MIT
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## Architecture (C4 Diagram)
+
+### System Context Diagram (Level 1)
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│                            Copy-Files System                            │
+│                                                                         │
+│  A fast file synchronization CLI tool with a rich Terminal UI that     │
+│  copies files from source to destination, tracking progress and        │
+│  providing real-time statistics.                                       │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ▲
+                                    │
+                                    │ Uses
+                                    │
+                        ┌───────────┴───────────┐
+                        │                       │
+                        │        User           │
+                        │                       │
+                        │  Runs the CLI tool    │
+                        │  to sync files        │
+                        │                       │
+                        └───────────────────────┘
+```
+
+### Container Diagram (Level 2)
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Copy-Files Application                          │
+│                                                                         │
+│  ┌─────────────────┐         ┌─────────────────┐                      │
+│  │                 │         │                 │                      │
+│  │   CLI Entry     │────────▶│   Config        │                      │
+│  │   (main.go)     │ Parses  │   Parser        │                      │
+│  │                 │  flags  │                 │                      │
+│  └────────┬────────┘         └─────────────────┘                      │
+│           │                                                             │
+│           │ Creates                                                     │
+│           ▼                                                             │
+│  ┌─────────────────┐         ┌─────────────────┐                      │
+│  │                 │         │                 │                      │
+│  │   TUI Layer     │────────▶│  Sync Engine    │                      │
+│  │   (Bubbletea)   │ Controls│  (sync.Engine)  │                      │
+│  │                 │         │                 │                      │
+│  └─────────────────┘         └────────┬────────┘                      │
+│           │                           │                                │
+│           │ Displays                  │ Uses                           │
+│           │ Progress                  │                                │
+│           │                           ▼                                │
+│           │                  ┌─────────────────┐                      │
+│           │                  │                 │                      │
+│           └─────────────────▶│  File Ops       │                      │
+│                              │  (fileops pkg)  │                      │
+│                              │                 │                      │
+│                              └────────┬────────┘                      │
+│                                       │                                │
+└───────────────────────────────────────┼────────────────────────────────┘
+                                        │
+                                        │ Reads/Writes
+                                        ▼
+                              ┌─────────────────┐
+                              │                 │
+                              │  File System    │
+                              │  (Source/Dest)  │
+                              │                 │
+                              └─────────────────┘
+```
+
+### Component Diagram (Level 3)
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            Sync Engine                                  │
+│                                                                         │
+│  ┌─────────────────┐         ┌─────────────────┐                      │
+│  │                 │         │                 │                      │
+│  │   Analysis      │────────▶│   File Cache    │                      │
+│  │   Phase         │ Stores  │   (cache.go)    │                      │
+│  │                 │  scans  │                 │                      │
+│  └────────┬────────┘         └─────────────────┘                      │
+│           │                                                             │
+│           │ Identifies                                                  │
+│           │ changes                                                     │
+│           ▼                                                             │
+│  ┌─────────────────┐         ┌─────────────────┐                      │
+│  │                 │         │                 │                      │
+│  │   Deletion      │         │   Worker Pool   │                      │
+│  │   Phase         │         │   (Fixed/       │                      │
+│  │                 │         │   Adaptive)     │                      │
+│  └────────┬────────┘         └────────┬────────┘                      │
+│           │                           ▲                                │
+│           │ Removes                   │                                │
+│           │ orphaned                  │ Coordinates                    │
+│           │ files                     │                                │
+│           ▼                           │                                │
+│  ┌─────────────────┐                 │                                │
+│  │                 │                 │                                │
+│  │   Sync Phase    │─────────────────┘                                │
+│  │                 │  Uses workers                                     │
+│  │                 │                                                   │
+│  └────────┬────────┘                                                   │
+│           │                                                             │
+│           │ Updates                                                     │
+│           ▼                                                             │
+│  ┌─────────────────┐                                                   │
+│  │                 │                                                   │
+│  │   Status        │◀───────────────────────────────────────┐         │
+│  │   Tracker       │  Callbacks                             │         │
+│  │                 │                                         │         │
+│  └─────────────────┘                                         │         │
+│                                                               │         │
+└───────────────────────────────────────────────────────────────┼─────────┘
+                                                                │
+                                                                │
+┌───────────────────────────────────────────────────────────────┼─────────┐
+│                              TUI Layer                        │         │
+│                                                               │         │
+│  ┌─────────────────┐         ┌─────────────────┐            │         │
+│  │                 │         │                 │            │         │
+│  │   Input Model   │────────▶│   Main Model    │────────────┘         │
+│  │   (Interactive) │ Provides│   (Bubbletea)   │  Receives            │
+│  │                 │  paths  │                 │  updates             │
+│  └─────────────────┘         └────────┬────────┘                      │
+│                                       │                                │
+│                                       │ Renders                        │
+│                                       ▼                                │
+│                              ┌─────────────────┐                      │
+│                              │                 │                      │
+│                              │   View Layer    │                      │
+│                              │   (Progress     │                      │
+│                              │    Bars, Stats) │                      │
+│                              │                 │                      │
+│                              └─────────────────┘                      │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+- **CLI Entry (cmd/copy-files/main.go)**: Application entry point, orchestrates initialization
+- **Config Parser (internal/config)**: Parses command-line flags and configuration
+- **TUI Layer (internal/tui)**: Bubbletea-based terminal UI with progress tracking
+- **Sync Engine (internal/sync)**: Core synchronization logic with three phases:
+  - Analysis: Scans source/destination and identifies differences
+  - Deletion: Removes files from destination not in source
+  - Sync: Copies new/modified files using worker pool
+- **File Operations (pkg/fileops)**: Low-level file I/O, copying, and scanning utilities
+- **Worker Pool**: Concurrent file copying with fixed or adaptive scaling
+- **Status Tracker**: Real-time progress tracking with callbacks to TUI
+

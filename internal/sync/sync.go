@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -523,7 +525,7 @@ func (e *Engine) Analyze() error {
 	e.logAnalysis(fmt.Sprintf("Comparison summary: %d source files, %d dest files, %d need sync, %d already synced",
 		len(sourceFiles), len(destFiles), totalFiles, alreadySynced))
 
-	// Find files to delete (exist in dest but not in source)
+	// Find files and directories to delete (exist in dest but not in source)
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = "deleting"
 	e.Status.ScannedFiles = 0
@@ -534,30 +536,33 @@ func (e *Engine) Analyze() error {
 	deleteErrorCount := 0
 	checkedCount := 0
 	filesToDelete := 0
+	dirsToDelete := 0
 
-	// First pass: count files to delete
+	// First pass: count files and directories to delete
 	for relPath, dstFile := range destFiles {
-		if dstFile.IsDir {
-			continue
-		}
 		if _, exists := sourceFiles[relPath]; !exists {
-			filesToDelete++
+			if dstFile.IsDir {
+				dirsToDelete++
+			} else {
+				filesToDelete++
+			}
 		}
 	}
 
-	if filesToDelete > 0 {
-		e.logAnalysis(fmt.Sprintf("Found %d files in destination that don't exist in source", filesToDelete))
+	if filesToDelete > 0 || dirsToDelete > 0 {
+		e.logAnalysis(fmt.Sprintf("Found %d files and %d directories in destination that don't exist in source", filesToDelete, dirsToDelete))
 
-		// Log sample of destination files that don't exist in source
+		// Log sample of destination files/dirs that don't exist in source
 		loggedDeletes := 0
-		e.logAnalysis("Sample destination files not in source:")
+		e.logAnalysis("Sample destination items not in source:")
 		for relPath, dstFile := range destFiles {
-			if dstFile.IsDir {
-				continue
-			}
 			if _, exists := sourceFiles[relPath]; !exists {
 				if loggedDeletes < 5 {
-					e.logAnalysis(fmt.Sprintf("  Dest only: %s", relPath))
+					itemType := "file"
+					if dstFile.IsDir {
+						itemType = "dir"
+					}
+					e.logAnalysis(fmt.Sprintf("  Dest only (%s): %s", itemType, relPath))
 					loggedDeletes++
 				} else {
 					break
@@ -566,6 +571,7 @@ func (e *Engine) Analyze() error {
 		}
 	}
 
+	// Delete files first (before directories)
 	for relPath, dstFile := range destFiles {
 		// Check for cancellation periodically (every 100 files)
 		if checkedCount%100 == 0 {
@@ -623,7 +629,7 @@ func (e *Engine) Analyze() error {
 		}
 	}
 
-	// Summary of deletion phase
+	// Summary of file deletion phase
 	if deletedCount > 0 || deleteErrorCount > 0 {
 		if deleteErrorCount == 0 {
 			e.logAnalysis(fmt.Sprintf("✓ Deleted %d files from destination", deletedCount))
@@ -632,6 +638,86 @@ func (e *Engine) Analyze() error {
 		} else {
 			e.logAnalysis(fmt.Sprintf("Deleted %d files, failed to delete %d files (see errors below)",
 				deletedCount, deleteErrorCount))
+		}
+	}
+
+	// Now delete directories (in reverse depth order, deepest first)
+	deletedDirCount := 0
+	deleteDirErrorCount := 0
+
+	if dirsToDelete > 0 {
+		e.logAnalysis(fmt.Sprintf("Deleting %d orphaned directories...", dirsToDelete))
+
+		// Collect directories to delete and sort by depth (deepest first)
+		type dirToDelete struct {
+			relPath string
+			depth   int
+		}
+		var dirsToRemove []dirToDelete
+
+		for relPath, dstFile := range destFiles {
+			if dstFile.IsDir {
+				if _, exists := sourceFiles[relPath]; !exists {
+					// Count depth by number of path separators
+					depth := strings.Count(relPath, string(filepath.Separator))
+					dirsToRemove = append(dirsToRemove, dirToDelete{relPath: relPath, depth: depth})
+				}
+			}
+		}
+
+		// Sort by depth descending (deepest first)
+		sort.Slice(dirsToRemove, func(i, j int) bool {
+			return dirsToRemove[i].depth > dirsToRemove[j].depth
+		})
+
+		// Delete directories
+		for _, dir := range dirsToRemove {
+			// Check for cancellation
+			select {
+			case <-e.cancelChan:
+				return fmt.Errorf("analysis cancelled")
+			default:
+			}
+
+			dstPath := filepath.Join(e.DestPath, dir.relPath)
+
+			// Log first 10 directory deletions for debugging
+			if deletedDirCount < 10 {
+				e.logAnalysis(fmt.Sprintf("  → Deleting directory: %s (not in source)", dir.relPath))
+			}
+
+			if err := os.Remove(dstPath); err != nil {
+				// Track error instead of failing
+				e.Status.mu.Lock()
+				e.Status.Errors = append(e.Status.Errors, FileError{
+					FilePath: dir.relPath,
+					Error:    fmt.Errorf("failed to delete directory: %w", err),
+				})
+				deleteDirErrorCount++
+				errorCount := len(e.Status.Errors)
+				e.Status.mu.Unlock()
+
+				e.logAnalysis(fmt.Sprintf("✗ Error deleting directory %s: %v", dir.relPath, err))
+
+				// Check if we've hit the error limit
+				if errorCount >= MaxErrorsBeforeAbort {
+					return fmt.Errorf("too many errors (%d), aborting sync", errorCount)
+				}
+			} else {
+				deletedDirCount++
+			}
+		}
+
+		// Summary of directory deletion
+		if deletedDirCount > 0 || deleteDirErrorCount > 0 {
+			if deleteDirErrorCount == 0 {
+				e.logAnalysis(fmt.Sprintf("✓ Deleted %d directories from destination", deletedDirCount))
+			} else if deletedDirCount == 0 {
+				e.logAnalysis(fmt.Sprintf("✗ Failed to delete all %d directories (see errors below)", deleteDirErrorCount))
+			} else {
+				e.logAnalysis(fmt.Sprintf("Deleted %d directories, failed to delete %d directories (see errors below)",
+					deletedDirCount, deleteDirErrorCount))
+			}
 		}
 	}
 
