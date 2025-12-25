@@ -1,10 +1,6 @@
 package tui
 
 import (
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -124,65 +120,3 @@ func (m Model) Init() tea.Cmd {
 }
 
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// getPathCompletions returns possible path completions for the given input
-func getPathCompletions(input string) []string {
-	if input == "" {
-		input = "."
-	}
-
-	// Expand ~ to home directory
-	if strings.HasPrefix(input, "~") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			input = filepath.Join(home, input[1:])
-		}
-	}
-
-	// Get the directory and prefix to search
-	dir := filepath.Dir(input)
-	prefix := filepath.Base(input)
-
-	// If input ends with /, we're completing in that directory
-	if strings.HasSuffix(input, string(filepath.Separator)) {
-		dir = input
-		prefix = ""
-	}
-
-	// Read directory entries
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-
-	var completions []string
-	for _, entry := range entries {
-		name := entry.Name()
-
-		// Skip hidden files unless prefix starts with .
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
-			continue
-		}
-
-		// Check if name matches prefix
-		if prefix == "" || strings.HasPrefix(name, prefix) {
-			fullPath := filepath.Join(dir, name)
-
-			// Add trailing slash for directories
-			if entry.IsDir() {
-				fullPath += string(filepath.Separator)
-			}
-
-			completions = append(completions, fullPath)
-		}
-	}
-
-	sort.Strings(completions)
-	return completions
-}
