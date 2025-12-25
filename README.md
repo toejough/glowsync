@@ -49,16 +49,21 @@ You'll be prompted to enter source and destination paths.
 Specify source and destination paths directly:
 
 ```bash
-./copy-files -source /path/to/source -dest /path/to/destination
+./copy-files --source /path/to/source --dest /path/to/destination
 # or use short flags
 ./copy-files -s /path/to/source -d /path/to/destination
 ```
 
 ### Flags
 
-- `-source`, `-s` - Source directory path
-- `-dest`, `-d` - Destination directory path
-- `-interactive`, `-i` - Force interactive mode
+- `--source`, `-s` - Source directory path
+- `--dest`, `-d` - Destination directory path
+- `--interactive`, `-i` - Force interactive mode
+- `--workers`, `-w` - Number of concurrent workers (default: 4, 0 = adaptive)
+- `--adaptive` - Use adaptive concurrency (default: true)
+- `--cache` - Use cached scan results (default: true)
+- `--help`, `-h` - Display help and exit
+- `--version` - Display version and exit
 
 ## What You'll See
 
