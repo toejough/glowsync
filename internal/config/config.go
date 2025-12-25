@@ -45,18 +45,49 @@ func ParseFlags() (*Config, error) {
 
 	// Validate paths if not in interactive mode
 	if !cfg.InteractiveMode {
-		if cfg.SourcePath == "" {
-			return nil, fmt.Errorf("source path is required")
-		}
-		if cfg.DestPath == "" {
-			return nil, fmt.Errorf("destination path is required")
-		}
-
-		// Check if source exists
-		if _, err := os.Stat(cfg.SourcePath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("source path does not exist: %s", cfg.SourcePath)
+		if err := cfg.ValidatePaths(); err != nil {
+			return nil, err
 		}
 	}
 
 	return cfg, nil
+}
+
+// ValidatePaths validates that source and destination paths are valid
+func (cfg *Config) ValidatePaths() error {
+	// Check source path is provided
+	if cfg.SourcePath == "" {
+		return fmt.Errorf("source path is required")
+	}
+
+	// Check destination path is provided
+	if cfg.DestPath == "" {
+		return fmt.Errorf("destination path is required")
+	}
+
+	// Check if source exists and is a directory
+	sourceInfo, err := os.Stat(cfg.SourcePath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("source path does not exist: %s", cfg.SourcePath)
+	}
+	if err != nil {
+		return fmt.Errorf("cannot access source path: %w", err)
+	}
+	if !sourceInfo.IsDir() {
+		return fmt.Errorf("source path is not a directory: %s", cfg.SourcePath)
+	}
+
+	// Check if destination exists and is a directory
+	destInfo, err := os.Stat(cfg.DestPath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("destination path does not exist: %s", cfg.DestPath)
+	}
+	if err != nil {
+		return fmt.Errorf("cannot access destination path: %w", err)
+	}
+	if !destInfo.IsDir() {
+		return fmt.Errorf("destination path is not a directory: %s", cfg.DestPath)
+	}
+
+	return nil
 }
