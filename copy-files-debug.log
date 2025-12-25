@@ -1,58 +1,46 @@
-[00:14:19.874] === Sync Log Started: 2025-12-25T00:14:19-05:00 ===
-[00:14:19.874] Source: /Volumes/photo/lr-exports/shared/reorganized/2025/2025-01/
-[00:14:19.874] Destination: ./test_files
-[00:14:19.874] Workers: 4, Adaptive: true, Cache: true
-[00:14:19.874] 
-[00:14:19.941] Source cache validation: Cache valid: checked 10 sample files, all match
-[00:14:19.941] ✓ Using cached source scan (184 items, scanned 10m22s ago)
-[00:14:19.941] Destination cache validation: Cache valid: checked 20 sample files, all match
-[00:14:19.941] ✓ Using cached destination scan (178 items, scanned 7s ago)
-[00:14:19.941] Comparing files to determine sync plan (184 files to compare)...
-[00:14:19.941] Sample source paths:
-[00:14:19.941]   Source: 2025-01-02.IMG_0073.jpg
-[00:14:19.941]   Source: 2025-01-11.0A0A0016.jpg
-[00:14:19.941]   Source: 2025-01-14.IMG_0147.jpg
-[00:14:19.941]   Source: 2025-01-14.IMG_9957.mov
-[00:14:19.941]   Source: 2025-01-14.IMG_9964.mov
-[00:14:19.941] Sample destination paths:
-[00:14:19.941]   Dest: 2025-01-14.IMG_0147.jpg
-[00:14:19.941]   Dest: 2025-01-20.IMG_0170 (1).jpg
-[00:14:19.941]   Dest: 2025-01-20.IMG_7482 (1).jpg
-[00:14:19.941]   Dest: 2025-01-20.IMG_7483 (1).mov
-[00:14:19.941]   Dest: 2025-01-11.IMG_0127.jpg
-[00:14:19.941]   ✓ Already synced: 2025-01-14.IMG_0148.jpg (size=691196, modtime=2025-04-19T15:51:00.1785325-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-20.IMG_7492.jpg (size=764747, modtime=2025-04-19T15:51:49.3125939-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-22.IMG_7545.jpg (size=842409, modtime=2025-04-19T15:54:05.6831855-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-24.IMG_0254.jpg (size=949598, modtime=2025-04-19T15:54:05.8240683-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-20.IMG_7483 (1).mov (size=33755801, modtime=2025-04-12T21:20:31.0108943-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-11.0A0A0422.jpg (size=345895, modtime=2025-01-19T10:20:53.7102118-05:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-12.IMG_7455.jpg (size=978811, modtime=2025-01-19T10:21:08.9048339-05:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-16.IMG_7478 (1).jpg (size=510869, modtime=2025-04-19T15:51:10.9084711-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-20.IMG_7511.jpg (size=396021, modtime=2025-04-19T15:53:17.6042024-04:00)
-[00:14:19.941]   ✓ Already synced: 2025-01-28.0A0A2286.jpg (size=562955, modtime=2025-02-01T15:29:27.8319594-05:00)
-[00:14:19.941]   → Need sync: 2025-01-20.IMG_7508.jpg (destination missing)
-[00:14:19.941]   → Need sync: 2025-01-14.IMG_9634.mov (destination missing)
-[00:14:19.941] Compared 100 / 184 files...
-[00:14:19.941]   → Need sync: 2025-01-21.IMG_0206 (1).jpg (destination missing)
-[00:14:19.941]   → Need sync: 2025-01-14.IMG_9600.mov (destination missing)
-[00:14:19.941]   → Need sync: 2025-01-25.IMG_7551 (1).mov (destination missing)
-[00:14:19.941]   → Need sync: 2025-01-22.IMG_0236.jpg (destination missing)
-[00:14:19.941] Found 6 files to sync (78.7 MB total)
-[00:14:19.941] 178 files already up-to-date
-[00:14:19.941] Comparison summary: 184 source files, 178 dest files, 6 need sync, 178 already synced
-[00:14:19.941] Analysis complete!
-[00:14:19.941] Starting sync phase (adaptive mode)...
-[00:14:19.941] Files to sync: 6
-[00:14:19.941] Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency
-[00:14:20.169]   ✓ Copied: 2025-01-20.IMG_7508.jpg (652.6 KB)
-[00:14:20.973]   ✓ Copied: 2025-01-14.IMG_9634.mov (8.0 MB)
-[00:14:21.064]   ✓ Copied: 2025-01-21.IMG_0206 (1).jpg (397.0 KB)
-[00:14:22.018]   ✓ Copied: 2025-01-14.IMG_9600.mov (15.9 MB)
-[00:14:23.302]   ✓ Copied: 2025-01-25.IMG_7551 (1).mov (52.9 MB)
-[00:14:23.453]   ✓ Copied: 2025-01-22.IMG_0236.jpg (901.9 KB)
-[00:14:23.453] Updating destination cache incrementally (starting with 178 cached files)...
-[00:14:23.453] Cache update: processed 6 files, 6 complete, 0 skipped, total cache size: 184 files
-[00:14:23.454] ✓ Updated destination cache for next run
-[00:14:23.454] ✓ Updated destination cache for next run
-[00:14:23.454] 
-=== Sync Log Ended: 2025-12-25T00:14:23-05:00 ===
+[00:27:11.129] === Sync Log Started: 2025-12-25T00:27:11-05:00 ===
+[00:27:11.129] Source: /Volumes/photo/lr-exports/shared/reorganized/2025/2025-01/
+[00:27:11.129] Destination: ./test_files
+[00:27:11.129] Workers: 4, Adaptive: true, Cache: true
+[00:27:11.129] 
+[00:27:11.204] Source cache validation: Cache valid: checked 10 sample files, all match
+[00:27:11.204] ✓ Using cached source scan (184 items, scanned 23m13s ago)
+[00:27:11.205] Destination cache validation: Cache valid: checked 20 sample files, all match
+[00:27:11.205] ✓ Using cached destination scan (184 items, scanned 12m48s ago)
+[00:27:11.205] Comparing files to determine sync plan (184 files to compare)...
+[00:27:11.205] Sample source paths:
+[00:27:11.205]   Source: 2025-01-25.0A0A0995.jpg
+[00:27:11.205]   Source: 2025-01-25.0A0A1009.jpg
+[00:27:11.205]   Source: 2025-01-11.0A0A0581.jpg
+[00:27:11.205]   Source: 2025-01-14.IMG_2540.mov
+[00:27:11.205]   Source: 2025-01-20.IMG_7491 (1).mov
+[00:27:11.205] Sample destination paths:
+[00:27:11.205]   Dest: 2025-01-11.0A0A0104.jpg
+[00:27:11.205]   Dest: 2025-01-15.IMG_7473.jpg
+[00:27:11.205]   Dest: 2025-01-20.IMG_7482 (1).jpg
+[00:27:11.205]   Dest: 2025-01-20.IMG_7497.jpg
+[00:27:11.205]   Dest: 2025-01-20.IMG_7510.jpg
+[00:27:11.205]   ✓ Already synced: 2025-01-21.IMG_0183 (1).jpg (size=720733, modtime=2025-04-19T15:53:36.7287785-04:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-22.IMG_7547.jpg (size=909695, modtime=2025-04-19T15:54:08.121567-04:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-25.IMG_7552.jpg (size=915174, modtime=2025-04-19T15:54:28.4377991-04:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-11.0A0A0016.jpg (size=838157, modtime=2025-01-19T10:20:37.8199396-05:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-21.IMG_0204 (1).jpg (size=542649, modtime=2025-04-19T15:53:46.3607383-04:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-22.IMG_0231 (1).jpg (size=647522, modtime=2025-04-19T15:53:58.8755903-04:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-11.0A0A0104.jpg (size=952195, modtime=2025-01-19T10:20:46.8000934-05:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-11.IMG_7449.jpg (size=860327, modtime=2025-01-19T10:20:24.122422-05:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-16.IMG_0154.jpg (size=364685, modtime=2025-04-19T15:51:01.0517146-04:00)
+[00:27:11.205]   ✓ Already synced: 2025-01-18.IMG_7479.jpg (size=728988, modtime=2025-01-19T10:21:54.2952165-05:00)
+[00:27:11.205] Compared 100 / 184 files...
+[00:27:11.205] Found 0 files to sync (0 B total)
+[00:27:11.205] 184 files already up-to-date
+[00:27:11.205] Comparison summary: 184 source files, 184 dest files, 0 need sync, 184 already synced
+[00:27:11.205] Analysis complete!
+[00:27:11.205] Starting sync phase (adaptive mode)...
+[00:27:11.205] Files to sync: 0
+[00:27:11.205] Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency
+[00:27:11.206] Updating destination cache incrementally (starting with 184 cached files)...
+[00:27:11.206] Cache update: processed 0 files, 0 complete, 0 skipped, total cache size: 184 files
+[00:27:11.206] ✓ Updated destination cache for next run
+[00:27:11.206] ✓ Updated destination cache for next run
+[00:27:11.206] 
+=== Sync Log Ended: 2025-12-25T00:27:11-05:00 ===
