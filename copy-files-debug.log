@@ -1,92 +1,58 @@
-[23:03:44.466] === Sync Log Started: 2025-12-24T23:03:44-05:00 ===
-[23:03:44.466] Source: /Volumes/photo/lr-exports/shared/reorganized/2025/2025-01/
-[23:03:44.466] Destination: ./test_files
-[23:03:44.466] Workers: 4, Adaptive: true, Cache: true
-[23:03:44.466] 
-[23:03:44.466] Starting analysis...
-[23:03:44.546] Source cache validation: Cache valid: checked 10 sample files, all match
-[23:03:44.546] ✓ Using cached source scan (184 items, scanned 16m24s ago)
-[23:03:44.547] Destination cache validation: Sample file missing or inaccessible: 2025-01 (error: stat test_files/2025-01: no such file or directory)
-[23:03:44.547] ✗ Destination cache invalid (age: 1m2s, will rescan)
-[23:03:44.547] Scanning destination: ./test_files
-[23:03:44.547] Counting files in destination: 10 so far...
-[23:03:44.547] Counting files in destination: 20 so far...
-[23:03:44.547] Counting files in destination: 30 so far...
-[23:03:44.547] Counting files in destination: 40 so far...
-[23:03:44.547] Counting files in destination: 50 so far...
-[23:03:44.547] Counting files in destination: 60 so far...
-[23:03:44.548] Counting files in destination: 70 so far...
-[23:03:44.548] Counting files in destination: 80 so far...
-[23:03:44.548] Counting files in destination: 90 so far...
-[23:03:44.548] Counting files in destination: 100 so far...
-[23:03:44.548] Counting files in destination: 110 so far...
-[23:03:44.548] Counting files in destination: 120 so far...
-[23:03:44.548] Counting files in destination: 130 so far...
-[23:03:44.548] Counting files in destination: 140 so far...
-[23:03:44.548] Counting files in destination: 150 so far...
-[23:03:44.548] Counting files in destination: 160 so far...
-[23:03:44.548] Counting files in destination: 170 so far...
-[23:03:44.548] Counting files in destination: 180 so far...
-[23:03:44.548] Scanning 10 / 184 files from destination...
-[23:03:44.548] Scanning 20 / 184 files from destination...
-[23:03:44.548] Scanning 30 / 184 files from destination...
-[23:03:44.548] Scanning 40 / 184 files from destination...
-[23:03:44.548] Scanning 50 / 184 files from destination...
-[23:03:44.548] Scanning 60 / 184 files from destination...
-[23:03:44.548] Scanning 70 / 184 files from destination...
-[23:03:44.548] Scanning 80 / 184 files from destination...
-[23:03:44.548] Scanning 90 / 184 files from destination...
-[23:03:44.548] Scanning 100 / 184 files from destination...
-[23:03:44.548] Scanning 110 / 184 files from destination...
-[23:03:44.548] Scanning 120 / 184 files from destination...
-[23:03:44.548] Scanning 130 / 184 files from destination...
-[23:03:44.548] Scanning 140 / 184 files from destination...
-[23:03:44.548] Scanning 150 / 184 files from destination...
-[23:03:44.548] Scanning 160 / 184 files from destination...
-[23:03:44.548] Scanning 170 / 184 files from destination...
-[23:03:44.548] Scanning 180 / 184 files from destination...
-[23:03:44.548] Destination scan complete: 184 items found
-[23:03:44.549] Comparing files to determine sync plan (184 files to compare)...
-[23:03:44.549] Sample source paths:
-[23:03:44.549]   Source: 2025-01-21.IMG_7538.jpg
-[23:03:44.549]   Source: 2025-01-14.IMG_9583.mov
-[23:03:44.549]   Source: 2025-01-18.IMG_1017.jpg
-[23:03:44.549]   Source: 2025-01-18.IMG_7479.jpg
-[23:03:44.549]   Source: 2025-01-20.IMG_0169 (1).jpg
-[23:03:44.549] Sample destination paths:
-[23:03:44.549]   Dest: 2025-01-14.IMG_0013.mov
-[23:03:44.549]   Dest: 2025-01-14.IMG_9601.mov
-[23:03:44.549]   Dest: 2025-01-14.IMG_9688.mov
-[23:03:44.549]   Dest: 2025-01-18.IMG_7479.jpg
-[23:03:44.549]   Dest: 2025-01-25.0A0A0940.jpg
-[23:03:44.549]   ✓ Already synced: 2025-01-02.IMG_0075.jpg (size=428633, modtime=2025-04-19T15:50:32.9112019-04:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-11.IMG_0115.jpg (size=576864, modtime=2025-04-19T15:50:47.9614761-04:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-20.IMG_7510.jpg (size=396548, modtime=2025-04-19T15:53:15.2341593-04:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-21.IMG_0183 (1).jpg (size=720733, modtime=2025-04-19T15:53:36.7287785-04:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-22.IMG_7545.jpg (size=842409, modtime=2025-04-19T15:54:05.6831855-04:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-24.IMG_0259.jpg (size=645069, modtime=2025-04-19T15:54:08.3721987-04:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-07.IMG_7446 (1).mov (size=98441908, modtime=2025-01-18T15:22:21.8722811-05:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-14.IMG_0008.mov (size=3436151, modtime=2025-01-13T19:21:18.9342102-05:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-14.IMG_2540.mov (size=7328236, modtime=2025-01-13T19:20:40.4997677-05:00)
-[23:03:44.549]   ✓ Already synced: 2025-01-20.IMG_7491 (1).mov (size=18740268, modtime=2025-04-12T21:20:43.2563939-04:00)
-[23:03:44.549]   → Need sync: 2025-01-02.IMG_0073.jpg (destination missing)
-[23:03:44.549] Compared 100 / 184 files...
-[23:03:44.549] Found 1 files to sync (470.8 KB total)
-[23:03:44.549] 183 files already up-to-date
-[23:03:44.549] Comparison summary: 184 source files, 184 dest files, 1 need sync, 183 already synced
-[23:03:44.549] Found 1 files and 0 directories in destination that don't exist in source
-[23:03:44.549] Sample destination items not in source:
-[23:03:44.549]   Dest only (file): .DS_Store
-[23:03:44.549]   → Deleting: .DS_Store (not in source)
-[23:03:44.549] ✓ Deleted 1 files from destination
-[23:03:44.549] Analysis complete!
-[23:03:44.549] Starting sync phase (adaptive mode)...
-[23:03:44.549] Files to sync: 1
-[23:03:44.549] Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency
-[23:03:44.654]   ✓ Copied: 2025-01-02.IMG_0073.jpg (470.8 KB)
-[23:03:44.655] Updating destination cache incrementally (starting with 184 cached files)...
-[23:03:44.655] Cache update: processed 1 files, 1 complete, 0 skipped, total cache size: 185 files
-[23:03:44.655] ✓ Updated destination cache for next run
-[23:03:44.655] ✓ Updated destination cache for next run
-[23:03:44.655] 
-=== Sync Log Ended: 2025-12-24T23:03:44-05:00 ===
+[00:14:19.874] === Sync Log Started: 2025-12-25T00:14:19-05:00 ===
+[00:14:19.874] Source: /Volumes/photo/lr-exports/shared/reorganized/2025/2025-01/
+[00:14:19.874] Destination: ./test_files
+[00:14:19.874] Workers: 4, Adaptive: true, Cache: true
+[00:14:19.874] 
+[00:14:19.941] Source cache validation: Cache valid: checked 10 sample files, all match
+[00:14:19.941] ✓ Using cached source scan (184 items, scanned 10m22s ago)
+[00:14:19.941] Destination cache validation: Cache valid: checked 20 sample files, all match
+[00:14:19.941] ✓ Using cached destination scan (178 items, scanned 7s ago)
+[00:14:19.941] Comparing files to determine sync plan (184 files to compare)...
+[00:14:19.941] Sample source paths:
+[00:14:19.941]   Source: 2025-01-02.IMG_0073.jpg
+[00:14:19.941]   Source: 2025-01-11.0A0A0016.jpg
+[00:14:19.941]   Source: 2025-01-14.IMG_0147.jpg
+[00:14:19.941]   Source: 2025-01-14.IMG_9957.mov
+[00:14:19.941]   Source: 2025-01-14.IMG_9964.mov
+[00:14:19.941] Sample destination paths:
+[00:14:19.941]   Dest: 2025-01-14.IMG_0147.jpg
+[00:14:19.941]   Dest: 2025-01-20.IMG_0170 (1).jpg
+[00:14:19.941]   Dest: 2025-01-20.IMG_7482 (1).jpg
+[00:14:19.941]   Dest: 2025-01-20.IMG_7483 (1).mov
+[00:14:19.941]   Dest: 2025-01-11.IMG_0127.jpg
+[00:14:19.941]   ✓ Already synced: 2025-01-14.IMG_0148.jpg (size=691196, modtime=2025-04-19T15:51:00.1785325-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-20.IMG_7492.jpg (size=764747, modtime=2025-04-19T15:51:49.3125939-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-22.IMG_7545.jpg (size=842409, modtime=2025-04-19T15:54:05.6831855-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-24.IMG_0254.jpg (size=949598, modtime=2025-04-19T15:54:05.8240683-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-20.IMG_7483 (1).mov (size=33755801, modtime=2025-04-12T21:20:31.0108943-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-11.0A0A0422.jpg (size=345895, modtime=2025-01-19T10:20:53.7102118-05:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-12.IMG_7455.jpg (size=978811, modtime=2025-01-19T10:21:08.9048339-05:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-16.IMG_7478 (1).jpg (size=510869, modtime=2025-04-19T15:51:10.9084711-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-20.IMG_7511.jpg (size=396021, modtime=2025-04-19T15:53:17.6042024-04:00)
+[00:14:19.941]   ✓ Already synced: 2025-01-28.0A0A2286.jpg (size=562955, modtime=2025-02-01T15:29:27.8319594-05:00)
+[00:14:19.941]   → Need sync: 2025-01-20.IMG_7508.jpg (destination missing)
+[00:14:19.941]   → Need sync: 2025-01-14.IMG_9634.mov (destination missing)
+[00:14:19.941] Compared 100 / 184 files...
+[00:14:19.941]   → Need sync: 2025-01-21.IMG_0206 (1).jpg (destination missing)
+[00:14:19.941]   → Need sync: 2025-01-14.IMG_9600.mov (destination missing)
+[00:14:19.941]   → Need sync: 2025-01-25.IMG_7551 (1).mov (destination missing)
+[00:14:19.941]   → Need sync: 2025-01-22.IMG_0236.jpg (destination missing)
+[00:14:19.941] Found 6 files to sync (78.7 MB total)
+[00:14:19.941] 178 files already up-to-date
+[00:14:19.941] Comparison summary: 184 source files, 178 dest files, 6 need sync, 178 already synced
+[00:14:19.941] Analysis complete!
+[00:14:19.941] Starting sync phase (adaptive mode)...
+[00:14:19.941] Files to sync: 6
+[00:14:19.941] Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency
+[00:14:20.169]   ✓ Copied: 2025-01-20.IMG_7508.jpg (652.6 KB)
+[00:14:20.973]   ✓ Copied: 2025-01-14.IMG_9634.mov (8.0 MB)
+[00:14:21.064]   ✓ Copied: 2025-01-21.IMG_0206 (1).jpg (397.0 KB)
+[00:14:22.018]   ✓ Copied: 2025-01-14.IMG_9600.mov (15.9 MB)
+[00:14:23.302]   ✓ Copied: 2025-01-25.IMG_7551 (1).mov (52.9 MB)
+[00:14:23.453]   ✓ Copied: 2025-01-22.IMG_0236.jpg (901.9 KB)
+[00:14:23.453] Updating destination cache incrementally (starting with 178 cached files)...
+[00:14:23.453] Cache update: processed 6 files, 6 complete, 0 skipped, total cache size: 184 files
+[00:14:23.454] ✓ Updated destination cache for next run
+[00:14:23.454] ✓ Updated destination cache for next run
+[00:14:23.454] 
+=== Sync Log Ended: 2025-12-25T00:14:23-05:00 ===

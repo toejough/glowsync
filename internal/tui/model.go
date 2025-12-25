@@ -50,6 +50,14 @@ type StatusUpdateMsg struct {
 	Status *sync.Status
 }
 
+// InitializeEngineMsg is sent to trigger engine initialization
+type InitializeEngineMsg struct{}
+
+// EngineInitializedMsg is sent when the engine has been created
+type EngineInitializedMsg struct {
+	Engine *sync.Engine
+}
+
 // AnalysisStartedMsg is sent when analysis has started
 type AnalysisStartedMsg struct{}
 
@@ -113,30 +121,19 @@ func (m Model) Init() tea.Cmd {
 	if m.needsInput {
 		return textinput.Blink
 	}
-	// If not in input mode, create engine and start sync
-	return m.initializeEngine()
+	// If not in input mode, trigger engine initialization
+	return func() tea.Msg {
+		return InitializeEngineMsg{}
+	}
 }
 
 // initializeEngine creates the sync engine and starts the analysis
 func (m Model) initializeEngine() tea.Cmd {
+	// Create a command that will initialize the engine
 	return func() tea.Msg {
-		// Create sync engine
-		m.engine = sync.NewEngine(m.config.SourcePath, m.config.DestPath)
-		m.engine.Workers = m.config.Workers
-		m.engine.AdaptiveMode = m.config.AdaptiveMode
-		m.engine.UseCache = m.config.UseCache
-
-		// Register status callback
-		m.engine.RegisterStatusCallback(func(status *sync.Status) {
-			m.status = status
-		})
-
-		// Return a command to start spinner, analysis, and ticking
-		return tea.Batch(
-			m.spinner.Tick,
-			m.startAnalysis(),
-			tickCmd(),
-		)()
+		return EngineInitializedMsg{
+			Engine: sync.NewEngine(m.config.SourcePath, m.config.DestPath),
+		}
 	}
 }
 
@@ -158,6 +155,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Otherwise, handle sync-specific updates
 	switch msg := msg.(type) {
+	case InitializeEngineMsg:
+		// Initialize the engine and start the process
+		return m, m.initializeEngine()
+
+	case EngineInitializedMsg:
+		// Store the engine and configure it
+		m.engine = msg.Engine
+		m.engine.Workers = m.config.Workers
+		m.engine.AdaptiveMode = m.config.AdaptiveMode
+		m.engine.UseCache = m.config.UseCache
+
+		// Register status callback
+		m.engine.RegisterStatusCallback(func(status *sync.Status) {
+			m.status = status
+		})
+
+		// Capture engine in local variable for closures
+		engine := m.engine
+
+		// Start spinner, analysis, and ticking
+		return m, tea.Batch(
+			m.spinner.Tick,
+			func() tea.Msg {
+				// Enable file logging for debugging
+				logPath := "copy-files-debug.log"
+				if err := engine.EnableFileLogging(logPath); err != nil {
+					// Non-fatal, just continue without file logging
+				}
+				// Signal that analysis has started
+				return AnalysisStartedMsg{}
+			},
+			func() tea.Msg {
+				if err := engine.Analyze(); err != nil {
+					return ErrorMsg{Err: err}
+				}
+				return AnalysisCompleteMsg{}
+			},
+			tickCmd(),
+		)
+
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
 
@@ -488,26 +525,24 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // startAnalysis starts the analysis process
 func (m Model) startAnalysis() tea.Cmd {
 	return func() tea.Msg {
-		// Signal that we're starting
-		// This happens immediately before any blocking work
-
 		// Enable file logging for debugging
 		logPath := "copy-files-debug.log"
 		if err := m.engine.EnableFileLogging(logPath); err != nil {
 			// Non-fatal, just continue without file logging
 		}
 
-		// Send a message that analysis has started
-		// We'll do this by returning a batch command
-		return tea.Batch(
-			func() tea.Msg { return AnalysisStartedMsg{} },
-			func() tea.Msg {
-				if err := m.engine.Analyze(); err != nil {
-					return ErrorMsg{Err: err}
-				}
-				return AnalysisCompleteMsg{}
-			},
-		)()
+		// Signal that analysis has started
+		return AnalysisStartedMsg{}
+	}
+}
+
+// doAnalysis performs the actual analysis work
+func (m Model) doAnalysis() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.engine.Analyze(); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return AnalysisCompleteMsg{}
 	}
 }
 
