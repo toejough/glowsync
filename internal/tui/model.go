@@ -1,17 +1,36 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/sync"
 )
 
 // Model represents the TUI state
 type Model struct {
+	// Configuration
+	config *config.Config
+
+	// Input phase (when needsInput is true)
+	needsInput      bool
+	sourceInput     textinput.Model
+	destInput       textinput.Model
+	focusIndex      int
+	completions     []string
+	completionIndex int
+	showCompletions bool
+
+	// Sync phase (when needsInput is false)
 	engine          *sync.Engine
 	status          *sync.Status
 	overallProgress progress.Model
@@ -19,7 +38,7 @@ type Model struct {
 	spinner         spinner.Model
 	width           int
 	height          int
-	state           string // "initializing", "analyzing", "syncing", "complete", "error", "cancelled", "cancelling"
+	state           string // "input", "initializing", "analyzing", "syncing", "complete", "error", "cancelled", "cancelling"
 	err             error
 	quitting        bool
 	cancelled       bool
@@ -46,7 +65,20 @@ type ErrorMsg struct {
 }
 
 // NewModel creates a new TUI model
-func NewModel(engine *sync.Engine) Model {
+func NewModel(cfg *config.Config) Model {
+	sourceInput := textinput.New()
+	sourceInput.Placeholder = "/path/to/source"
+	sourceInput.Focus()
+	sourceInput.CharLimit = 256
+	sourceInput.Width = 60
+	sourceInput.Prompt = "▶ "
+
+	destInput := textinput.New()
+	destInput.Placeholder = "/path/to/destination"
+	destInput.CharLimit = 256
+	destInput.Width = 60
+	destInput.Prompt = "  "
+
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -61,30 +93,57 @@ func NewModel(engine *sync.Engine) Model {
 		progress.WithWidth(60),
 	)
 
-	m := Model{
-		engine:          engine,
+	// Determine initial state based on whether we need input
+	needsInput := cfg.InteractiveMode
+	initialState := "input"
+	if !needsInput {
+		initialState = "initializing"
+	}
+
+	return Model{
+		config:          cfg,
+		needsInput:      needsInput,
+		sourceInput:     sourceInput,
+		destInput:       destInput,
+		focusIndex:      0,
 		overallProgress: overallProg,
 		fileProgress:    fileProg,
 		spinner:         s,
-		state:           "initializing",
+		state:           initialState,
 		lastUpdate:      time.Now(),
 	}
-
-	// Register status callback
-	engine.RegisterStatusCallback(func(status *sync.Status) {
-		m.status = status
-	})
-
-	return m
 }
 
 // Init initializes the model
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		m.spinner.Tick,
-		m.startAnalysis(),
-		tickCmd(),
-	)
+	if m.needsInput {
+		return textinput.Blink
+	}
+	// If not in input mode, create engine and start sync
+	return m.initializeEngine()
+}
+
+// initializeEngine creates the sync engine and starts the analysis
+func (m Model) initializeEngine() tea.Cmd {
+	return func() tea.Msg {
+		// Create sync engine
+		m.engine = sync.NewEngine(m.config.SourcePath, m.config.DestPath)
+		m.engine.Workers = m.config.Workers
+		m.engine.AdaptiveMode = m.config.AdaptiveMode
+		m.engine.UseCache = m.config.UseCache
+
+		// Register status callback
+		m.engine.RegisterStatusCallback(func(status *sync.Status) {
+			m.status = status
+		})
+
+		// Return a command to start spinner, analysis, and ticking
+		return tea.Batch(
+			m.spinner.Tick,
+			m.startAnalysis(),
+			tickCmd(),
+		)()
+	}
 }
 
 // tickCmd creates a tick command for regular updates
@@ -98,6 +157,12 @@ type tickMsg time.Time
 
 // Update handles messages and updates the model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// If in input mode, handle input-specific updates
+	if m.needsInput {
+		return m.updateInput(msg)
+	}
+
+	// Otherwise, handle sync-specific updates
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -169,6 +234,208 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// updateInput handles updates when in input mode
+func (m Model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			return m, tea.Quit
+
+		case "ctrl+n", "down":
+			// Move to next field
+			if m.focusIndex == 0 {
+				m.focusIndex = 1
+				m.sourceInput.Blur()
+				m.sourceInput.Prompt = "  "
+				m.destInput.Focus()
+				m.destInput.Prompt = "▶ "
+			}
+			m.showCompletions = false
+			return m, nil
+
+		case "ctrl+p", "up":
+			// Move to previous field
+			if m.focusIndex == 1 {
+				m.focusIndex = 0
+				m.destInput.Blur()
+				m.destInput.Prompt = "  "
+				m.sourceInput.Focus()
+				m.sourceInput.Prompt = "▶ "
+			}
+			m.showCompletions = false
+			return m, nil
+
+		case "tab":
+			return m.handleTabCompletion(), nil
+
+		case "shift+tab":
+			return m.handleShiftTabCompletion(), nil
+
+		case "right":
+			return m.handleRightArrow(), nil
+
+		case "enter":
+			m.showCompletions = false
+			if m.focusIndex == 0 && m.sourceInput.Value() != "" {
+				// Move to destination input
+				m.focusIndex = 1
+				m.sourceInput.Blur()
+				m.sourceInput.Prompt = "  "
+				m.destInput.Focus()
+				m.destInput.Prompt = "▶ "
+				return m, nil
+			} else if m.focusIndex == 1 && m.destInput.Value() != "" {
+				// Submit - transition to sync phase
+				return m.transitionToSync()
+			}
+
+		default:
+			// Any other key resets completion state
+			m.showCompletions = false
+		}
+	}
+
+	// Update the focused input
+	if m.focusIndex == 0 {
+		m.sourceInput, cmd = m.sourceInput.Update(msg)
+	} else {
+		m.destInput, cmd = m.destInput.Update(msg)
+	}
+
+	return m, cmd
+}
+
+// transitionToSync transitions from input mode to sync mode
+func (m Model) transitionToSync() (tea.Model, tea.Cmd) {
+	// Set paths in config
+	m.config.SourcePath = m.sourceInput.Value()
+	m.config.DestPath = m.destInput.Value()
+
+	// Validate paths
+	if err := m.config.ValidatePaths(); err != nil {
+		m.err = err
+		m.state = "error"
+		m.needsInput = false
+		return m, nil
+	}
+
+	// Transition to sync mode
+	m.needsInput = false
+	m.state = "initializing"
+
+	// Initialize engine and start sync
+	return m, m.initializeEngine()
+}
+
+// handleTabCompletion handles tab key for path completion
+func (m Model) handleTabCompletion() Model {
+	var currentValue string
+	if m.focusIndex == 0 {
+		currentValue = m.sourceInput.Value()
+	} else {
+		currentValue = m.destInput.Value()
+	}
+
+	// Get completions if we don't have them or if this is first tab
+	if !m.showCompletions {
+		m.completions = getPathCompletions(currentValue)
+		m.completionIndex = 0
+		m.showCompletions = true
+	} else {
+		// Cycle forward through completions
+		if len(m.completions) > 0 {
+			m.completionIndex = (m.completionIndex + 1) % len(m.completions)
+		}
+	}
+
+	// Apply completion
+	if len(m.completions) > 0 {
+		if len(m.completions) == 1 {
+			// Single match - complete it
+			if m.focusIndex == 0 {
+				m.sourceInput.SetValue(m.completions[0])
+				m.sourceInput.CursorEnd()
+			} else {
+				m.destInput.SetValue(m.completions[0])
+				m.destInput.CursorEnd()
+			}
+			m.showCompletions = false
+		} else {
+			// Multiple matches - show current one
+			if m.focusIndex == 0 {
+				m.sourceInput.SetValue(m.completions[m.completionIndex])
+				m.sourceInput.CursorEnd()
+			} else {
+				m.destInput.SetValue(m.completions[m.completionIndex])
+				m.destInput.CursorEnd()
+			}
+		}
+	}
+	return m
+}
+
+// handleShiftTabCompletion handles shift+tab for backward completion cycling
+func (m Model) handleShiftTabCompletion() Model {
+	if m.showCompletions && len(m.completions) > 0 {
+		// Cycle backward through completions
+		m.completionIndex--
+		if m.completionIndex < 0 {
+			m.completionIndex = len(m.completions) - 1
+		}
+
+		// Apply completion
+		if m.focusIndex == 0 {
+			m.sourceInput.SetValue(m.completions[m.completionIndex])
+			m.sourceInput.CursorEnd()
+		} else {
+			m.destInput.SetValue(m.completions[m.completionIndex])
+			m.destInput.CursorEnd()
+		}
+	}
+	return m
+}
+
+// handleRightArrow handles right arrow for accepting completion and continuing
+func (m Model) handleRightArrow() Model {
+	// If showing completions, accept current and continue to next segment
+	if m.showCompletions && len(m.completions) > 0 {
+		currentCompletion := m.completions[m.completionIndex]
+
+		// Set the value
+		if m.focusIndex == 0 {
+			m.sourceInput.SetValue(currentCompletion)
+			m.sourceInput.CursorEnd()
+		} else {
+			m.destInput.SetValue(currentCompletion)
+			m.destInput.CursorEnd()
+		}
+
+		// Reset completion state and get new completions for next segment
+		m.showCompletions = false
+		m.completions = getPathCompletions(currentCompletion)
+		if len(m.completions) > 0 {
+			m.completionIndex = 0
+			m.showCompletions = true
+
+			// Apply first completion of next segment
+			if m.focusIndex == 0 {
+				m.sourceInput.SetValue(m.completions[0])
+				m.sourceInput.CursorEnd()
+			} else {
+				m.destInput.SetValue(m.completions[0])
+				m.destInput.CursorEnd()
+			}
+		}
+		return m
+	}
+	// Otherwise, let the textinput handle it (move cursor right)
+	m.showCompletions = false
+	return m
 }
 
 // handleKeyPress handles keyboard input
@@ -247,3 +514,58 @@ func minInt(a, b int) int {
 	return b
 }
 
+// getPathCompletions returns possible path completions for the given input
+func getPathCompletions(input string) []string {
+	if input == "" {
+		input = "."
+	}
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(input, "~") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			input = filepath.Join(home, input[1:])
+		}
+	}
+
+	// Get the directory and prefix to search
+	dir := filepath.Dir(input)
+	prefix := filepath.Base(input)
+
+	// If input ends with /, we're completing in that directory
+	if strings.HasSuffix(input, string(filepath.Separator)) {
+		dir = input
+		prefix = ""
+	}
+
+	// Read directory entries
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var completions []string
+	for _, entry := range entries {
+		name := entry.Name()
+
+		// Skip hidden files unless prefix starts with .
+		if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
+			continue
+		}
+
+		// Check if name matches prefix
+		if prefix == "" || strings.HasPrefix(name, prefix) {
+			fullPath := filepath.Join(dir, name)
+
+			// Add trailing slash for directories
+			if entry.IsDir() {
+				fullPath += string(filepath.Separator)
+			}
+
+			completions = append(completions, fullPath)
+		}
+	}
+
+	sort.Strings(completions)
+	return completions
+}

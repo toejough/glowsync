@@ -61,6 +61,8 @@ func (m Model) View() string {
 	}
 
 	switch m.state {
+	case "input":
+		return m.renderInputView()
 	case "initializing":
 		return m.renderInitializingView()
 	case "analyzing":
@@ -78,6 +80,36 @@ func (m Model) View() string {
 	default:
 		return "Unknown state"
 	}
+}
+
+func (m Model) renderInputView() string {
+	hintStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Italic(true)
+
+	content := titleStyle.Render("🚀 File Sync Tool") + "\n\n" +
+		subtitleStyle.Render("Configure your sync operation") + "\n\n" +
+		labelStyle.Render("Source Path:") + "\n" +
+		m.sourceInput.View() + "\n"
+
+	// Show completion list for source
+	if m.focusIndex == 0 && m.showCompletions && len(m.completions) > 0 {
+		content += formatCompletionList(m.completions, m.completionIndex, hintStyle) + "\n"
+	}
+
+	content += "\n" +
+		labelStyle.Render("Destination Path:") + "\n" +
+		m.destInput.View() + "\n"
+
+	// Show completion list for dest
+	if m.focusIndex == 1 && m.showCompletions && len(m.completions) > 0 {
+		content += formatCompletionList(m.completions, m.completionIndex, hintStyle) + "\n"
+	}
+
+	content += "\n" +
+		subtitleStyle.Render("Tab/Shift+Tab to cycle • → to accept & continue • ↑↓ to switch fields • Enter to continue • Ctrl+C to quit")
+
+	return boxStyle.Render(content)
 }
 
 func (m Model) renderInitializingView() string {
@@ -975,3 +1007,82 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%ds", s)
 }
 
+// formatCompletionList formats the completion list for display
+func formatCompletionList(completions []string, currentIndex int, style lipgloss.Style) string {
+	if len(completions) == 0 {
+		return ""
+	}
+
+	maxShow := 8
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("205")).
+		Bold(true)
+
+	var lines []string
+
+	if len(completions) == 1 {
+		// Single completion - just show it
+		base := getBaseName(completions[0])
+		lines = append(lines, style.Render("  → "+base))
+	} else if len(completions) <= maxShow {
+		// Show all completions
+		lines = append(lines, style.Render(fmt.Sprintf("  %d matches:", len(completions))))
+		for i, comp := range completions {
+			base := getBaseName(comp)
+			if i == currentIndex {
+				lines = append(lines, selectedStyle.Render("  ▶ "+base))
+			} else {
+				lines = append(lines, style.Render("    "+base))
+			}
+		}
+	} else {
+		// Show a window around current selection
+		lines = append(lines, style.Render(fmt.Sprintf("  %d matches (showing %d):", len(completions), maxShow)))
+
+		// Calculate window
+		start := currentIndex - maxShow/2
+		if start < 0 {
+			start = 0
+		}
+		end := start + maxShow
+		if end > len(completions) {
+			end = len(completions)
+			start = end - maxShow
+			if start < 0 {
+				start = 0
+			}
+		}
+
+		// Show ellipsis if not at start
+		if start > 0 {
+			lines = append(lines, style.Render("    ..."))
+		}
+
+		// Show window
+		for i := start; i < end; i++ {
+			base := getBaseName(completions[i])
+			if i == currentIndex {
+				lines = append(lines, selectedStyle.Render("  ▶ "+base))
+			} else {
+				lines = append(lines, style.Render("    "+base))
+			}
+		}
+
+		// Show ellipsis if not at end
+		if end < len(completions) {
+			lines = append(lines, style.Render("    ..."))
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// getBaseName returns the base name of a path (helper to avoid importing filepath in view)
+func getBaseName(path string) string {
+	// Simple basename extraction
+	idx := strings.LastIndex(path, "/")
+	if idx == -1 {
+		return path
+	}
+	return path[idx+1:]
+}
