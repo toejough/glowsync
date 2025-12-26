@@ -1160,6 +1160,61 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 	e.Status.mu.Unlock()
 	e.notifyStatusUpdate()
 
+	// For Content mode, check if hashes match before copying
+	// If they do, just update modtime instead of copying the entire file
+	if e.ChangeType == config.Content {
+		// Check if destination file exists
+		if _, err := os.Stat(dstPath); err == nil {
+			// Both files exist, compute hashes
+			srcHash, err := fileops.ComputeFileHash(srcPath)
+			if err != nil {
+				return fmt.Errorf("failed to compute source hash: %w", err)
+			}
+
+			dstHash, err := fileops.ComputeFileHash(dstPath)
+			if err != nil {
+				return fmt.Errorf("failed to compute destination hash: %w", err)
+			}
+
+			// If hashes match, just update modtime
+			if srcHash == dstHash {
+				e.logAnalysis(fmt.Sprintf("  ✓ Hashes match for %s - updating modtime only", fileToSync.RelativePath))
+
+				// Get source modtime
+				srcInfo, err := os.Stat(srcPath)
+				if err != nil {
+					return fmt.Errorf("failed to stat source file: %w", err)
+				}
+
+				// Update destination modtime
+				if err := os.Chtimes(dstPath, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
+					return fmt.Errorf("failed to update modtime: %w", err)
+				}
+
+				// Mark file as complete without copying
+				e.Status.mu.Lock()
+				fileToSync.Status = "complete"
+				fileToSync.Transferred = fileToSync.Size
+				e.Status.ProcessedFiles++
+				atomic.AddInt64(&e.Status.TransferredBytes, fileToSync.Size)
+
+				// Remove from currently copying files
+				for i, f := range e.Status.CurrentFiles {
+					if f == fileToSync.RelativePath {
+						e.Status.CurrentFiles = append(e.Status.CurrentFiles[:i], e.Status.CurrentFiles[i+1:]...)
+						break
+					}
+				}
+				e.Status.mu.Unlock()
+				e.notifyStatusUpdate()
+
+				return nil
+			}
+
+			e.logAnalysis(fmt.Sprintf("  → Hashes differ for %s - copying file", fileToSync.RelativePath))
+		}
+	}
+
 	// Track this file's previous transferred bytes for delta calculation
 	var previousBytes int64 = 0
 	var lastNotifyTime time.Time
