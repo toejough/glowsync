@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/pkg/fileops"
 )
 
@@ -104,9 +105,9 @@ type Engine struct {
 	SourcePath      string
 	DestPath        string
 	Status          *Status
-	Workers         int  // Number of concurrent workers (default: 4, 0 = adaptive)
-	AdaptiveMode    bool // Enable adaptive concurrency scaling
-	UseCache        bool // Use cached scan results (default: true)
+	Workers         int                // Number of concurrent workers (default: 4, 0 = adaptive)
+	AdaptiveMode    bool               // Enable adaptive concurrency scaling
+	ChangeType      config.ChangeType  // Type of changes expected (default: MonotonicCount)
 	statusCallbacks []func(*Status)
 	mu              sync.RWMutex
 	cancelChan      chan struct{} // Channel to signal cancellation
@@ -120,8 +121,8 @@ func NewEngine(source, dest string) *Engine {
 	return &Engine{
 		SourcePath: source,
 		DestPath:   dest,
-		Workers:    4,    // Default to 4 concurrent workers
-		UseCache:   true, // Default to using cache
+		Workers:    4,                         // Default to 4 concurrent workers
+		ChangeType: config.MonotonicCount,    // Default to monotonic count
 		Status: &Status{
 			StartTime: time.Now(),
 		},
@@ -147,7 +148,7 @@ func (e *Engine) EnableFileLogging(logPath string) error {
 	e.logToFile(fmt.Sprintf("=== Sync Log Started: %s ===", time.Now().Format(time.RFC3339)))
 	e.logToFile(fmt.Sprintf("Source: %s", e.SourcePath))
 	e.logToFile(fmt.Sprintf("Destination: %s", e.DestPath))
-	e.logToFile(fmt.Sprintf("Workers: %d, Adaptive: %v, Cache: %v", e.Workers, e.AdaptiveMode, e.UseCache))
+	e.logToFile(fmt.Sprintf("Workers: %d, Adaptive: %v, ChangeType: %v", e.Workers, e.AdaptiveMode, e.ChangeType))
 	e.logToFile("")
 	return nil
 }
@@ -218,76 +219,118 @@ func (e *Engine) Analyze() error {
 	default:
 	}
 
-	// Try to load cached source scan
-	var sourceFiles map[string]*fileops.FileInfo
-	var err error
+	// For monotonic-count mode, first check if file counts match
+	// If they do, we can skip detailed scanning (optimization)
+	if e.ChangeType == config.MonotonicCount {
+		e.logAnalysis("Monotonic-count mode: checking file counts...")
 
-	usedCache := false
-	if e.UseCache {
-		sourceCache, cacheErr := LoadScanCache(e.SourcePath)
-		if cacheErr == nil {
-			isValid := IsCacheValid(sourceCache, e.SourcePath, false, func(msg string) {
-				e.logToFile(fmt.Sprintf("Source cache validation: %s", msg))
-			})
-			if isValid {
-				e.logAnalysis(fmt.Sprintf("✓ Using cached source scan (%d items, scanned %s ago)",
-					len(sourceCache.Files), time.Since(sourceCache.ScanTime).Round(time.Second)))
-				sourceFiles = sourceCache.Files
-				usedCache = true
-			} else {
-				e.logAnalysis(fmt.Sprintf("✗ Source cache invalid (age: %s, will rescan)",
-					time.Since(sourceCache.ScanTime).Round(time.Second)))
-			}
-		} else {
-			e.logAnalysis(fmt.Sprintf("✗ Source cache not found: %v", cacheErr))
-		}
-	}
-
-	if !usedCache {
-		// Cache miss, invalid, or disabled - do full scan
-		e.logAnalysis(fmt.Sprintf("Scanning source: %s", e.SourcePath))
-
-		// Update analysis phase
+		// Count source files
 		e.Status.mu.Lock()
 		e.Status.AnalysisPhase = "counting_source"
-		e.Status.ScannedFiles = 0
-		e.Status.TotalFilesToScan = 0
 		e.Status.mu.Unlock()
 
-		// Scan source directory with progress
-		sourceFiles, err = fileops.ScanDirectoryWithProgress(e.SourcePath, func(path string, scannedCount int, totalCount int) {
+		sourceCount, err := fileops.CountFilesWithProgress(e.SourcePath, func(path string, count int) {
 			e.Status.mu.Lock()
+			e.Status.ScannedFiles = count
 			e.Status.CurrentPath = path
-			e.Status.ScannedFiles = scannedCount
-			e.Status.TotalFilesToScan = totalCount
-
-			// Update phase when we transition from counting to scanning
-			if totalCount > 0 && e.Status.AnalysisPhase == "counting_source" {
-				e.Status.AnalysisPhase = "scanning_source"
-			}
 			e.Status.mu.Unlock()
 
-			// Log every 10 files to avoid spam
-			if scannedCount%10 == 0 {
-				if totalCount > 0 {
-					e.logAnalysis(fmt.Sprintf("Scanning %d / %d files from source...", scannedCount, totalCount))
-				} else {
-					e.logAnalysis(fmt.Sprintf("Counting files in source: %d so far...", scannedCount))
-				}
+			if count%10 == 0 {
+				e.logAnalysis(fmt.Sprintf("Counting source files: %d so far...", count))
 			}
 			e.notifyStatusUpdate()
 		})
 		if err != nil {
-			return fmt.Errorf("failed to scan source: %w", err)
+			return fmt.Errorf("failed to count source files: %w", err)
 		}
 
-		e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found", len(sourceFiles)))
+		e.logAnalysis(fmt.Sprintf("Source file count: %d", sourceCount))
 
-		// Save to cache for next time
-		if err := SaveScanCache(e.SourcePath, sourceFiles); err != nil {
-			e.logAnalysis(fmt.Sprintf("Warning: failed to save cache: %v", err))
+		// Count destination files
+		e.Status.mu.Lock()
+		e.Status.AnalysisPhase = "counting_dest"
+		e.Status.ScannedFiles = 0
+		e.Status.mu.Unlock()
+
+		destCount, err := fileops.CountFilesWithProgress(e.DestPath, func(path string, count int) {
+			e.Status.mu.Lock()
+			e.Status.ScannedFiles = count
+			e.Status.CurrentPath = path
+			e.Status.mu.Unlock()
+
+			if count%10 == 0 {
+				e.logAnalysis(fmt.Sprintf("Counting dest files: %d so far...", count))
+			}
+			e.notifyStatusUpdate()
+		})
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to count destination files: %w", err)
 		}
+		if os.IsNotExist(err) {
+			destCount = 0
+		}
+
+		e.logAnalysis(fmt.Sprintf("Destination file count: %d", destCount))
+
+		// Update status with counts
+		e.Status.mu.Lock()
+		e.Status.TotalFilesInSource = sourceCount
+		e.Status.mu.Unlock()
+
+		// If counts match, assume everything is fine (monotonic-count optimization)
+		if sourceCount == destCount {
+			e.logAnalysis("✓ File counts match - assuming directories are in sync (monotonic-count mode)")
+			e.Status.mu.Lock()
+			e.Status.AnalysisPhase = "complete"
+			e.Status.TotalFiles = 0
+			e.Status.TotalBytes = 0
+			e.Status.FilesToSync = []*FileToSync{}
+			e.Status.mu.Unlock()
+			e.notifyStatusUpdate()
+			return nil
+		}
+
+		e.logAnalysis(fmt.Sprintf("✗ File counts differ (%d vs %d) - proceeding with full scan", sourceCount, destCount))
 	}
+
+	// Scan source directory
+	e.logAnalysis(fmt.Sprintf("Scanning source: %s", e.SourcePath))
+
+	// Update analysis phase
+	e.Status.mu.Lock()
+	e.Status.AnalysisPhase = "counting_source"
+	e.Status.ScannedFiles = 0
+	e.Status.TotalFilesToScan = 0
+	e.Status.mu.Unlock()
+
+	// Scan source directory with progress
+	sourceFiles, err := fileops.ScanDirectoryWithProgress(e.SourcePath, func(path string, scannedCount int, totalCount int) {
+		e.Status.mu.Lock()
+		e.Status.CurrentPath = path
+		e.Status.ScannedFiles = scannedCount
+		e.Status.TotalFilesToScan = totalCount
+
+		// Update phase when we transition from counting to scanning
+		if totalCount > 0 && e.Status.AnalysisPhase == "counting_source" {
+			e.Status.AnalysisPhase = "scanning_source"
+		}
+		e.Status.mu.Unlock()
+
+		// Log every 10 files to avoid spam
+		if scannedCount%10 == 0 {
+			if totalCount > 0 {
+				e.logAnalysis(fmt.Sprintf("Scanning %d / %d files from source...", scannedCount, totalCount))
+			} else {
+				e.logAnalysis(fmt.Sprintf("Counting files in source: %d so far...", scannedCount))
+			}
+		}
+		e.notifyStatusUpdate()
+	})
+	if err != nil {
+		return fmt.Errorf("failed to scan source: %w", err)
+	}
+
+	e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found", len(sourceFiles)))
 
 	// Check for cancellation after source scan
 	select {
@@ -296,78 +339,47 @@ func (e *Engine) Analyze() error {
 	default:
 	}
 
-	// Try to load cached destination scan
-	var destFiles map[string]*fileops.FileInfo
+	// Scan destination directory
+	e.logAnalysis(fmt.Sprintf("Scanning destination: %s", e.DestPath))
 
-	usedCache = false
-	if e.UseCache {
-		destCache, cacheErr := LoadScanCache(e.DestPath)
-		if cacheErr == nil {
-			isValid := IsCacheValid(destCache, e.DestPath, true, func(msg string) {
-				e.logToFile(fmt.Sprintf("Destination cache validation: %s", msg))
-			})
-			if isValid {
-				e.logAnalysis(fmt.Sprintf("✓ Using cached destination scan (%d items, scanned %s ago)",
-					len(destCache.Files), time.Since(destCache.ScanTime).Round(time.Second)))
-				destFiles = destCache.Files
-				usedCache = true
-			} else {
-				e.logAnalysis(fmt.Sprintf("✗ Destination cache invalid (age: %s, will rescan)",
-					time.Since(destCache.ScanTime).Round(time.Second)))
-			}
-		} else {
-			e.logAnalysis(fmt.Sprintf("✗ Destination cache not found: %v", cacheErr))
-		}
-	}
+	// Update analysis phase
+	e.Status.mu.Lock()
+	e.Status.AnalysisPhase = "counting_dest"
+	e.Status.ScannedFiles = 0
+	e.Status.TotalFilesToScan = 0
+	e.Status.mu.Unlock()
 
-	if !usedCache {
-		// Cache miss, invalid, or disabled - do full scan
-		e.logAnalysis(fmt.Sprintf("Scanning destination: %s", e.DestPath))
-
-		// Update analysis phase
+	// Scan destination directory with progress
+	destFiles, err := fileops.ScanDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int) {
 		e.Status.mu.Lock()
-		e.Status.AnalysisPhase = "counting_dest"
-		e.Status.ScannedFiles = 0
-		e.Status.TotalFilesToScan = 0
+		e.Status.CurrentPath = path
+		e.Status.ScannedFiles = scannedCount
+		e.Status.TotalFilesToScan = totalCount
+
+		// Update phase when we transition from counting to scanning
+		if totalCount > 0 && e.Status.AnalysisPhase == "counting_dest" {
+			e.Status.AnalysisPhase = "scanning_dest"
+		}
 		e.Status.mu.Unlock()
 
-		// Scan destination directory with progress
-		destFiles, err = fileops.ScanDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int) {
-			e.Status.mu.Lock()
-			e.Status.CurrentPath = path
-			e.Status.ScannedFiles = scannedCount
-			e.Status.TotalFilesToScan = totalCount
-
-			// Update phase when we transition from counting to scanning
-			if totalCount > 0 && e.Status.AnalysisPhase == "counting_dest" {
-				e.Status.AnalysisPhase = "scanning_dest"
-			}
-			e.Status.mu.Unlock()
-
-			// Log every 10 files to avoid spam
-			if scannedCount%10 == 0 {
-				if totalCount > 0 {
-					e.logAnalysis(fmt.Sprintf("Scanning %d / %d files from destination...", scannedCount, totalCount))
-				} else {
-					e.logAnalysis(fmt.Sprintf("Counting files in destination: %d so far...", scannedCount))
-				}
-			}
-			e.notifyStatusUpdate()
-		})
-		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to scan destination: %w", err)
-		}
-		if destFiles == nil {
-			destFiles = make(map[string]*fileops.FileInfo)
-			e.logAnalysis("Destination directory does not exist (will be created)")
-		} else {
-			e.logAnalysis(fmt.Sprintf("Destination scan complete: %d items found", len(destFiles)))
-
-			// Save to cache for next time
-			if err := SaveScanCache(e.DestPath, destFiles); err != nil {
-				e.logAnalysis(fmt.Sprintf("Warning: failed to save cache: %v", err))
+		// Log every 10 files to avoid spam
+		if scannedCount%10 == 0 {
+			if totalCount > 0 {
+				e.logAnalysis(fmt.Sprintf("Scanning %d / %d files from destination...", scannedCount, totalCount))
+			} else {
+				e.logAnalysis(fmt.Sprintf("Counting files in destination: %d so far...", scannedCount))
 			}
 		}
+		e.notifyStatusUpdate()
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to scan destination: %w", err)
+	}
+	if destFiles == nil {
+		destFiles = make(map[string]*fileops.FileInfo)
+		e.logAnalysis("Destination directory does not exist (will be created)")
+	} else {
+		e.logAnalysis(fmt.Sprintf("Destination scan complete: %d items found", len(destFiles)))
 	}
 
 	// Check for cancellation after destination scan
@@ -835,29 +847,11 @@ func (e *Engine) syncFixed() error {
 
 	e.logToFile(fmt.Sprintf("Sync phase complete: %d / %d files copied", processedFiles, totalFiles))
 
-	// Update destination cache after sync (even if there were errors)
-	// This ensures the next run can use the cache instead of rescanning
-	// We update even with errors because most files were likely copied successfully
-	if e.UseCache {
-		e.Status.mu.Lock()
-		e.Status.FinalizationPhase = "updating_cache"
-		e.Status.mu.Unlock()
-		e.notifyStatusUpdate()
-
-		if err := e.updateDestinationCache(); err != nil {
-			// Don't fail the sync if cache update fails, just log it
-			e.logAnalysis(fmt.Sprintf("Warning: failed to update destination cache: %v", err))
-			e.logToFile(fmt.Sprintf("Warning: failed to update destination cache: %v", err))
-		} else {
-			e.logAnalysis("✓ Updated destination cache for next run")
-			e.logToFile("✓ Updated destination cache for next run")
-		}
-
-		e.Status.mu.Lock()
-		e.Status.FinalizationPhase = "complete"
-		e.Status.mu.Unlock()
-		e.notifyStatusUpdate()
-	}
+	// Mark finalization as complete
+	e.Status.mu.Lock()
+	e.Status.FinalizationPhase = "complete"
+	e.Status.mu.Unlock()
+	e.notifyStatusUpdate()
 
 	// Return combined error if any failures occurred
 	if len(allErrors) > 0 {
@@ -1098,29 +1092,11 @@ func (e *Engine) syncAdaptive() error {
 		return fmt.Errorf("sync aborted: too many errors (%d errors, limit is %d)", errorCount, MaxErrorsBeforeAbort)
 	}
 
-	// Update destination cache after sync (even if there were errors)
-	// This ensures the next run can use the cache instead of rescanning
-	// We update even with errors because most files were likely copied successfully
-	if e.UseCache {
-		e.Status.mu.Lock()
-		e.Status.FinalizationPhase = "updating_cache"
-		e.Status.mu.Unlock()
-		e.notifyStatusUpdate()
-
-		if err := e.updateDestinationCache(); err != nil {
-			// Don't fail the sync if cache update fails, just log it
-			e.logAnalysis(fmt.Sprintf("Warning: failed to update destination cache: %v", err))
-			e.logToFile(fmt.Sprintf("Warning: failed to update destination cache: %v", err))
-		} else {
-			e.logAnalysis("✓ Updated destination cache for next run")
-			e.logToFile("✓ Updated destination cache for next run")
-		}
-
-		e.Status.mu.Lock()
-		e.Status.FinalizationPhase = "complete"
-		e.Status.mu.Unlock()
-		e.notifyStatusUpdate()
-	}
+	// Mark finalization as complete
+	e.Status.mu.Lock()
+	e.Status.FinalizationPhase = "complete"
+	e.Status.mu.Unlock()
+	e.notifyStatusUpdate()
 
 	// Return combined error if any failures occurred (but didn't hit limit)
 	if len(allErrors) > 0 {
@@ -1294,62 +1270,6 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 	e.notifyStatusUpdate()
 
 	return nil
-}
-
-// updateDestinationCache updates the destination cache after a sync
-// This updates the cache incrementally with newly copied files
-func (e *Engine) updateDestinationCache() error {
-	// Try to load the existing destination cache first
-	// We'll update it incrementally rather than rescanning everything
-	destCache, err := LoadScanCache(e.DestPath)
-	var destFiles map[string]*fileops.FileInfo
-
-	if err == nil && destCache != nil {
-		// Start with existing cache - already-synced files are already in here
-		destFiles = destCache.Files
-		e.logToFile(fmt.Sprintf("Updating destination cache incrementally (starting with %d cached files)...", len(destFiles)))
-	} else {
-		// No existing cache, start fresh
-		// This means we'll only cache the files we just copied
-		// The cache will be incomplete but still valid
-		destFiles = make(map[string]*fileops.FileInfo)
-		e.logToFile("Building new destination cache from copied files...")
-	}
-
-	e.Status.mu.RLock()
-	totalFilesToSync := len(e.Status.FilesToSync)
-	copiedCount := 0
-	skippedCount := 0
-	// Update entries for files that were just copied
-	for _, fileToSync := range e.Status.FilesToSync {
-		if fileToSync.Status == "complete" {
-			// Get the actual file info from destination
-			dstPath := filepath.Join(e.DestPath, fileToSync.RelativePath)
-			info, err := os.Stat(dstPath)
-			if err != nil {
-				// File should exist since we just copied it, but if not, skip it
-				e.logToFile(fmt.Sprintf("Warning: copied file not found for cache update: %s", fileToSync.RelativePath))
-				skippedCount++
-				continue
-			}
-
-			destFiles[fileToSync.RelativePath] = &fileops.FileInfo{
-				Path:         dstPath,
-				RelativePath: fileToSync.RelativePath,
-				Size:         info.Size(),
-				ModTime:      info.ModTime(),
-				IsDir:        info.IsDir(),
-			}
-			copiedCount++
-		}
-	}
-	e.Status.mu.RUnlock()
-
-	e.logToFile(fmt.Sprintf("Cache update: processed %d files, %d complete, %d skipped, total cache size: %d files",
-		totalFilesToSync, copiedCount, skippedCount, len(destFiles)))
-
-	// Save the updated destination state to cache
-	return SaveScanCache(e.DestPath, destFiles)
 }
 
 // GetStatus returns a copy of the current status

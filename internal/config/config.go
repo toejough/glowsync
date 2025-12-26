@@ -4,18 +4,82 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alexflint/go-arg"
 )
 
+// ChangeType represents the type of changes expected in the sync operation
+type ChangeType int
+
+const (
+	// MonotonicCount - only files added OR removed (not both)
+	MonotonicCount ChangeType = iota
+	// FluctuatingCount - files added AND removed
+	FluctuatingCount
+	// Content - files may be altered (content changes)
+	Content
+	// DeviousContent - files altered with same modtime (devious changes)
+	DeviousContent
+	// Paranoid - meticulous byte-by-byte comparison
+	Paranoid
+)
+
+// String returns the string representation of ChangeType
+func (ct ChangeType) String() string {
+	switch ct {
+	case MonotonicCount:
+		return "monotonic-count"
+	case FluctuatingCount:
+		return "fluctuating-count"
+	case Content:
+		return "content"
+	case DeviousContent:
+		return "devious-content-changes"
+	case Paranoid:
+		return "paranoid-does-not-mean-wrong"
+	default:
+		return "unknown"
+	}
+}
+
+// ParseChangeType parses a string into a ChangeType
+func ParseChangeType(s string) (ChangeType, error) {
+	s = strings.ToLower(s)
+	switch s {
+	case "monotonic-count", "monotonic":
+		return MonotonicCount, nil
+	case "fluctuating-count", "fluctuating":
+		return FluctuatingCount, nil
+	case "content":
+		return Content, nil
+	case "devious-content-changes", "devious":
+		return DeviousContent, nil
+	case "paranoid-does-not-mean-wrong", "paranoid":
+		return Paranoid, nil
+	default:
+		return MonotonicCount, fmt.Errorf("invalid change type: %s (valid: monotonic, fluctuating, content, devious, paranoid)", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler for go-arg
+func (ct *ChangeType) UnmarshalText(text []byte) error {
+	parsed, err := ParseChangeType(string(text))
+	if err != nil {
+		return err
+	}
+	*ct = parsed
+	return nil
+}
+
 // Config holds the application configuration
 type Config struct {
-	SourcePath      string `arg:"-s,--source" help:"Source directory path"`
-	DestPath        string `arg:"-d,--dest" help:"Destination directory path"`
-	InteractiveMode bool   `arg:"-i,--interactive" help:"Run in interactive mode"`
-	AdaptiveMode    bool   `arg:"--adaptive" default:"true" help:"Use adaptive concurrency"`
-	Workers         int    `arg:"-w,--workers" default:"4" help:"Number of concurrent workers (0 = adaptive)"`
-	UseCache        bool   `arg:"--cache" default:"true" help:"Use cached scan results"`
+	SourcePath      string     `arg:"-s,--source" help:"Source directory path"`
+	DestPath        string     `arg:"-d,--dest" help:"Destination directory path"`
+	InteractiveMode bool       `arg:"-i,--interactive" help:"Run in interactive mode"`
+	AdaptiveMode    bool       `arg:"--adaptive" default:"true" help:"Use adaptive concurrency"`
+	Workers         int        `arg:"-w,--workers" default:"4" help:"Number of concurrent workers (0 = adaptive)"`
+	TypeOfChange    ChangeType `arg:"--type-of-change,--type" default:"monotonic-count" help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"`
 }
 
 // Description returns the program description for go-arg
@@ -33,7 +97,7 @@ func ParseFlags() (*Config, error) {
 	cfg := &Config{
 		AdaptiveMode: true,
 		Workers:      4,
-		UseCache:     true,
+		TypeOfChange: MonotonicCount,
 	}
 
 	arg.MustParse(cfg)

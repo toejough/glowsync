@@ -101,9 +101,10 @@ func Fmt() error {
 
 // Check runs all checks (fmt, lint, test)
 func Check() error {
+	mg.Deps(Test)
 	mg.Deps(Fmt)
 	mg.Deps(Lint)
-	mg.Deps(Test)
+	mg.Deps(CheckNils)
 	return nil
 }
 

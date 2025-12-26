@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/magefile/mage v1.15.0
 	github.com/onsi/gomega v1.38.3
-	github.com/toejough/imptest v0.0.0-20251224013240-9784b4a62b53
+	github.com/toejough/imptest v0.0.0-20251226073255-2a7778c95449
 )
 
 require (

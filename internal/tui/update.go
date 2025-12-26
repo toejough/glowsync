@@ -50,7 +50,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.engine = msg.Engine
 		m.engine.Workers = m.config.Workers
 		m.engine.AdaptiveMode = m.config.AdaptiveMode
-		m.engine.UseCache = m.config.UseCache
+		m.engine.ChangeType = m.config.TypeOfChange
 
 		// Register status callback
 		m.engine.RegisterStatusCallback(func(status *sync.Status) {

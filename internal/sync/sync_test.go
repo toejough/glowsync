@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/sync"
 )
 
@@ -181,7 +182,9 @@ func TestEngineDeleteExtraFiles(t *testing.T) {
 	}
 
 	// Analyze should delete the extra file
+	// Use FluctuatingCount mode to ensure full scan (not monotonic optimization)
 	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.FluctuatingCount
 	if err := engine.Analyze(); err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
@@ -238,6 +241,202 @@ func TestGetStatus(t *testing.T) {
 	}
 	if status.TotalBytes != 0 {
 		t.Errorf("Expected 0 total bytes, got %d", status.TotalBytes)
+	}
+}
+
+// TestMonotonicCount_SameCountSameFiles tests that when file counts match,
+// monotonic-count mode assumes everything is fine and skips detailed scanning
+func TestMonotonicCount_SameCountSameFiles(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create identical files in both directories
+	testFiles := map[string]string{
+		"file1.txt": "content1",
+		"file2.txt": "content2",
+		"file3.txt": "content3",
+	}
+
+	for path, content := range testFiles {
+		srcPath := filepath.Join(srcDir, path)
+		dstPath := filepath.Join(dstDir, path)
+
+		if err := os.WriteFile(srcPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+		if err := os.WriteFile(dstPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+
+		// Make sure mod times are the same
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			t.Fatalf("Failed to stat source file: %v", err)
+		}
+		if err := os.Chtimes(dstPath, info.ModTime(), info.ModTime()); err != nil {
+			t.Fatalf("Failed to set mod time: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.MonotonicCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// With monotonic-count mode and same file count, should assume everything is fine
+	// and skip sync (this is the optimization - we trust that same count = same files)
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync (monotonic-count optimization), got %d", engine.Status.TotalFiles)
+	}
+
+	// Verify that TotalFilesInSource was still counted (we need to count to know if counts match)
+	if engine.Status.TotalFilesInSource != 3 {
+		t.Errorf("Expected 3 total files in source, got %d", engine.Status.TotalFilesInSource)
+	}
+}
+
+// TestMonotonicCount_SameCountDifferentContent tests that monotonic-count mode
+// will INCORRECTLY skip sync when counts match but content differs
+// This demonstrates the trade-off: speed for correctness
+func TestMonotonicCount_SameCountDifferentContent(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create files with same names but different content
+	if err := os.WriteFile(filepath.Join(srcDir, "file1.txt"), []byte("new content"), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dstDir, "file1.txt"), []byte("old content"), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.MonotonicCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Monotonic-count mode should skip sync because counts match (1 file in each)
+	// This is the trade-off: we assume same count = same files
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync (monotonic-count assumes same count = same files), got %d", engine.Status.TotalFiles)
+	}
+}
+
+// TestMonotonicCount_SameCountDifferentFiles tests that when file counts match but files differ,
+// monotonic-count mode INCORRECTLY skips sync (this is the trade-off for speed)
+func TestMonotonicCount_SameCountDifferentFiles(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create different files with same count
+	srcFiles := map[string]string{
+		"file1.txt": "content1",
+		"file2.txt": "content2",
+		"file3.txt": "content3",
+	}
+
+	dstFiles := map[string]string{
+		"fileA.txt": "contentA",
+		"fileB.txt": "contentB",
+		"fileC.txt": "contentC",
+	}
+
+	for path, content := range srcFiles {
+		if err := os.WriteFile(filepath.Join(srcDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+	}
+
+	for path, content := range dstFiles {
+		if err := os.WriteFile(filepath.Join(dstDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.MonotonicCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Monotonic-count mode assumes same count = same files, so it skips sync
+	// This is the trade-off: speed for correctness
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync (monotonic-count assumes same count = same files), got %d", engine.Status.TotalFiles)
+	}
+
+	// Verify old destination files still exist (not deleted because we skipped sync)
+	for path := range dstFiles {
+		dstPath := filepath.Join(dstDir, path)
+		if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+			t.Errorf("Expected file %s to still exist in destination (sync was skipped)", path)
+		}
+	}
+}
+
+// TestMonotonicCount_DifferentCount tests that when file counts differ, sync is performed
+func TestMonotonicCount_DifferentCount(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create more files in source than destination
+	srcFiles := map[string]string{
+		"file1.txt": "content1",
+		"file2.txt": "content2",
+		"file3.txt": "content3",
+	}
+
+	dstFiles := map[string]string{
+		"file1.txt": "content1",
+	}
+
+	for path, content := range srcFiles {
+		srcPath := filepath.Join(srcDir, path)
+		if err := os.WriteFile(srcPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+	}
+
+	for path, content := range dstFiles {
+		dstPath := filepath.Join(dstDir, path)
+		if err := os.WriteFile(dstPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+
+		// Make sure mod time matches source for file1.txt
+		srcPath := filepath.Join(srcDir, path)
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			t.Fatalf("Failed to stat source file: %v", err)
+		}
+		if err := os.Chtimes(dstPath, info.ModTime(), info.ModTime()); err != nil {
+			t.Fatalf("Failed to set mod time: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.MonotonicCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should sync the 2 missing files
+	if engine.Status.TotalFiles != 2 {
+		t.Errorf("Expected 2 files to sync, got %d", engine.Status.TotalFiles)
 	}
 }
 
