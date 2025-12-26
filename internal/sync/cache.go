@@ -13,10 +13,9 @@ import (
 
 // ScanCache represents cached scan results for a directory
 type ScanCache struct {
-	Path          string                      `json:"path"`
-	ScanTime      time.Time                   `json:"scan_time"`
-	Files         map[string]*fileops.FileInfo `json:"files"`
-	DirectoryHash string                      `json:"directory_hash"` // Hash of directory structure
+	Path     string                       `json:"path"`
+	ScanTime time.Time                    `json:"scan_time"`
+	Files    map[string]*fileops.FileInfo `json:"files"`
 }
 
 // getCacheDir returns the directory where cache files are stored
@@ -46,18 +45,6 @@ func getCachePath(dirPath string) (string, error) {
 	cacheFile := fmt.Sprintf("scan-%x.json", hash[:8])
 	
 	return filepath.Join(cacheDir, cacheFile), nil
-}
-
-// computeDirectoryHash creates a hash based on directory structure
-// This is a quick check - we hash the count of files
-func computeDirectoryHash(files map[string]*fileops.FileInfo) string {
-	h := sha256.New()
-
-	// Simple approach: hash the count
-	// For large directories, we don't want to hash everything
-	_, _ = fmt.Fprintf(h, "count:%d", len(files))
-
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // LoadScanCache attempts to load cached scan results
@@ -94,10 +81,9 @@ func SaveScanCache(dirPath string, files map[string]*fileops.FileInfo) error {
 	}
 	
 	cache := ScanCache{
-		Path:          dirPath,
-		ScanTime:      time.Now(),
-		Files:         files,
-		DirectoryHash: computeDirectoryHash(files),
+		Path:     dirPath,
+		ScanTime: time.Now(),
+		Files:    files,
 	}
 	
 	data, err := json.MarshalIndent(cache, "", "  ")
