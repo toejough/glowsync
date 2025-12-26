@@ -1,54 +1,51 @@
-version: 2
-
-run:
-  timeout: 5m
-  tests: true
-  modules-download-mode: readonly
+version: '2'
 
 linters:
-  enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - misspell
-    - unconvert
-    - unparam
-    - gocritic
-    - gocyclo
-    - revive
-    - gosec
-    - bodyclose
-    - gocognit
-    - nestif
-    - prealloc
-    - predeclared
-    - whitespace
+  enable-all: true
+  disable:
+    - exhaustruct    # too noisy for zero value structs
+    - forbidigo      # I print output on purpose sometimes
+    - godox          # saving todos till another validation step
+    - ireturn        # I like generic return types
+    - nonamedreturns # I like named returns
+    - wsl            # deprecated
 
 linters-settings:
-  gocyclo:
-    min-complexity: 15
-  gocognit:
-    min-complexity: 20
-  nestif:
-    min-complexity: 5
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  revive:
+  depguard:
     rules:
-      - name: exported
-        disabled: false
-      - name: package-comments
-        disabled: true
+      all:
+        files:
+          - $all
+          - "!$test"
+        allow:
+          - $gostd
+          - github.com/magefile/mage
+          - github.com/magefile/mage/mg
+          - github.com/magefile/mage/sh
+      test:
+        files:
+          - $test
+        allow:
+          - $gostd
+
+  nlreturn:
+    block-size: 2
+
+  unused:
+    field-writes-are-uses: false
+    exported-fields-are-used: false
+    local-variables-are-used: false
 
 issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  fix: true
+  exclude-generated: lax
+  exclude-dirs:
+    - third_party
+    - builtin
+    - examples
+  exclude-rules:
+    # Dynamic errors are acceptable and often clearer in test code/predicates.
+    - path: _test\.go
+      linters:
+        - err113
 

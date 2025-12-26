@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,10 +28,23 @@ func Test() error {
 	return sh.Run("go", "test", "-v", "-race", "-coverprofile=coverage.out", "./...")
 }
 
-// Lint runs golangci-lint
+// Lint lints the codebase
 func Lint() error {
-	fmt.Println("Running linter...")
-	return sh.Run("golangci-lint", "run", "./...")
+	fmt.Println("Linting...")
+	return run(context.Background(), "golangci-lint", "run", "-c", ".golangci.yml")
+}
+
+// LintForFail lints the codebase purely to find out whether anything fails
+func LintForFail() error {
+	fmt.Println("Linting to check for overall pass/fail...")
+	return run(
+		context.Background(),
+		"golangci-lint", "run",
+		"-c", ".golangci.yml",
+		"--fix=false",
+		"--max-issues-per-linter=1",
+		"--max-same-issues=1",
+	)
 }
 
 // Clean removes build artifacts
@@ -73,12 +87,22 @@ func Coverage() error {
 	if err := sh.Run("go", "tool", "cover", "-html=coverage.out", "-o", "coverage.html"); err != nil {
 		return err
 	}
-	
+
 	// Try to open the coverage report
 	cmd := exec.Command("open", "coverage.html")
 	if err := cmd.Run(); err != nil {
 		fmt.Println("Coverage report generated at coverage.html")
 	}
 	return nil
+}
+
+// Helper function to run commands with context
+func run(c context.Context, command string, arg ...string) error {
+	cmd := exec.CommandContext(c, command, arg...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }
 
