@@ -1101,3 +1101,199 @@ func TestDeviousContent_DeletedFile(t *testing.T) {
 	}
 }
 
+// TestParanoid_SameContent tests that files with identical bytes are not synced
+func TestParanoid_SameContent(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file with same content in both locations
+	content := "identical byte-by-byte content"
+
+	srcPath := filepath.Join(srcDir, "file.txt")
+	dstPath := filepath.Join(dstDir, "file.txt")
+
+	if err := os.WriteFile(srcPath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(dstPath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	// Set different modtimes (shouldn't matter for Paranoid mode)
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
+		t.Fatalf("Failed to stat source file: %v", err)
+	}
+	oldTime := srcInfo.ModTime().Add(-2 * time.Hour)
+	if err := os.Chtimes(dstPath, oldTime, oldTime); err != nil {
+		t.Fatalf("Failed to set dest modtime: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.Paranoid
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 0 files to sync (bytes are identical)
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync, got %d", engine.Status.TotalFiles)
+	}
+}
+
+// TestParanoid_DifferentContent tests that files with different bytes are synced
+func TestParanoid_DifferentContent(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file with different content
+	srcContent := "source content here"
+	dstContent := "destination content"
+
+	if err := os.WriteFile(filepath.Join(srcDir, "file.txt"), []byte(srcContent), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dstDir, "file.txt"), []byte(dstContent), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.Paranoid
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 1 file to sync
+	if engine.Status.TotalFiles != 1 {
+		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify content was updated
+	content, err := os.ReadFile(filepath.Join(dstDir, "file.txt"))
+	if err != nil {
+		t.Fatalf("Failed to read dest file: %v", err)
+	}
+	if string(content) != srcContent {
+		t.Errorf("Expected content %q, got %q", srcContent, string(content))
+	}
+}
+
+// TestParanoid_NewFile tests that new files are copied
+func TestParanoid_NewFile(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file only in source
+	if err := os.WriteFile(filepath.Join(srcDir, "new.txt"), []byte("brand new file"), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.Paranoid
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 1 file to sync
+	if engine.Status.TotalFiles != 1 {
+		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify file was copied
+	if _, err := os.Stat(filepath.Join(dstDir, "new.txt")); os.IsNotExist(err) {
+		t.Error("Expected new.txt to be copied to destination")
+	}
+}
+
+// TestParanoid_DeletedFile tests that deleted files are removed from destination
+func TestParanoid_DeletedFile(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file only in destination
+	if err := os.WriteFile(filepath.Join(dstDir, "deleted.txt"), []byte("to be deleted"), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.Paranoid
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify file was deleted
+	if _, err := os.Stat(filepath.Join(dstDir, "deleted.txt")); !os.IsNotExist(err) {
+		t.Error("Expected deleted.txt to be removed from destination")
+	}
+}
+
+// TestParanoid_DifferentModtime tests that files with same bytes but different modtime are not synced
+func TestParanoid_DifferentModtime(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file with same content
+	content := "exact same bytes"
+
+	srcPath := filepath.Join(srcDir, "file.txt")
+	dstPath := filepath.Join(dstDir, "file.txt")
+
+	if err := os.WriteFile(srcPath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(dstPath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	// Set very different modtimes
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
+		t.Fatalf("Failed to stat source file: %v", err)
+	}
+	veryOldTime := srcInfo.ModTime().Add(-24 * time.Hour)
+	if err := os.Chtimes(dstPath, veryOldTime, veryOldTime); err != nil {
+		t.Fatalf("Failed to set dest modtime: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.Paranoid
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 0 files to sync (bytes are identical, modtime doesn't matter)
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync, got %d", engine.Status.TotalFiles)
+	}
+}
+

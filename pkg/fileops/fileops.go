@@ -330,17 +330,92 @@ func FilesNeedSync(src, dst *FileInfo) bool {
 	if dst == nil {
 		return true // Destination doesn't exist
 	}
-	
+
 	// Compare sizes first (quick check)
 	if src.Size != dst.Size {
 		return true
 	}
-	
+
 	// Compare modification times
 	if !src.ModTime.Equal(dst.ModTime) {
 		return true
 	}
-	
+
 	return false
+}
+
+// CompareFilesBytes performs byte-by-byte comparison of two files
+// Returns true if files are identical, false if they differ
+func CompareFilesBytes(path1, path2 string) (bool, error) {
+	// Open both files
+	file1, err := os.Open(path1) // #nosec G304 - file path is controlled by caller
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		_ = file1.Close()
+	}()
+
+	file2, err := os.Open(path2) // #nosec G304 - file path is controlled by caller
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		_ = file2.Close()
+	}()
+
+	// Get file sizes
+	info1, err := file1.Stat()
+	if err != nil {
+		return false, err
+	}
+	info2, err := file2.Stat()
+	if err != nil {
+		return false, err
+	}
+
+	// Quick size check
+	if info1.Size() != info2.Size() {
+		return false, nil
+	}
+
+	// Compare byte-by-byte
+	buf1 := make([]byte, 32*1024) // 32KB buffer
+	buf2 := make([]byte, 32*1024)
+
+	for {
+		n1, err1 := file1.Read(buf1)
+		n2, err2 := file2.Read(buf2)
+
+		// Check for read errors
+		if err1 != nil && err1 != io.EOF {
+			return false, err1
+		}
+		if err2 != nil && err2 != io.EOF {
+			return false, err2
+		}
+
+		// Compare bytes read
+		if n1 != n2 {
+			return false, nil
+		}
+
+		// Compare buffer contents
+		for i := 0; i < n1; i++ {
+			if buf1[i] != buf2[i] {
+				return false, nil
+			}
+		}
+
+		// Check if we've reached EOF on both files
+		if err1 == io.EOF && err2 == io.EOF {
+			return true, nil
+		}
+
+		// If only one file reached EOF, they're different
+		if err1 == io.EOF || err2 == io.EOF {
+			return false, nil
+		}
+	}
 }
 

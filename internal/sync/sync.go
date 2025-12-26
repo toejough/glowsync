@@ -490,8 +490,34 @@ func (e *Engine) Analyze() error {
 					}
 				}
 			}
+		case config.Paranoid:
+			// For paranoid mode, perform byte-by-byte comparison
+			if dstFile == nil {
+				needsSync = true
+			} else {
+				// Compare files byte-by-byte
+				srcPath := filepath.Join(e.SourcePath, relPath)
+				dstPath := filepath.Join(e.DestPath, relPath)
+
+				identical, err := fileops.CompareFilesBytes(srcPath, dstPath)
+				if err != nil {
+					e.logAnalysis(fmt.Sprintf("  ⚠ Failed to compare bytes for %s: %v", relPath, err))
+					needsSync = true // Assume needs sync if we can't compare
+				} else {
+					needsSync = !identical
+
+					// Log first few comparisons for debugging
+					if comparedCount < 5 {
+						if needsSync {
+							e.logAnalysis(fmt.Sprintf("  → Bytes differ: %s", relPath))
+						} else {
+							e.logAnalysis(fmt.Sprintf("  ✓ Bytes match: %s", relPath))
+						}
+					}
+				}
+			}
 		default:
-			// For other modes (Content, Paranoid), use full comparison (size + modtime)
+			// For other modes (Content), use full comparison (size + modtime)
 			needsSync = fileops.FilesNeedSync(srcFile, dstFile)
 		}
 
