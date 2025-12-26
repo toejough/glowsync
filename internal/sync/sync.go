@@ -449,7 +449,17 @@ func (e *Engine) Analyze() error {
 		}
 
 		dstFile := destFiles[relPath]
-		needsSync := fileops.FilesNeedSync(srcFile, dstFile)
+
+		// Determine if file needs sync based on ChangeType
+		var needsSync bool
+		switch e.ChangeType {
+		case config.MonotonicCount, config.FluctuatingCount:
+			// For count-based modes, only check if file exists (path comparison)
+			needsSync = (dstFile == nil)
+		default:
+			// For other modes, use full comparison (size + modtime)
+			needsSync = fileops.FilesNeedSync(srcFile, dstFile)
+		}
 
 		// Prepare log messages outside the lock
 		var logMsg string

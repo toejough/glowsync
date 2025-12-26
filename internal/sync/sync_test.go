@@ -442,3 +442,216 @@ func TestMonotonicCount_DifferentCount(t *testing.T) {
 	}
 }
 
+// TestFluctuatingCount_AddedFiles tests that files added to source are copied to destination
+func TestFluctuatingCount_AddedFiles(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create files in source
+	srcFiles := map[string]string{
+		"existing.txt": "existing content",
+		"new1.txt":     "new content 1",
+		"new2.txt":     "new content 2",
+	}
+
+	// Only one file exists in destination
+	dstFiles := map[string]string{
+		"existing.txt": "existing content",
+	}
+
+	for path, content := range srcFiles {
+		if err := os.WriteFile(filepath.Join(srcDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+	}
+
+	for path, content := range dstFiles {
+		if err := os.WriteFile(filepath.Join(dstDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.FluctuatingCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 2 new files to sync
+	if engine.Status.TotalFiles != 2 {
+		t.Errorf("Expected 2 files to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify new files were copied
+	for path := range srcFiles {
+		dstPath := filepath.Join(dstDir, path)
+		if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+			t.Errorf("Expected file %s to exist in destination", path)
+		}
+	}
+}
+
+// TestFluctuatingCount_RemovedFiles tests that files removed from source are deleted from destination
+func TestFluctuatingCount_RemovedFiles(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Only one file in source
+	srcFiles := map[string]string{
+		"keep.txt": "keep this",
+	}
+
+	// Multiple files in destination
+	dstFiles := map[string]string{
+		"keep.txt":    "keep this",
+		"delete1.txt": "delete this",
+		"delete2.txt": "delete this too",
+	}
+
+	for path, content := range srcFiles {
+		if err := os.WriteFile(filepath.Join(srcDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+	}
+
+	for path, content := range dstFiles {
+		if err := os.WriteFile(filepath.Join(dstDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.FluctuatingCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Perform sync (Analyze doesn't delete, Sync does)
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify deleted files are gone
+	if _, err := os.Stat(filepath.Join(dstDir, "delete1.txt")); !os.IsNotExist(err) {
+		t.Error("Expected delete1.txt to be deleted from destination")
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, "delete2.txt")); !os.IsNotExist(err) {
+		t.Error("Expected delete2.txt to be deleted from destination")
+	}
+
+	// Verify kept file still exists
+	if _, err := os.Stat(filepath.Join(dstDir, "keep.txt")); os.IsNotExist(err) {
+		t.Error("Expected keep.txt to still exist in destination")
+	}
+}
+
+// TestFluctuatingCount_BothAddedAndRemoved tests handling both adds and removes in one sync
+func TestFluctuatingCount_BothAddedAndRemoved(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Source has some files
+	srcFiles := map[string]string{
+		"keep.txt": "keep this",
+		"new.txt":  "new file",
+	}
+
+	// Destination has different files
+	dstFiles := map[string]string{
+		"keep.txt":   "keep this",
+		"remove.txt": "remove this",
+	}
+
+	for path, content := range srcFiles {
+		if err := os.WriteFile(filepath.Join(srcDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+	}
+
+	for path, content := range dstFiles {
+		if err := os.WriteFile(filepath.Join(dstDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.FluctuatingCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 1 file to sync (new.txt)
+	if engine.Status.TotalFiles != 1 {
+		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify new file was added
+	if _, err := os.Stat(filepath.Join(dstDir, "new.txt")); os.IsNotExist(err) {
+		t.Error("Expected new.txt to be copied to destination")
+	}
+
+	// Verify removed file is gone
+	if _, err := os.Stat(filepath.Join(dstDir, "remove.txt")); !os.IsNotExist(err) {
+		t.Error("Expected remove.txt to be deleted from destination")
+	}
+
+	// Verify kept file still exists
+	if _, err := os.Stat(filepath.Join(dstDir, "keep.txt")); os.IsNotExist(err) {
+		t.Error("Expected keep.txt to still exist in destination")
+	}
+}
+
+// TestFluctuatingCount_SameFiles tests that when files match, nothing is synced
+func TestFluctuatingCount_SameFiles(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Same files in both
+	files := map[string]string{
+		"file1.txt": "content1",
+		"file2.txt": "content2",
+	}
+
+	for path, content := range files {
+		if err := os.WriteFile(filepath.Join(srcDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write source file: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, path), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write dest file: %v", err)
+		}
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.FluctuatingCount
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 0 files to sync
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync, got %d", engine.Status.TotalFiles)
+	}
+}
+
