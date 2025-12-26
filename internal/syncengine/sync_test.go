@@ -37,9 +37,9 @@ func TestNewEngine(t *testing.T) {
 	wrapper.Start("/source", "/dest").ExpectReturnedValuesShould(
 		And(
 			Not(BeNil()),
-			WithTransform(func(e *syncengine.Engine) string { return e.SourcePath }, Equal("/source")),
-			WithTransform(func(e *syncengine.Engine) string { return e.DestPath }, Equal("/dest")),
-			WithTransform(func(e *syncengine.Engine) *syncengine.Status { return e.Status }, Not(BeNil())),
+			HaveField("SourcePath", Equal("/source")),
+			HaveField("DestPath", Equal("/dest")),
+			HaveField("Status", Not(BeNil())),
 		),
 	)
 }
@@ -262,8 +262,8 @@ func TestGetStatus(t *testing.T) {
 			WithTransform(func(e *syncengine.Engine) *syncengine.Status {
 				return e.GetStatus()
 			}, And(
-				WithTransform(func(s *syncengine.Status) int { return s.TotalFiles }, Equal(0)),
-				WithTransform(func(s *syncengine.Status) int64 { return s.TotalBytes }, Equal(int64(0))),
+				HaveField("TotalFiles", Equal(0)),
+				HaveField("TotalBytes", Equal(int64(0))),
 			)),
 		),
 	)
