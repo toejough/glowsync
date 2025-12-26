@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/joe/copy-files/internal/config"
-	"github.com/joe/copy-files/internal/sync"
+	"github.com/joe/copy-files/internal/syncengine"
 )
 
 // Model represents the TUI state
@@ -27,8 +27,8 @@ type Model struct {
 	showCompletions bool
 
 	// Sync phase (when needsInput is false)
-	engine          *sync.Engine
-	status          *sync.Status
+	engine          *syncengine.Engine
+	status          *syncengine.Status
 	overallProgress progress.Model
 	fileProgress    progress.Model
 	spinner         spinner.Model
@@ -43,7 +43,7 @@ type Model struct {
 
 // StatusUpdateMsg is sent when sync status updates
 type StatusUpdateMsg struct {
-	Status *sync.Status
+	Status *syncengine.Status
 }
 
 // InitializeEngineMsg is sent to trigger engine initialization
@@ -51,7 +51,7 @@ type InitializeEngineMsg struct{}
 
 // EngineInitializedMsg is sent when the engine has been created
 type EngineInitializedMsg struct {
-	Engine *sync.Engine
+	Engine *syncengine.Engine
 }
 
 // AnalysisStartedMsg is sent when analysis has started

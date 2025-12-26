@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/joe/copy-files/internal/sync"
+	"github.com/joe/copy-files/internal/syncengine"
 )
 
 type tickMsg time.Time
@@ -26,7 +26,7 @@ func (m Model) initializeEngine() tea.Cmd {
 	// Create a command that will initialize the engine
 	return func() tea.Msg {
 		return EngineInitializedMsg{
-			Engine: sync.NewEngine(m.config.SourcePath, m.config.DestPath),
+			Engine: syncengine.NewEngine(m.config.SourcePath, m.config.DestPath),
 		}
 	}
 }
@@ -53,7 +53,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.engine.ChangeType = m.config.TypeOfChange
 
 		// Register status callback
-		m.engine.RegisterStatusCallback(func(status *sync.Status) {
+		m.engine.RegisterStatusCallback(func(status *syncengine.Status) {
 			m.status = status
 		})
 
