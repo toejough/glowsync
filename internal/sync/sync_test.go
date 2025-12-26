@@ -891,3 +891,213 @@ func TestContent_DeletedFile(t *testing.T) {
 	}
 }
 
+// TestDeviousContent_ModifiedWithSameModtime tests that files modified with matching modtime are detected
+func TestDeviousContent_ModifiedWithSameModtime(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file with different content in both locations
+	srcContent := "malicious new content"
+	dstContent := "original content"
+
+	srcPath := filepath.Join(srcDir, "file.txt")
+	dstPath := filepath.Join(dstDir, "file.txt")
+
+	if err := os.WriteFile(srcPath, []byte(srcContent), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(dstPath, []byte(dstContent), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	// Get source modtime and set destination to match (simulating devious modification)
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
+		t.Fatalf("Failed to stat source file: %v", err)
+	}
+	if err := os.Chtimes(dstPath, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
+		t.Fatalf("Failed to set dest modtime: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.DeviousContent
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should detect the content difference despite matching modtime
+	if engine.Status.TotalFiles != 1 {
+		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify content was updated
+	content, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("Failed to read dest file: %v", err)
+	}
+	if string(content) != srcContent {
+		t.Errorf("Expected content %q, got %q", srcContent, string(content))
+	}
+}
+
+// TestDeviousContent_SameContent tests that files with same content are not synced
+func TestDeviousContent_SameContent(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file with same content in both locations
+	content := "same content"
+
+	srcPath := filepath.Join(srcDir, "file.txt")
+	dstPath := filepath.Join(dstDir, "file.txt")
+
+	if err := os.WriteFile(srcPath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(dstPath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	// Set different modtimes (shouldn't matter for DeviousContent mode)
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
+		t.Fatalf("Failed to stat source file: %v", err)
+	}
+	oldTime := srcInfo.ModTime().Add(-1 * time.Hour)
+	if err := os.Chtimes(dstPath, oldTime, oldTime); err != nil {
+		t.Fatalf("Failed to set dest modtime: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.DeviousContent
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 0 files to sync (content is the same)
+	if engine.Status.TotalFiles != 0 {
+		t.Errorf("Expected 0 files to sync, got %d", engine.Status.TotalFiles)
+	}
+}
+
+// TestDeviousContent_DifferentContent tests that files with different content are synced
+func TestDeviousContent_DifferentContent(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file with different content
+	srcContent := "new content"
+	dstContent := "old content"
+
+	if err := os.WriteFile(filepath.Join(srcDir, "file.txt"), []byte(srcContent), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dstDir, "file.txt"), []byte(dstContent), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.DeviousContent
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 1 file to sync
+	if engine.Status.TotalFiles != 1 {
+		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify content was updated
+	content, err := os.ReadFile(filepath.Join(dstDir, "file.txt"))
+	if err != nil {
+		t.Fatalf("Failed to read dest file: %v", err)
+	}
+	if string(content) != srcContent {
+		t.Errorf("Expected content %q, got %q", srcContent, string(content))
+	}
+}
+
+// TestDeviousContent_NewFile tests that new files are copied
+func TestDeviousContent_NewFile(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file only in source
+	if err := os.WriteFile(filepath.Join(srcDir, "new.txt"), []byte("new content"), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.DeviousContent
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should find 1 file to sync
+	if engine.Status.TotalFiles != 1 {
+		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify file was copied
+	if _, err := os.Stat(filepath.Join(dstDir, "new.txt")); os.IsNotExist(err) {
+		t.Error("Expected new.txt to be copied to destination")
+	}
+}
+
+// TestDeviousContent_DeletedFile tests that deleted files are removed from destination
+func TestDeviousContent_DeletedFile(t *testing.T) {
+	t.Parallel()
+
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// Create file only in destination
+	if err := os.WriteFile(filepath.Join(dstDir, "deleted.txt"), []byte("old content"), 0644); err != nil {
+		t.Fatalf("Failed to write dest file: %v", err)
+	}
+
+	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.DeviousContent
+
+	if err := engine.Analyze(); err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Perform sync
+	if err := engine.Sync(); err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify file was deleted
+	if _, err := os.Stat(filepath.Join(dstDir, "deleted.txt")); !os.IsNotExist(err) {
+		t.Error("Expected deleted.txt to be removed from destination")
+	}
+}
+

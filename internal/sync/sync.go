@@ -456,8 +456,42 @@ func (e *Engine) Analyze() error {
 		case config.MonotonicCount, config.FluctuatingCount:
 			// For count-based modes, only check if file exists (path comparison)
 			needsSync = (dstFile == nil)
+		case config.DeviousContent:
+			// For devious-content mode, always compare hashes
+			if dstFile == nil {
+				needsSync = true
+			} else {
+				// Compute hashes for both files
+				srcPath := filepath.Join(e.SourcePath, relPath)
+				dstPath := filepath.Join(e.DestPath, relPath)
+
+				srcHash, err := fileops.ComputeFileHash(srcPath)
+				if err != nil {
+					e.logAnalysis(fmt.Sprintf("  ⚠ Failed to compute source hash for %s: %v", relPath, err))
+					needsSync = true // Assume needs sync if we can't compute hash
+				} else {
+					dstHash, err := fileops.ComputeFileHash(dstPath)
+					if err != nil {
+						e.logAnalysis(fmt.Sprintf("  ⚠ Failed to compute dest hash for %s: %v", relPath, err))
+						needsSync = true // Assume needs sync if we can't compute hash
+					} else {
+						// Compare hashes
+						needsSync = (srcHash != dstHash)
+
+						// Log first few hash comparisons for debugging
+						if comparedCount < 5 {
+							if needsSync {
+								e.logAnalysis(fmt.Sprintf("  → Hash mismatch: %s (src=%s... dst=%s...)",
+									relPath, srcHash[:8], dstHash[:8]))
+							} else {
+								e.logAnalysis(fmt.Sprintf("  ✓ Hash match: %s (%s...)", relPath, srcHash[:8]))
+							}
+						}
+					}
+				}
+			}
 		default:
-			// For other modes, use full comparison (size + modtime)
+			// For other modes (Content, Paranoid), use full comparison (size + modtime)
 			needsSync = fileops.FilesNeedSync(srcFile, dstFile)
 		}
 
