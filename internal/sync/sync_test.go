@@ -54,6 +54,8 @@ func TestEngineAnalyze(t *testing.T) {
 
 	// Create engine and analyze
 	engine := sync.NewEngine(srcDir, dstDir)
+	engine.ChangeType = config.FluctuatingCount // Use full scan mode
+
 	if err := engine.Analyze(); err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
