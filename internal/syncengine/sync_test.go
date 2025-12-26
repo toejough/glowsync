@@ -1,17 +1,17 @@
 package syncengine_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/pkg/fileops"
 	"github.com/joe/copy-files/pkg/filesystem"
-	"github.com/toejough/imptest/imptest"
 )
 
 //go:generate impgen syncengine.NewEngine
@@ -35,21 +35,12 @@ func TestNewEngine(t *testing.T) {
 	// Use imptest wrapper for NewEngine
 	wrapper := NewNewEngineImp(t, syncengine.NewEngine)
 	wrapper.Start("/source", "/dest").ExpectReturnedValuesShould(
-		imptest.Satisfies(func(engine *syncengine.Engine) error {
-			if engine == nil {
-				return fmt.Errorf("expected engine to not be nil")
-			}
-			if engine.SourcePath != "/source" {
-				return fmt.Errorf("expected SourcePath to be '/source', got '%s'", engine.SourcePath)
-			}
-			if engine.DestPath != "/dest" {
-				return fmt.Errorf("expected DestPath to be '/dest', got '%s'", engine.DestPath)
-			}
-			if engine.Status == nil {
-				return fmt.Errorf("expected Status to not be nil")
-			}
-			return nil
-		}),
+		And(
+			Not(BeNil()),
+			WithTransform(func(e *syncengine.Engine) string { return e.SourcePath }, Equal("/source")),
+			WithTransform(func(e *syncengine.Engine) string { return e.DestPath }, Equal("/dest")),
+			WithTransform(func(e *syncengine.Engine) *syncengine.Status { return e.Status }, Not(BeNil())),
+		),
 	)
 }
 
@@ -266,21 +257,15 @@ func TestGetStatus(t *testing.T) {
 	// Use imptest wrapper for NewEngine
 	wrapper := NewNewEngineImp(t, syncengine.NewEngine)
 	wrapper.Start("/source", "/dest").ExpectReturnedValuesShould(
-		imptest.Satisfies(func(engine *syncengine.Engine) error {
-			if engine == nil {
-				return fmt.Errorf("expected engine to not be nil")
-			}
-
-			// GetStatus is a method, so we test it traditionally
-			status := engine.GetStatus()
-			if status.TotalFiles != 0 {
-				return fmt.Errorf("expected 0 total files, got %d", status.TotalFiles)
-			}
-			if status.TotalBytes != 0 {
-				return fmt.Errorf("expected 0 total bytes, got %d", status.TotalBytes)
-			}
-			return nil
-		}),
+		And(
+			Not(BeNil()),
+			WithTransform(func(e *syncengine.Engine) *syncengine.Status {
+				return e.GetStatus()
+			}, And(
+				WithTransform(func(s *syncengine.Status) int { return s.TotalFiles }, Equal(0)),
+				WithTransform(func(s *syncengine.Status) int64 { return s.TotalBytes }, Equal(int64(0))),
+			)),
+		),
 	)
 }
 
@@ -1372,31 +1357,18 @@ func TestFileopsComputeFileHash(t *testing.T) {
 	// Use imptest wrapper for ComputeFileHash
 	wrapper := NewComputeFileHashImp(t, fileops.ComputeFileHash)
 	wrapper.Start(testFile).ExpectReturnedValuesShould(
-		imptest.Satisfies(func(hash string) error {
-			if hash == "" {
-				return fmt.Errorf("expected non-empty hash")
-			}
-			// SHA256 hash should be 64 hex characters
-			if len(hash) != 64 {
-				return fmt.Errorf("expected hash length 64, got %d", len(hash))
-			}
-			return nil
-		}),
-		nil, // no error expected
+		And(
+			Not(BeEmpty()),
+			HaveLen(64), // SHA256 hash should be 64 hex characters
+		),
+		BeNil(), // no error expected
 	)
 
 	// Verify hash is consistent
 	wrapper2 := NewComputeFileHashImp(t, fileops.ComputeFileHash)
 	wrapper2.Start(testFile).ExpectReturnedValuesShould(
-		imptest.Satisfies(func(hash string) error {
-			// Get the first hash
-			firstHash := wrapper.Returned.Result0
-			if hash != firstHash {
-				return fmt.Errorf("expected consistent hash, got different values")
-			}
-			return nil
-		}),
-		nil,
+		Equal(wrapper.Returned.Result0), // Should match first hash
+		BeNil(),
 	)
 }
 
@@ -1425,25 +1397,15 @@ func TestFileopsCompareFilesBytes(t *testing.T) {
 	// Test identical files
 	wrapper1 := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
 	wrapper1.Start(file1, file2).ExpectReturnedValuesShould(
-		imptest.Satisfies(func(identical bool) error {
-			if !identical {
-				return fmt.Errorf("expected files to be identical")
-			}
-			return nil
-		}),
-		nil, // no error expected
+		BeTrue(), // files should be identical
+		BeNil(),  // no error expected
 	)
 
 	// Test different files
 	wrapper2 := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
 	wrapper2.Start(file1, file3).ExpectReturnedValuesShould(
-		imptest.Satisfies(func(identical bool) error {
-			if identical {
-				return fmt.Errorf("expected files to be different")
-			}
-			return nil
-		}),
-		nil,
+		BeFalse(), // files should be different
+		BeNil(),
 	)
 }
 
@@ -1474,14 +1436,8 @@ func TestFileopsCountFiles(t *testing.T) {
 	// Use imptest wrapper for CountFiles
 	wrapper := NewCountFilesImp(t, fileops.CountFiles)
 	wrapper.Start(tmpDir).ExpectReturnedValuesShould(
-		imptest.Satisfies(func(count int) error {
-			// Should count 4 files + 1 subdir = 5 total
-			if count != 5 {
-				return fmt.Errorf("expected 5 files/dirs, got %d", count)
-			}
-			return nil
-		}),
-		nil, // no error expected
+		Equal(5), // Should count 4 files + 1 subdir = 5 total
+		BeNil(),  // no error expected
 	)
 }
 
@@ -1511,23 +1467,14 @@ func TestFileopsScanDirectory(t *testing.T) {
 	// Use imptest wrapper for ScanDirectory
 	wrapper := NewScanDirectoryImp(t, fileops.ScanDirectory)
 	wrapper.Start(tmpDir).ExpectReturnedValuesShould(
-		imptest.Satisfies(func(files map[string]*fileops.FileInfo) error {
-			// Should find 4 entries (3 files + 1 subdir)
-			if len(files) != 4 {
-				return fmt.Errorf("expected 4 entries, got %d", len(files))
-			}
-
-			// Check that all expected files are present
-			expectedPaths := []string{"file1.txt", "file2.txt", "subdir", "subdir/file3.txt"}
-			for _, path := range expectedPaths {
-				if _, ok := files[path]; !ok {
-					return fmt.Errorf("expected to find %s in scanned files", path)
-				}
-			}
-
-			return nil
-		}),
-		nil, // no error expected
+		And(
+			HaveLen(4), // Should find 4 entries (3 files + 1 subdir)
+			HaveKey("file1.txt"),
+			HaveKey("file2.txt"),
+			HaveKey("subdir"),
+			HaveKey("subdir/file3.txt"),
+		),
+		BeNil(), // no error expected
 	)
 }
 
