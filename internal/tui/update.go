@@ -64,11 +64,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(
 			m.spinner.Tick,
 			func() tea.Msg {
-				// Enable file logging for debugging
+				// Enable file logging for debugging (non-fatal if it fails)
 				logPath := "copy-files-debug.log"
-				if err := engine.EnableFileLogging(logPath); err != nil {
-					// Non-fatal, just continue without file logging
-				}
+				_ = engine.EnableFileLogging(logPath)
 				// Signal that analysis has started
 				return AnalysisStartedMsg{}
 			},
@@ -107,8 +105,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.engine != nil && m.state != "complete" && m.state != "error" && m.state != "cancelled" {
 			now := time.Now()
 			if now.Sub(m.lastUpdate) >= 200*time.Millisecond {
-				status := m.engine.GetStatus()
-				m.status = &status
+				m.status = m.engine.GetStatus()
 				m.lastUpdate = now
 			}
 		}
@@ -134,8 +131,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Get final status one last time
 		if m.engine != nil {
 			m.engine.CloseLog()
-			status := m.engine.GetStatus()
-			m.status = &status
+			m.status = m.engine.GetStatus()
 		}
 		return m, nil
 
@@ -146,8 +142,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = "cancelled"
 			if m.engine != nil {
 				m.engine.CloseLog()
-				status := m.engine.GetStatus()
-				m.status = &status
+				m.status = m.engine.GetStatus()
 			}
 		} else {
 			m.state = "error"

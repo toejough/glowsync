@@ -28,10 +28,25 @@ func Test() error {
 	return sh.Run("go", "test", "-v", "-race", "-coverprofile=coverage.out", "./...")
 }
 
+// TestForFail runs the unit tests purely to find out whether any fail
+func TestForFail() error {
+	fmt.Println("Running unit tests for overall pass/fail...")
+	return run(
+		context.Background(),
+		"go",
+		"test",
+		"-timeout=10s",
+		"./...",
+		"-failfast",
+		"-shuffle=on",
+		"-race",
+	)
+}
+
 // Lint lints the codebase
 func Lint() error {
 	fmt.Println("Linting...")
-	return run(context.Background(), "golangci-lint", "run", "-c", ".golangci.yml")
+	return run(context.Background(), "golangci-lint", "run", "-c", ".golangci.yml", "./...")
 }
 
 // LintForFail lints the codebase purely to find out whether anything fails
@@ -44,7 +59,21 @@ func LintForFail() error {
 		"--fix=false",
 		"--max-issues-per-linter=1",
 		"--max-same-issues=1",
+		"./...",
 	)
+}
+
+// CheckNils checks for nils
+func CheckNils() error {
+	fmt.Println("Running check for nils...")
+	return run(context.Background(), "nilaway", "./...")
+}
+
+// CheckForFail runs all checks on the code for determining whether any fail
+func CheckForFail() error {
+	fmt.Println("Checking for failures...")
+	mg.SerialDeps(LintForFail, TestForFail, CheckNils)
+	return nil
 }
 
 // Clean removes build artifacts

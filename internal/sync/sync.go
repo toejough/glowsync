@@ -156,7 +156,7 @@ func (e *Engine) EnableFileLogging(logPath string) error {
 func (e *Engine) CloseLog() {
 	if e.logFile != nil {
 		e.logToFile(fmt.Sprintf("\n=== Sync Log Ended: %s ===", time.Now().Format(time.RFC3339)))
-		e.logFile.Close()
+		_ = e.logFile.Close()
 		e.logFile = nil
 	}
 }
@@ -167,7 +167,7 @@ func (e *Engine) logToFile(message string) {
 		e.logMu.Lock()
 		defer e.logMu.Unlock()
 		timestamp := time.Now().Format("15:04:05.000")
-		fmt.Fprintf(e.logFile, "[%s] %s\n", timestamp, message)
+		_, _ = fmt.Fprintf(e.logFile, "[%s] %s\n", timestamp, message)
 	}
 }
 
@@ -1227,23 +1227,25 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 
 	e.Status.mu.Lock()
 
-	// Track read/write times for bottleneck detection
-	e.Status.TotalReadTime += stats.ReadTime
-	e.Status.TotalWriteTime += stats.WriteTime
+	// Track read/write times for bottleneck detection (only if stats is not nil)
+	if stats != nil {
+		e.Status.TotalReadTime += stats.ReadTime
+		e.Status.TotalWriteTime += stats.WriteTime
 
-	// Determine bottleneck based on cumulative times
-	totalTime := e.Status.TotalReadTime + e.Status.TotalWriteTime
-	if totalTime > 0 {
-		readPercent := float64(e.Status.TotalReadTime) / float64(totalTime)
-		writePercent := float64(e.Status.TotalWriteTime) / float64(totalTime)
+		// Determine bottleneck based on cumulative times
+		totalTime := e.Status.TotalReadTime + e.Status.TotalWriteTime
+		if totalTime > 0 {
+			readPercent := float64(e.Status.TotalReadTime) / float64(totalTime)
+			writePercent := float64(e.Status.TotalWriteTime) / float64(totalTime)
 
-		// If one side is taking >60% of the time, it's the bottleneck
-		if readPercent > 0.60 {
-			e.Status.Bottleneck = "source"
-		} else if writePercent > 0.60 {
-			e.Status.Bottleneck = "destination"
-		} else {
-			e.Status.Bottleneck = "balanced"
+			// If one side is taking >60% of the time, it's the bottleneck
+			if readPercent > 0.60 {
+				e.Status.Bottleneck = "source"
+			} else if writePercent > 0.60 {
+				e.Status.Bottleneck = "destination"
+			} else {
+				e.Status.Bottleneck = "balanced"
+			}
 		}
 	}
 
@@ -1351,12 +1353,12 @@ func (e *Engine) updateDestinationCache() error {
 }
 
 // GetStatus returns a copy of the current status
-func (e *Engine) GetStatus() Status {
+func (e *Engine) GetStatus() *Status {
 	e.Status.mu.RLock()
 	defer e.Status.mu.RUnlock()
 
 	// Create a new status without the mutex
-	status := Status{
+	status := &Status{
 		TotalFiles:        e.Status.TotalFiles,
 		ProcessedFiles:    e.Status.ProcessedFiles,
 		FailedFiles:       e.Status.FailedFiles,

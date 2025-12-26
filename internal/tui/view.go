@@ -22,9 +22,6 @@ var (
 			Foreground(lipgloss.Color("86")).
 			Bold(true)
 
-	valueStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255"))
-
 	errorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
@@ -162,13 +159,13 @@ func (m Model) renderAnalyzingView() string {
 		b.WriteString("\n\n")
 
 		// Show scan progress with progress bar or count
-		if m.status.AnalysisPhase == "counting_source" || m.status.AnalysisPhase == "counting_dest" {
+		switch m.status.AnalysisPhase {
+		case "counting_source", "counting_dest":
 			// Counting phase - show count so far
 			if m.status.ScannedFiles > 0 {
 				b.WriteString(fmt.Sprintf("Found: %d items so far...\n\n", m.status.ScannedFiles))
 			}
-		} else if m.status.AnalysisPhase == "scanning_source" || m.status.AnalysisPhase == "scanning_dest" ||
-			m.status.AnalysisPhase == "comparing" || m.status.AnalysisPhase == "deleting" {
+		case "scanning_source", "scanning_dest", "comparing", "deleting":
 			if m.status.TotalFilesToScan > 0 {
 				// Show progress bar
 				scanPercent := float64(m.status.ScannedFiles) / float64(m.status.TotalFilesToScan)

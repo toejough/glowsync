@@ -49,20 +49,14 @@ func getCachePath(dirPath string) (string, error) {
 }
 
 // computeDirectoryHash creates a hash based on directory structure
-// This is a quick check - we hash the list of file paths and their mod times
+// This is a quick check - we hash the count of files
 func computeDirectoryHash(files map[string]*fileops.FileInfo) string {
 	h := sha256.New()
-	
-	// Sort keys for consistent hashing
-	var paths []string
-	for path := range files {
-		paths = append(paths, path)
-	}
-	
-	// Simple approach: hash the count and a sample of files
+
+	// Simple approach: hash the count
 	// For large directories, we don't want to hash everything
-	h.Write([]byte(fmt.Sprintf("count:%d", len(files))))
-	
+	_, _ = fmt.Fprintf(h, "count:%d", len(files))
+
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
