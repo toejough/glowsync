@@ -26,8 +26,9 @@ import (
 //go:generate impgen syncengine.Engine.Sync
 //go:generate impgen syncengine.Engine.GetStatus
 
-// Generate mock for FileSystem interface
+// Generate mocks for FileSystem and FileScanner interfaces
 //go:generate impgen filesystem.FileSystem
+//go:generate impgen filesystem.FileScanner
 
 func TestNewEngine(t *testing.T) {
 	t.Parallel()
@@ -69,23 +70,18 @@ func TestEngineAnalyze(t *testing.T) {
 	engine := syncengine.NewEngine(srcDir, dstDir)
 	engine.ChangeType = config.FluctuatingCount
 	engine.FileOps = fileops.NewFileOps(mockFS)
-	engine.FileOps = fileops.NewFileOps(mockFS)
 
 	// Use imptest wrapper for Analyze method
 	analyzeWrapper := NewEngineAnalyze(t, engine.Analyze)
 	analyzeWrapper.Start().ExpectReturnedValuesAre(nil) // Should succeed with no error
 
-	// Should find all files need syncing
+	// Verify engine status using gomega matchers
 	expectedBytes := int64(len("content1") + len("content2") + len("content3"))
-	if engine.Status.TotalFiles != 3 {
-		t.Errorf("Expected 3 total files, got %d", engine.Status.TotalFiles)
-	}
-	if len(engine.Status.FilesToSync) != 3 {
-		t.Errorf("Expected 3 files to sync, got %d", len(engine.Status.FilesToSync))
-	}
-	if engine.Status.TotalBytes != expectedBytes {
-		t.Errorf("Expected %d total bytes, got %d", expectedBytes, engine.Status.TotalBytes)
-	}
+	NewWithT(t).Expect(engine.Status).Should(And(
+		HaveField("TotalFiles", Equal(3)),
+		HaveField("FilesToSync", HaveLen(3)),
+		HaveField("TotalBytes", Equal(expectedBytes)),
+	))
 }
 
 func TestEngineAnalyzeWithExistingFiles(t *testing.T) {
@@ -120,9 +116,7 @@ func TestEngineAnalyzeWithExistingFiles(t *testing.T) {
 	analyzeWrapper.Start().ExpectReturnedValuesAre(nil)
 
 	// Should only need to sync the different file
-	if engine.Status.TotalFiles != 1 {
-		t.Errorf("Expected 1 file to sync, got %d", engine.Status.TotalFiles)
-	}
+	NewWithT(t).Expect(engine.Status).Should(HaveField("TotalFiles", Equal(1)))
 }
 
 func TestEngineSync(t *testing.T) {
@@ -159,20 +153,15 @@ func TestEngineSync(t *testing.T) {
 	syncWrapper.Start().ExpectReturnedValuesAre(nil)
 
 	// Verify all files were synced
-	if engine.Status.ProcessedFiles != 2 {
-		t.Errorf("Expected 2 processed files, got %d", engine.Status.ProcessedFiles)
-	}
+	g := NewWithT(t)
+	g.Expect(engine.Status).Should(HaveField("ProcessedFiles", Equal(2)))
 
 	// Verify files exist in destination
 	for path, expectedContent := range testFiles {
 		dstPath := filepath.Join(dstDir, path)
 		content, _, err := mockFS.GetFile(dstPath)
-		if err != nil {
-			t.Fatalf("Failed to read destination file %s: %v", path, err)
-		}
-		if string(content) != expectedContent {
-			t.Errorf("Content mismatch for %s: expected %q, got %q", path, expectedContent, string(content))
-		}
+		g.Expect(err).Should(BeNil(), "Failed to read destination file %s", path)
+		g.Expect(string(content)).Should(Equal(expectedContent), "Content mismatch for %s", path)
 	}
 }
 
@@ -207,9 +196,7 @@ func TestEngineDeleteExtraFiles(t *testing.T) {
 	analyzeWrapper.Start().ExpectReturnedValuesAre(nil)
 
 	// Extra file should be deleted
-	if mockFS.Exists(extraFile) {
-		t.Error("Expected extra file to be deleted")
-	}
+	NewWithT(t).Expect(mockFS.Exists(extraFile)).Should(BeFalse(), "Expected extra file to be deleted")
 }
 
 func TestEngineStatusCallback(t *testing.T) {

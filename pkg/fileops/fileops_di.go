@@ -35,33 +35,24 @@ func (fo *FileOps) CountFiles(rootPath string) (int, error) {
 
 // CountFilesWithProgress counts files with progress reporting.
 func (fo *FileOps) CountFilesWithProgress(rootPath string, progressCallback CountProgressCallback) (int, error) {
+	scanner := fo.FS.Scan(rootPath)
 	count := 0
-	err := fo.FS.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
 
-		relPath, err := filepath.Rel(rootPath, path)
-		if err != nil {
-			return err
-		}
-
-		// Skip the root directory itself
-		if relPath == "." {
-			return nil
-		}
-
+	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
 		count++
 
 		// Report progress every 10 files to avoid spam
 		if progressCallback != nil && count%10 == 0 {
+			path := filepath.Join(rootPath, info.RelativePath)
 			progressCallback(path, count)
 		}
+	}
 
-		return nil
-	})
+	if err := scanner.Err(); err != nil {
+		return count, err
+	}
 
-	return count, err
+	return count, nil
 }
 
 // ScanDirectory recursively scans a directory and returns file information.
@@ -70,60 +61,38 @@ func (fo *FileOps) ScanDirectory(rootPath string) (map[string]*FileInfo, error) 
 }
 
 // ScanDirectoryWithProgress recursively scans a directory with progress reporting.
+// This now scans only once, collecting files and reporting progress as we go.
 func (fo *FileOps) ScanDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
 	files := make(map[string]*FileInfo)
 	fileCount := 0
 
-	// First, count total files if we have a progress callback
-	totalCount := 0
-	if progressCallback != nil {
-		var err error
-		// Use the progress callback during counting too
-		totalCount, err = fo.CountFilesWithProgress(rootPath, func(path string, count int) {
-			// Report counting progress (with totalCount = 0 to indicate counting phase)
-			progressCallback(path, count, 0)
-		})
-		if err != nil {
-			// If counting fails, continue without total count
-			totalCount = 0
-		}
-	}
-
-	err := fo.FS.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(rootPath, path)
-		if err != nil {
-			return err
-		}
-
-		// Skip the root directory itself
-		if relPath == "." {
-			return nil
-		}
+	scanner := fo.FS.Scan(rootPath)
+	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
+		path := filepath.Join(rootPath, info.RelativePath)
 
 		fileInfo := &FileInfo{
 			Path:         path,
-			RelativePath: relPath,
-			Size:         info.Size(),
-			ModTime:      info.ModTime(),
-			IsDir:        info.IsDir(),
+			RelativePath: info.RelativePath,
+			Size:         info.Size,
+			ModTime:      info.ModTime,
+			IsDir:        info.IsDir,
 		}
 
-		files[relPath] = fileInfo
+		files[info.RelativePath] = fileInfo
 		fileCount++
 
 		// Report progress if callback provided
+		// Note: totalCount is 0 because we don't know the total until we finish scanning
 		if progressCallback != nil {
-			progressCallback(path, fileCount, totalCount)
+			progressCallback(path, fileCount, 0)
 		}
+	}
 
-		return nil
-	})
+	if err := scanner.Err(); err != nil {
+		return files, err
+	}
 
-	return files, err
+	return files, nil
 }
 
 // ComputeFileHash computes SHA256 hash of a file.

@@ -10,22 +10,36 @@ import (
 
 //go:generate impgen filesystem.FileSystem
 
-func TestMockFileSystem_WriteAndRead(t *testing.T) {
+func TestMockFileSystem_CreateAndOpen(t *testing.T) {
 	fs := filesystem.NewMockFileSystem()
-	
-	// Write a file
+
+	// Create a file
 	content := []byte("test content")
-	err := fs.WriteFile("test.txt", content, 0644)
+	file, err := fs.Create("test.txt")
 	if err != nil {
-		t.Fatalf("WriteFile failed: %v", err)
+		t.Fatalf("Create failed: %v", err)
 	}
-	
+	_, err = file.Write(content)
+	if err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	_ = file.Close()
+
 	// Read it back
-	data, err := fs.ReadFile("test.txt")
+	file, err = fs.Open("test.txt")
 	if err != nil {
-		t.Fatalf("ReadFile failed: %v", err)
+		t.Fatalf("Open failed: %v", err)
 	}
-	
+	defer func() {
+		_ = file.Close()
+	}()
+
+	data := make([]byte, len(content))
+	_, err = file.Read(data)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+
 	if string(data) != string(content) {
 		t.Errorf("Expected %q, got %q", content, data)
 	}
@@ -109,21 +123,18 @@ func TestMockFileSystem_Walk(t *testing.T) {
 	fs.AddDir("root/subdir", time.Now())
 	fs.AddFile("root/subdir/file3.txt", []byte("content3"), time.Now())
 	
-	// Walk the tree
+	// Scan the tree
 	visited := []string{}
-	err := fs.Walk("root", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		visited = append(visited, path)
-		return nil
-	})
-	
-	if err != nil {
-		t.Fatalf("Walk failed: %v", err)
+	scanner := fs.Scan("root")
+	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
+		visited = append(visited, info.RelativePath)
 	}
-	
-	expected := []string{"root", "root/file1.txt", "root/file2.txt", "root/subdir", "root/subdir/file3.txt"}
+
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	expected := []string{"file1.txt", "file2.txt", "subdir", "subdir/file3.txt"}
 	if len(visited) != len(expected) {
 		t.Errorf("Expected %d paths, got %d: %v", len(expected), len(visited), visited)
 	}

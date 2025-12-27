@@ -129,16 +129,21 @@ func NewMockFileSystem() *MockFileSystem {
 	}
 }
 
+// Scan returns an iterator over all files in a directory tree.
+func (fs *MockFileSystem) Scan(path string) FileScanner {
+	return newMockFileScanner(fs, path)
+}
+
 // Stat returns file information.
 func (fs *MockFileSystem) Stat(path string) (os.FileInfo, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
-	
+
 	file, exists := fs.files[path]
 	if !exists {
 		return nil, os.ErrNotExist
 	}
-	
+
 	return &mockFileInfo{
 		name:    filepath.Base(path),
 		size:    int64(len(file.data)),
@@ -146,45 +151,6 @@ func (fs *MockFileSystem) Stat(path string) (os.FileInfo, error) {
 		isDir:   file.isDir,
 		perm:    file.perm,
 	}, nil
-}
-
-// ReadFile reads the entire file.
-func (fs *MockFileSystem) ReadFile(path string) ([]byte, error) {
-	fs.mu.RLock()
-	defer fs.mu.RUnlock()
-	
-	file, exists := fs.files[path]
-	if !exists {
-		return nil, os.ErrNotExist
-	}
-	
-	if file.isDir {
-		return nil, fmt.Errorf("is a directory")
-	}
-	
-	return append([]byte(nil), file.data...), nil
-}
-
-// WriteFile writes data to a file.
-func (fs *MockFileSystem) WriteFile(path string, data []byte, perm os.FileMode) error {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
-
-	// Create parent directories if needed
-	dir := filepath.Dir(path)
-	if dir != "." && dir != "/" {
-		_ = fs.mkdirAllLocked(dir, 0755)
-	}
-
-	fs.files[path] = &mockFile{
-		path:    path,
-		data:    append([]byte(nil), data...),
-		modTime: time.Now(),
-		isDir:   false,
-		perm:    perm,
-	}
-
-	return nil
 }
 
 // Remove removes a file or empty directory.
@@ -210,25 +176,6 @@ func (fs *MockFileSystem) Remove(path string) error {
 	return nil
 }
 
-// RemoveAll removes a path and any children it contains.
-func (fs *MockFileSystem) RemoveAll(path string) error {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
-
-	// Remove the path itself and all children
-	toDelete := []string{}
-	for p := range fs.files {
-		if p == path || strings.HasPrefix(p, path+"/") {
-			toDelete = append(toDelete, p)
-		}
-	}
-
-	for _, p := range toDelete {
-		delete(fs.files, p)
-	}
-
-	return nil
-}
 
 // Chtimes changes the access and modification times of a file.
 func (fs *MockFileSystem) Chtimes(path string, atime, mtime time.Time) error {
@@ -330,68 +277,6 @@ func (fs *MockFileSystem) Create(path string) (File, error) {
 	}, nil
 }
 
-// Walk walks the file tree rooted at root.
-func (fs *MockFileSystem) Walk(root string, fn filepath.WalkFunc) error {
-	fs.mu.RLock()
-	defer fs.mu.RUnlock()
-
-	// Collect all paths that are under root
-	paths := []string{}
-	for p := range fs.files {
-		if p == root || strings.HasPrefix(p, root+"/") {
-			paths = append(paths, p)
-		}
-	}
-
-	// Sort paths to ensure consistent traversal order
-	sort.Strings(paths)
-
-	// Walk the root first
-	if file, exists := fs.files[root]; exists {
-		info := &mockFileInfo{
-			name:    filepath.Base(root),
-			size:    int64(len(file.data)),
-			modTime: file.modTime,
-			isDir:   file.isDir,
-			perm:    file.perm,
-		}
-		if err := fn(root, info, nil); err != nil {
-			return err
-		}
-	} else {
-		// Root doesn't exist
-		if err := fn(root, nil, os.ErrNotExist); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	// Walk all children
-	for _, p := range paths {
-		if p == root {
-			continue
-		}
-
-		file, exists := fs.files[p]
-		if !exists {
-			continue // Skip if file was deleted during iteration
-		}
-
-		info := &mockFileInfo{
-			name:    filepath.Base(p),
-			size:    int64(len(file.data)),
-			modTime: file.modTime,
-			isDir:   file.isDir,
-			perm:    file.perm,
-		}
-
-		if err := fn(p, info, nil); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 // Helper methods for testing
 

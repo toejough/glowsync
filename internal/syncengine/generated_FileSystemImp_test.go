@@ -3,12 +3,11 @@
 package syncengine_test
 
 import "github.com/toejough/imptest/imptest"
-import "os"
-import "path/filepath"
 import "reflect"
 import "testing"
 import "time"
 import filesystem "github.com/joe/copy-files/pkg/filesystem"
+import "os"
 
 // FileSystemImp is the test controller for mocking the interface.
 // Create with NewFileSystemImp(t), then use Mock field to get the mock implementation
@@ -71,16 +70,13 @@ func (i *FileSystemImp) Within(d time.Duration) *FileSystemImpTimed {
 // Only one method field is non-nil at a time, indicating which method was called.
 // Use Name() to identify the method and As{{Method}() to access typed call details.
 type FileSystemImpCall struct {
-	Stat      *FileSystemImpStatCall
-	ReadFile  *FileSystemImpReadFileCall
-	WriteFile *FileSystemImpWriteFileCall
-	Remove    *FileSystemImpRemoveCall
-	RemoveAll *FileSystemImpRemoveAllCall
-	Chtimes   *FileSystemImpChtimesCall
-	MkdirAll  *FileSystemImpMkdirAllCall
-	Open      *FileSystemImpOpenCall
-	Create    *FileSystemImpCreateCall
-	Walk      *FileSystemImpWalkCall
+	Scan     *FileSystemImpScanCall
+	Open     *FileSystemImpOpenCall
+	Create   *FileSystemImpCreateCall
+	MkdirAll *FileSystemImpMkdirAllCall
+	Chtimes  *FileSystemImpChtimesCall
+	Remove   *FileSystemImpRemoveCall
+	Stat     *FileSystemImpStatCall
 }
 
 // AsChtimes returns the call cast to FileSystemImpChtimesCall for accessing call details.
@@ -107,22 +103,16 @@ func (c *FileSystemImpCall) AsOpen() *FileSystemImpOpenCall {
 	return c.Open
 }
 
-// AsReadFile returns the call cast to FileSystemImpReadFileCall for accessing call details.
-// Returns nil if the call was not to ReadFile.
-func (c *FileSystemImpCall) AsReadFile() *FileSystemImpReadFileCall {
-	return c.ReadFile
-}
-
 // AsRemove returns the call cast to FileSystemImpRemoveCall for accessing call details.
 // Returns nil if the call was not to Remove.
 func (c *FileSystemImpCall) AsRemove() *FileSystemImpRemoveCall {
 	return c.Remove
 }
 
-// AsRemoveAll returns the call cast to FileSystemImpRemoveAllCall for accessing call details.
-// Returns nil if the call was not to RemoveAll.
-func (c *FileSystemImpCall) AsRemoveAll() *FileSystemImpRemoveAllCall {
-	return c.RemoveAll
+// AsScan returns the call cast to FileSystemImpScanCall for accessing call details.
+// Returns nil if the call was not to Scan.
+func (c *FileSystemImpCall) AsScan() *FileSystemImpScanCall {
+	return c.Scan
 }
 
 // AsStat returns the call cast to FileSystemImpStatCall for accessing call details.
@@ -131,41 +121,11 @@ func (c *FileSystemImpCall) AsStat() *FileSystemImpStatCall {
 	return c.Stat
 }
 
-// AsWalk returns the call cast to FileSystemImpWalkCall for accessing call details.
-// Returns nil if the call was not to Walk.
-func (c *FileSystemImpCall) AsWalk() *FileSystemImpWalkCall {
-	return c.Walk
-}
-
-// AsWriteFile returns the call cast to FileSystemImpWriteFileCall for accessing call details.
-// Returns nil if the call was not to WriteFile.
-func (c *FileSystemImpCall) AsWriteFile() *FileSystemImpWriteFileCall {
-	return c.WriteFile
-}
-
 // Done returns true if the call has been completed (response injected).
 // Used internally to track call state.
 func (c *FileSystemImpCall) Done() bool {
-	if c.Stat != nil {
-		return c.Stat.done
-	}
-	if c.ReadFile != nil {
-		return c.ReadFile.done
-	}
-	if c.WriteFile != nil {
-		return c.WriteFile.done
-	}
-	if c.Remove != nil {
-		return c.Remove.done
-	}
-	if c.RemoveAll != nil {
-		return c.RemoveAll.done
-	}
-	if c.Chtimes != nil {
-		return c.Chtimes.done
-	}
-	if c.MkdirAll != nil {
-		return c.MkdirAll.done
+	if c.Scan != nil {
+		return c.Scan.done
 	}
 	if c.Open != nil {
 		return c.Open.done
@@ -173,8 +133,17 @@ func (c *FileSystemImpCall) Done() bool {
 	if c.Create != nil {
 		return c.Create.done
 	}
-	if c.Walk != nil {
-		return c.Walk.done
+	if c.MkdirAll != nil {
+		return c.MkdirAll.done
+	}
+	if c.Chtimes != nil {
+		return c.Chtimes.done
+	}
+	if c.Remove != nil {
+		return c.Remove.done
+	}
+	if c.Stat != nil {
+		return c.Stat.done
 	}
 	return false
 }
@@ -182,26 +151,8 @@ func (c *FileSystemImpCall) Done() bool {
 // Name returns the name of the method that was called.
 // Returns an empty string if the call struct is invalid.
 func (c *FileSystemImpCall) Name() string {
-	if c.Stat != nil {
-		return "Stat"
-	}
-	if c.ReadFile != nil {
-		return "ReadFile"
-	}
-	if c.WriteFile != nil {
-		return "WriteFile"
-	}
-	if c.Remove != nil {
-		return "Remove"
-	}
-	if c.RemoveAll != nil {
-		return "RemoveAll"
-	}
-	if c.Chtimes != nil {
-		return "Chtimes"
-	}
-	if c.MkdirAll != nil {
-		return "MkdirAll"
+	if c.Scan != nil {
+		return "Scan"
 	}
 	if c.Open != nil {
 		return "Open"
@@ -209,8 +160,17 @@ func (c *FileSystemImpCall) Name() string {
 	if c.Create != nil {
 		return "Create"
 	}
-	if c.Walk != nil {
-		return "Walk"
+	if c.MkdirAll != nil {
+		return "MkdirAll"
+	}
+	if c.Chtimes != nil {
+		return "Chtimes"
+	}
+	if c.Remove != nil {
+		return "Remove"
+	}
+	if c.Stat != nil {
+		return "Stat"
 	}
 	return ""
 }
@@ -477,34 +437,19 @@ func (e *FileSystemImpExpectCallIs) Open() *FileSystemImpOpenBuilder {
 	return &FileSystemImpOpenBuilder{imp: e.imp, timeout: e.timeout}
 }
 
-// ReadFile returns a builder for setting expectations on ReadFile method calls.
-func (e *FileSystemImpExpectCallIs) ReadFile() *FileSystemImpReadFileBuilder {
-	return &FileSystemImpReadFileBuilder{imp: e.imp, timeout: e.timeout}
-}
-
 // Remove returns a builder for setting expectations on Remove method calls.
 func (e *FileSystemImpExpectCallIs) Remove() *FileSystemImpRemoveBuilder {
 	return &FileSystemImpRemoveBuilder{imp: e.imp, timeout: e.timeout}
 }
 
-// RemoveAll returns a builder for setting expectations on RemoveAll method calls.
-func (e *FileSystemImpExpectCallIs) RemoveAll() *FileSystemImpRemoveAllBuilder {
-	return &FileSystemImpRemoveAllBuilder{imp: e.imp, timeout: e.timeout}
+// Scan returns a builder for setting expectations on Scan method calls.
+func (e *FileSystemImpExpectCallIs) Scan() *FileSystemImpScanBuilder {
+	return &FileSystemImpScanBuilder{imp: e.imp, timeout: e.timeout}
 }
 
 // Stat returns a builder for setting expectations on Stat method calls.
 func (e *FileSystemImpExpectCallIs) Stat() *FileSystemImpStatBuilder {
 	return &FileSystemImpStatBuilder{imp: e.imp, timeout: e.timeout}
-}
-
-// Walk returns a builder for setting expectations on Walk method calls.
-func (e *FileSystemImpExpectCallIs) Walk() *FileSystemImpWalkBuilder {
-	return &FileSystemImpWalkBuilder{imp: e.imp, timeout: e.timeout}
-}
-
-// WriteFile returns a builder for setting expectations on WriteFile method calls.
-func (e *FileSystemImpExpectCallIs) WriteFile() *FileSystemImpWriteFileBuilder {
-	return &FileSystemImpWriteFileBuilder{imp: e.imp, timeout: e.timeout}
 }
 
 // FileSystemImpMkdirAllBuilder provides a fluent API for setting expectations on MkdirAll calls.
@@ -733,31 +678,6 @@ func (m *FileSystemImpMock) Open(path string) (filesystem.File, error) {
 	return resp.Result0, resp.Result1
 }
 
-// ReadFile implements the interface method and records the call for testing.
-// The method blocks until a response is injected via the test controller.
-func (m *FileSystemImpMock) ReadFile(path string) ([]byte, error) {
-	responseChan := make(chan FileSystemImpReadFileCallResponse, 1)
-
-	call := &FileSystemImpReadFileCall{
-		responseChan: responseChan,
-		path:         path,
-	}
-
-	callEvent := &FileSystemImpCall{
-		ReadFile: call,
-	}
-
-	m.imp.CallChan <- callEvent
-
-	resp := <-responseChan
-
-	if resp.Type == "panic" {
-		panic(resp.PanicValue)
-	}
-
-	return resp.Result0, resp.Result1
-}
-
 // Remove implements the interface method and records the call for testing.
 // The method blocks until a response is injected via the test controller.
 func (m *FileSystemImpMock) Remove(path string) error {
@@ -783,18 +703,18 @@ func (m *FileSystemImpMock) Remove(path string) error {
 	return resp.Result0
 }
 
-// RemoveAll implements the interface method and records the call for testing.
+// Scan implements the interface method and records the call for testing.
 // The method blocks until a response is injected via the test controller.
-func (m *FileSystemImpMock) RemoveAll(path string) error {
-	responseChan := make(chan FileSystemImpRemoveAllCallResponse, 1)
+func (m *FileSystemImpMock) Scan(path string) filesystem.FileScanner {
+	responseChan := make(chan FileSystemImpScanCallResponse, 1)
 
-	call := &FileSystemImpRemoveAllCall{
+	call := &FileSystemImpScanCall{
 		responseChan: responseChan,
 		path:         path,
 	}
 
 	callEvent := &FileSystemImpCall{
-		RemoveAll: call,
+		Scan: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -831,59 +751,6 @@ func (m *FileSystemImpMock) Stat(path string) (os.FileInfo, error) {
 	}
 
 	return resp.Result0, resp.Result1
-}
-
-// Walk implements the interface method and records the call for testing.
-// The method blocks until a response is injected via the test controller.
-func (m *FileSystemImpMock) Walk(root string, fn filepath.WalkFunc) error {
-	responseChan := make(chan FileSystemImpWalkCallResponse, 1)
-
-	call := &FileSystemImpWalkCall{
-		responseChan: responseChan,
-		root:         root,
-		fn:           fn,
-	}
-
-	callEvent := &FileSystemImpCall{
-		Walk: call,
-	}
-
-	m.imp.CallChan <- callEvent
-
-	resp := <-responseChan
-
-	if resp.Type == "panic" {
-		panic(resp.PanicValue)
-	}
-
-	return resp.Result0
-}
-
-// WriteFile implements the interface method and records the call for testing.
-// The method blocks until a response is injected via the test controller.
-func (m *FileSystemImpMock) WriteFile(path string, data []byte, perm os.FileMode) error {
-	responseChan := make(chan FileSystemImpWriteFileCallResponse, 1)
-
-	call := &FileSystemImpWriteFileCall{
-		responseChan: responseChan,
-		path:         path,
-		data:         data,
-		perm:         perm,
-	}
-
-	callEvent := &FileSystemImpCall{
-		WriteFile: call,
-	}
-
-	m.imp.CallChan <- callEvent
-
-	resp := <-responseChan
-
-	if resp.Type == "panic" {
-		panic(resp.PanicValue)
-	}
-
-	return resp.Result0
 }
 
 // FileSystemImpOpenBuilder provides a fluent API for setting expectations on Open calls.
@@ -996,224 +863,6 @@ type FileSystemImpOpenCallResponse struct {
 	PanicValue any
 }
 
-// FileSystemImpReadFileBuilder provides a fluent API for setting expectations on ReadFile calls.
-// Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
-type FileSystemImpReadFileBuilder struct {
-	imp     *FileSystemImp
-	timeout time.Duration
-}
-
-// ExpectArgsAre waits for a ReadFile call with exactly the specified argument values.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if arguments don't match exactly.
-// Uses == for comparable types and reflect.DeepEqual for others.
-func (bldr *FileSystemImpReadFileBuilder) ExpectArgsAre(path string) *FileSystemImpReadFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "ReadFile" {
-			return false
-		}
-		methodCall := callToCheck.AsReadFile()
-		if methodCall.path != path {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsReadFile()
-}
-
-// ExpectArgsShould waits for a ReadFile call with arguments matching the given matchers.
-// Use imptest.Any() to match any value, or imptest.Satisfies(fn) for custom matching.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if any matcher fails.
-func (bldr *FileSystemImpReadFileBuilder) ExpectArgsShould(path any) *FileSystemImpReadFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "ReadFile" {
-			return false
-		}
-		methodCall := callToCheck.AsReadFile()
-		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
-		if !ok {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsReadFile()
-}
-
-// InjectPanic waits for a ReadFile call and causes it to panic with the given value.
-// This is a shortcut that combines waiting for the call with injecting a panic.
-// Use this to test panic handling in code under test. Returns the call object for further operations.
-func (bldr *FileSystemImpReadFileBuilder) InjectPanic(msg any) *FileSystemImpReadFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "ReadFile"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsReadFile()
-	methodCall.InjectPanic(msg)
-	return methodCall
-}
-
-// InjectResults waits for a ReadFile call and immediately injects the return values.
-// This is a shortcut that combines waiting for the call with injecting multiple results.
-// Returns the call object for further operations. Fails if no call arrives within the timeout.
-func (bldr *FileSystemImpReadFileBuilder) InjectResults(r0 []byte, r1 error) *FileSystemImpReadFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "ReadFile"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsReadFile()
-	methodCall.InjectResults(r0, r1)
-	return methodCall
-}
-
-// FileSystemImpReadFileCall represents a captured call to the ReadFile method.
-// Use InjectResult to set the return value, or InjectPanic to cause the method to panic.
-type FileSystemImpReadFileCall struct {
-	responseChan chan FileSystemImpReadFileCallResponse
-	done         bool
-	path         string
-}
-
-// InjectPanic causes the mocked method to panic with the given value.
-// Use this to test panic handling in code under test.
-// The panic occurs in the goroutine where the mock was called.
-func (c *FileSystemImpReadFileCall) InjectPanic(msg any) {
-	c.done = true
-	c.responseChan <- FileSystemImpReadFileCallResponse{Type: "panic", PanicValue: msg}
-}
-
-// InjectResults sets the return values for this method call and unblocks the caller.
-// The mocked method will return the provided result values in order.
-func (c *FileSystemImpReadFileCall) InjectResults(r0 []byte, r1 error) {
-	c.done = true
-	resp := FileSystemImpReadFileCallResponse{Type: "return", Result0: r0, Result1: r1}
-	c.responseChan <- resp
-}
-
-// FileSystemImpReadFileCallResponse holds the response configuration for the ReadFile method.
-// Set Type to "return" for normal returns, "panic" to cause a panic, or "resolve" for void methods.
-type FileSystemImpReadFileCallResponse struct {
-	Type       string // "return", "panic", or "resolve"
-	Result0    []byte
-	Result1    error
-	PanicValue any
-}
-
-// FileSystemImpRemoveAllBuilder provides a fluent API for setting expectations on RemoveAll calls.
-// Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
-type FileSystemImpRemoveAllBuilder struct {
-	imp     *FileSystemImp
-	timeout time.Duration
-}
-
-// ExpectArgsAre waits for a RemoveAll call with exactly the specified argument values.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if arguments don't match exactly.
-// Uses == for comparable types and reflect.DeepEqual for others.
-func (bldr *FileSystemImpRemoveAllBuilder) ExpectArgsAre(path string) *FileSystemImpRemoveAllCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "RemoveAll" {
-			return false
-		}
-		methodCall := callToCheck.AsRemoveAll()
-		if methodCall.path != path {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsRemoveAll()
-}
-
-// ExpectArgsShould waits for a RemoveAll call with arguments matching the given matchers.
-// Use imptest.Any() to match any value, or imptest.Satisfies(fn) for custom matching.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if any matcher fails.
-func (bldr *FileSystemImpRemoveAllBuilder) ExpectArgsShould(path any) *FileSystemImpRemoveAllCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "RemoveAll" {
-			return false
-		}
-		methodCall := callToCheck.AsRemoveAll()
-		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
-		if !ok {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsRemoveAll()
-}
-
-// InjectPanic waits for a RemoveAll call and causes it to panic with the given value.
-// This is a shortcut that combines waiting for the call with injecting a panic.
-// Use this to test panic handling in code under test. Returns the call object for further operations.
-func (bldr *FileSystemImpRemoveAllBuilder) InjectPanic(msg any) *FileSystemImpRemoveAllCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "RemoveAll"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsRemoveAll()
-	methodCall.InjectPanic(msg)
-	return methodCall
-}
-
-// InjectResult waits for a RemoveAll call and immediately injects the return value.
-// This is a shortcut that combines waiting for the call with injecting the result.
-// Returns the call object for further operations. Fails if no call arrives within the timeout.
-func (bldr *FileSystemImpRemoveAllBuilder) InjectResult(result error) *FileSystemImpRemoveAllCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "RemoveAll"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsRemoveAll()
-	methodCall.InjectResult(result)
-	return methodCall
-}
-
-// FileSystemImpRemoveAllCall represents a captured call to the RemoveAll method.
-// Use InjectResult to set the return value, or InjectPanic to cause the method to panic.
-type FileSystemImpRemoveAllCall struct {
-	responseChan chan FileSystemImpRemoveAllCallResponse
-	done         bool
-	path         string
-}
-
-// InjectPanic causes the mocked method to panic with the given value.
-// Use this to test panic handling in code under test.
-// The panic occurs in the goroutine where the mock was called.
-func (c *FileSystemImpRemoveAllCall) InjectPanic(msg any) {
-	c.done = true
-	c.responseChan <- FileSystemImpRemoveAllCallResponse{Type: "panic", PanicValue: msg}
-}
-
-// InjectResult sets the return value for this method call and unblocks the caller.
-// The mocked method will return the provided result value.
-func (c *FileSystemImpRemoveAllCall) InjectResult(result error) {
-	c.done = true
-	c.responseChan <- FileSystemImpRemoveAllCallResponse{Type: "return", Result0: result}
-}
-
-// FileSystemImpRemoveAllCallResponse holds the response configuration for the RemoveAll method.
-// Set Type to "return" for normal returns, "panic" to cause a panic, or "resolve" for void methods.
-type FileSystemImpRemoveAllCallResponse struct {
-	Type       string // "return", "panic", or "resolve"
-	Result0    error
-	PanicValue any
-}
-
 // FileSystemImpRemoveBuilder provides a fluent API for setting expectations on Remove calls.
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpRemoveBuilder struct {
@@ -1319,6 +968,114 @@ func (c *FileSystemImpRemoveCall) InjectResult(result error) {
 type FileSystemImpRemoveCallResponse struct {
 	Type       string // "return", "panic", or "resolve"
 	Result0    error
+	PanicValue any
+}
+
+// FileSystemImpScanBuilder provides a fluent API for setting expectations on Scan calls.
+// Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
+type FileSystemImpScanBuilder struct {
+	imp     *FileSystemImp
+	timeout time.Duration
+}
+
+// ExpectArgsAre waits for a Scan call with exactly the specified argument values.
+// Returns the call object for response injection. Fails the test if the call
+// doesn't arrive within the timeout or if arguments don't match exactly.
+// Uses == for comparable types and reflect.DeepEqual for others.
+func (bldr *FileSystemImpScanBuilder) ExpectArgsAre(path string) *FileSystemImpScanCall {
+	validator := func(callToCheck *FileSystemImpCall) bool {
+		if callToCheck.Name() != "Scan" {
+			return false
+		}
+		methodCall := callToCheck.AsScan()
+		if methodCall.path != path {
+			return false
+		}
+		return true
+	}
+
+	call := bldr.imp.GetCall(bldr.timeout, validator)
+	return call.AsScan()
+}
+
+// ExpectArgsShould waits for a Scan call with arguments matching the given matchers.
+// Use imptest.Any() to match any value, or imptest.Satisfies(fn) for custom matching.
+// Returns the call object for response injection. Fails the test if the call
+// doesn't arrive within the timeout or if any matcher fails.
+func (bldr *FileSystemImpScanBuilder) ExpectArgsShould(path any) *FileSystemImpScanCall {
+	validator := func(callToCheck *FileSystemImpCall) bool {
+		if callToCheck.Name() != "Scan" {
+			return false
+		}
+		methodCall := callToCheck.AsScan()
+		var ok bool
+		ok, _ = imptest.MatchValue(methodCall.path, path)
+		if !ok {
+			return false
+		}
+		return true
+	}
+
+	call := bldr.imp.GetCall(bldr.timeout, validator)
+	return call.AsScan()
+}
+
+// InjectPanic waits for a Scan call and causes it to panic with the given value.
+// This is a shortcut that combines waiting for the call with injecting a panic.
+// Use this to test panic handling in code under test. Returns the call object for further operations.
+func (bldr *FileSystemImpScanBuilder) InjectPanic(msg any) *FileSystemImpScanCall {
+	validator := func(callToCheck *FileSystemImpCall) bool {
+		return callToCheck.Name() == "Scan"
+	}
+
+	call := bldr.imp.GetCall(bldr.timeout, validator)
+	methodCall := call.AsScan()
+	methodCall.InjectPanic(msg)
+	return methodCall
+}
+
+// InjectResult waits for a Scan call and immediately injects the return value.
+// This is a shortcut that combines waiting for the call with injecting the result.
+// Returns the call object for further operations. Fails if no call arrives within the timeout.
+func (bldr *FileSystemImpScanBuilder) InjectResult(result filesystem.FileScanner) *FileSystemImpScanCall {
+	validator := func(callToCheck *FileSystemImpCall) bool {
+		return callToCheck.Name() == "Scan"
+	}
+
+	call := bldr.imp.GetCall(bldr.timeout, validator)
+	methodCall := call.AsScan()
+	methodCall.InjectResult(result)
+	return methodCall
+}
+
+// FileSystemImpScanCall represents a captured call to the Scan method.
+// Use InjectResult to set the return value, or InjectPanic to cause the method to panic.
+type FileSystemImpScanCall struct {
+	responseChan chan FileSystemImpScanCallResponse
+	done         bool
+	path         string
+}
+
+// InjectPanic causes the mocked method to panic with the given value.
+// Use this to test panic handling in code under test.
+// The panic occurs in the goroutine where the mock was called.
+func (c *FileSystemImpScanCall) InjectPanic(msg any) {
+	c.done = true
+	c.responseChan <- FileSystemImpScanCallResponse{Type: "panic", PanicValue: msg}
+}
+
+// InjectResult sets the return value for this method call and unblocks the caller.
+// The mocked method will return the provided result value.
+func (c *FileSystemImpScanCall) InjectResult(result filesystem.FileScanner) {
+	c.done = true
+	c.responseChan <- FileSystemImpScanCallResponse{Type: "return", Result0: result}
+}
+
+// FileSystemImpScanCallResponse holds the response configuration for the Scan method.
+// Set Type to "return" for normal returns, "panic" to cause a panic, or "resolve" for void methods.
+type FileSystemImpScanCallResponse struct {
+	Type       string // "return", "panic", or "resolve"
+	Result0    filesystem.FileScanner
 	PanicValue any
 }
 
@@ -1436,246 +1193,6 @@ type FileSystemImpStatCallResponse struct {
 // Access via FileSystemImp.Within(duration) to set a timeout for expectations.
 type FileSystemImpTimed struct {
 	ExpectCallIs *FileSystemImpExpectCallIs
-}
-
-// FileSystemImpWalkBuilder provides a fluent API for setting expectations on Walk calls.
-// Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
-type FileSystemImpWalkBuilder struct {
-	imp     *FileSystemImp
-	timeout time.Duration
-}
-
-// ExpectArgsAre waits for a Walk call with exactly the specified argument values.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if arguments don't match exactly.
-// Uses == for comparable types and reflect.DeepEqual for others.
-func (bldr *FileSystemImpWalkBuilder) ExpectArgsAre(root string, fn filepath.WalkFunc) *FileSystemImpWalkCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "Walk" {
-			return false
-		}
-		methodCall := callToCheck.AsWalk()
-		if methodCall.root != root {
-			return false
-		}
-		if !reflect.DeepEqual(methodCall.fn, fn) {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsWalk()
-}
-
-// ExpectArgsShould waits for a Walk call with arguments matching the given matchers.
-// Use imptest.Any() to match any value, or imptest.Satisfies(fn) for custom matching.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if any matcher fails.
-func (bldr *FileSystemImpWalkBuilder) ExpectArgsShould(root any, fn any) *FileSystemImpWalkCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "Walk" {
-			return false
-		}
-		methodCall := callToCheck.AsWalk()
-		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.root, root)
-		if !ok {
-			return false
-		}
-		ok, _ = imptest.MatchValue(methodCall.fn, fn)
-		if !ok {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsWalk()
-}
-
-// InjectPanic waits for a Walk call and causes it to panic with the given value.
-// This is a shortcut that combines waiting for the call with injecting a panic.
-// Use this to test panic handling in code under test. Returns the call object for further operations.
-func (bldr *FileSystemImpWalkBuilder) InjectPanic(msg any) *FileSystemImpWalkCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "Walk"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsWalk()
-	methodCall.InjectPanic(msg)
-	return methodCall
-}
-
-// InjectResult waits for a Walk call and immediately injects the return value.
-// This is a shortcut that combines waiting for the call with injecting the result.
-// Returns the call object for further operations. Fails if no call arrives within the timeout.
-func (bldr *FileSystemImpWalkBuilder) InjectResult(result error) *FileSystemImpWalkCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "Walk"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsWalk()
-	methodCall.InjectResult(result)
-	return methodCall
-}
-
-// FileSystemImpWalkCall represents a captured call to the Walk method.
-// Use InjectResult to set the return value, or InjectPanic to cause the method to panic.
-type FileSystemImpWalkCall struct {
-	responseChan chan FileSystemImpWalkCallResponse
-	done         bool
-	root         string
-	fn           filepath.WalkFunc
-}
-
-// InjectPanic causes the mocked method to panic with the given value.
-// Use this to test panic handling in code under test.
-// The panic occurs in the goroutine where the mock was called.
-func (c *FileSystemImpWalkCall) InjectPanic(msg any) {
-	c.done = true
-	c.responseChan <- FileSystemImpWalkCallResponse{Type: "panic", PanicValue: msg}
-}
-
-// InjectResult sets the return value for this method call and unblocks the caller.
-// The mocked method will return the provided result value.
-func (c *FileSystemImpWalkCall) InjectResult(result error) {
-	c.done = true
-	c.responseChan <- FileSystemImpWalkCallResponse{Type: "return", Result0: result}
-}
-
-// FileSystemImpWalkCallResponse holds the response configuration for the Walk method.
-// Set Type to "return" for normal returns, "panic" to cause a panic, or "resolve" for void methods.
-type FileSystemImpWalkCallResponse struct {
-	Type       string // "return", "panic", or "resolve"
-	Result0    error
-	PanicValue any
-}
-
-// FileSystemImpWriteFileBuilder provides a fluent API for setting expectations on WriteFile calls.
-// Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
-type FileSystemImpWriteFileBuilder struct {
-	imp     *FileSystemImp
-	timeout time.Duration
-}
-
-// ExpectArgsAre waits for a WriteFile call with exactly the specified argument values.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if arguments don't match exactly.
-// Uses == for comparable types and reflect.DeepEqual for others.
-func (bldr *FileSystemImpWriteFileBuilder) ExpectArgsAre(path string, data []byte, perm os.FileMode) *FileSystemImpWriteFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "WriteFile" {
-			return false
-		}
-		methodCall := callToCheck.AsWriteFile()
-		if methodCall.path != path {
-			return false
-		}
-		if !reflect.DeepEqual(methodCall.data, data) {
-			return false
-		}
-		if !reflect.DeepEqual(methodCall.perm, perm) {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsWriteFile()
-}
-
-// ExpectArgsShould waits for a WriteFile call with arguments matching the given matchers.
-// Use imptest.Any() to match any value, or imptest.Satisfies(fn) for custom matching.
-// Returns the call object for response injection. Fails the test if the call
-// doesn't arrive within the timeout or if any matcher fails.
-func (bldr *FileSystemImpWriteFileBuilder) ExpectArgsShould(path any, data any, perm any) *FileSystemImpWriteFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		if callToCheck.Name() != "WriteFile" {
-			return false
-		}
-		methodCall := callToCheck.AsWriteFile()
-		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
-		if !ok {
-			return false
-		}
-		ok, _ = imptest.MatchValue(methodCall.data, data)
-		if !ok {
-			return false
-		}
-		ok, _ = imptest.MatchValue(methodCall.perm, perm)
-		if !ok {
-			return false
-		}
-		return true
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	return call.AsWriteFile()
-}
-
-// InjectPanic waits for a WriteFile call and causes it to panic with the given value.
-// This is a shortcut that combines waiting for the call with injecting a panic.
-// Use this to test panic handling in code under test. Returns the call object for further operations.
-func (bldr *FileSystemImpWriteFileBuilder) InjectPanic(msg any) *FileSystemImpWriteFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "WriteFile"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsWriteFile()
-	methodCall.InjectPanic(msg)
-	return methodCall
-}
-
-// InjectResult waits for a WriteFile call and immediately injects the return value.
-// This is a shortcut that combines waiting for the call with injecting the result.
-// Returns the call object for further operations. Fails if no call arrives within the timeout.
-func (bldr *FileSystemImpWriteFileBuilder) InjectResult(result error) *FileSystemImpWriteFileCall {
-	validator := func(callToCheck *FileSystemImpCall) bool {
-		return callToCheck.Name() == "WriteFile"
-	}
-
-	call := bldr.imp.GetCall(bldr.timeout, validator)
-	methodCall := call.AsWriteFile()
-	methodCall.InjectResult(result)
-	return methodCall
-}
-
-// FileSystemImpWriteFileCall represents a captured call to the WriteFile method.
-// Use InjectResult to set the return value, or InjectPanic to cause the method to panic.
-type FileSystemImpWriteFileCall struct {
-	responseChan chan FileSystemImpWriteFileCallResponse
-	done         bool
-	path         string
-	data         []byte
-	perm         os.FileMode
-}
-
-// InjectPanic causes the mocked method to panic with the given value.
-// Use this to test panic handling in code under test.
-// The panic occurs in the goroutine where the mock was called.
-func (c *FileSystemImpWriteFileCall) InjectPanic(msg any) {
-	c.done = true
-	c.responseChan <- FileSystemImpWriteFileCallResponse{Type: "panic", PanicValue: msg}
-}
-
-// InjectResult sets the return value for this method call and unblocks the caller.
-// The mocked method will return the provided result value.
-func (c *FileSystemImpWriteFileCall) InjectResult(result error) {
-	c.done = true
-	c.responseChan <- FileSystemImpWriteFileCallResponse{Type: "return", Result0: result}
-}
-
-// FileSystemImpWriteFileCallResponse holds the response configuration for the WriteFile method.
-// Set Type to "return" for normal returns, "panic" to cause a panic, or "resolve" for void methods.
-type FileSystemImpWriteFileCallResponse struct {
-	Type       string // "return", "panic", or "resolve"
-	Result0    error
-	PanicValue any
 }
 
 // unexported variables.
