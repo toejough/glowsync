@@ -1,10 +1,11 @@
-// Package fileops provides file operation utilities with dependency injection support.
 package fileops
 
 //go:generate impgen fileops.CopyFileWithStats
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -50,7 +51,8 @@ func (fo *FileOps) CountFilesWithProgress(rootPath string, progressCallback Coun
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
+	err := scanner.Err()
+	if err != nil {
 		return count, err
 	}
 
@@ -90,7 +92,8 @@ func (fo *FileOps) ScanDirectoryWithProgress(rootPath string, progressCallback S
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
+	err := scanner.Err()
+	if err != nil {
 		return files, err
 	}
 
@@ -108,11 +111,12 @@ func (fo *FileOps) ComputeFileHash(filePath string) (string, error) {
 	}()
 
 	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
+	_, err = io.Copy(hash, file)
+	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // CompareFilesBytes performs byte-by-byte comparison of two files.
@@ -163,14 +167,14 @@ func (fo *FileOps) CompareFilesBytes(path1, path2 string) (bool, error) {
 		}
 
 		if n1 > 0 {
-			for i := 0; i < n1; i++ {
+			for i := range n1 {
 				if buf1[i] != buf2[i] {
 					return false, nil
 				}
 			}
 		}
 
-		if err1 == io.EOF && err2 == io.EOF {
+		if errors.Is(err1, io.EOF) && errors.Is(err2, io.EOF) {
 			return true, nil
 		}
 
@@ -201,7 +205,7 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
-	if err := fo.FS.MkdirAll(dstDir, 0750); err != nil {
+	if err := fo.FS.MkdirAll(dstDir, 0o750); err != nil {
 		return 0, err
 	}
 
@@ -234,7 +238,7 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 				progress(written, sourceInfo.Size(), src)
 			}
 		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -243,13 +247,13 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 	}
 
 	// Preserve modification time
-	if err := fo.FS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime()); err != nil {
+	err = fo.FS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	if err != nil {
 		return written, err
 	}
 
 	return written, nil
 }
-
 
 // Remove removes a file or empty directory
 func (fo *FileOps) Remove(path string) error {
@@ -287,7 +291,7 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
-	if err := fo.FS.MkdirAll(dstDir, 0750); err != nil {
+	if err := fo.FS.MkdirAll(dstDir, 0o750); err != nil {
 		return stats, err
 	}
 
@@ -344,7 +348,7 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 				progress(written, sourceInfo.Size(), src)
 			}
 		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -356,17 +360,19 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 
 	// Close the file before setting modification time
 	// This is important for network filesystems like SMB
-	if err := destFile.Close(); err != nil {
+	err = destFile.Close()
+	if err != nil {
 		return stats, err
 	}
 
 	// Preserve modification time
-	if err := fo.FS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime()); err != nil {
+	err = fo.FS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	if err != nil {
 		return stats, err
 	}
 
 	// Mark copy as completed successfully
 	copyCompleted = true
+
 	return stats, nil
 }
-

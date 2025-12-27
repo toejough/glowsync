@@ -22,6 +22,11 @@ allow = [
 	'github.com/alexflint/go-arg',
 	'github.com/akedrou/textdiff',
 	'github.com/toejough/go-reorder',
+	'github.com/charmbracelet/bubbles',
+	'github.com/charmbracelet/bubbletea',
+	'github.com/charmbracelet/lipgloss',
+	'github.com/joe/copy-files',
+	'github.com/magefile/mage',
 ]
 
 [linters.settings.depguard.rules.test]
@@ -32,6 +37,7 @@ allow = [
 	'pgregory.net/rapid',
 	'github.com/toejough/imptest',
 	'github.com/toejough/go-reorder',
+	'github.com/joe/copy-files',
 ]
 
 [linters.settings.nlreturn]

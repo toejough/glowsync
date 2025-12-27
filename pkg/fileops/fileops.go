@@ -3,6 +3,7 @@ package fileops
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -147,11 +148,12 @@ func ComputeFileHash(filePath string) (string, error) {
 	}()
 
 	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
+	_, err = io.Copy(hash, file)
+	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // CopyFile copies a file from src to dst with progress reporting
@@ -172,7 +174,7 @@ func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0750); err != nil { // #nosec G301 - directory permissions
+	if err := os.MkdirAll(dstDir, 0o750); err != nil { // #nosec G301 - directory permissions
 		return 0, err
 	}
 
@@ -184,7 +186,7 @@ func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 	defer func() {
 		_ = destFile.Close()
 	}()
-	
+
 	// Copy with progress tracking
 	var written int64
 	buf := make([]byte, 32*1024) // 32KB buffer
@@ -214,7 +216,8 @@ func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 	}
 
 	// Preserve modification time
-	if err := os.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime()); err != nil {
+	err = os.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	if err != nil {
 		return written, err
 	}
 
@@ -242,7 +245,7 @@ func CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-
 
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0750); err != nil { // #nosec G301 - directory permissions
+	if err := os.MkdirAll(dstDir, 0o750); err != nil { // #nosec G301 - directory permissions
 		return stats, err
 	}
 
@@ -311,17 +314,20 @@ func CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-
 
 	// Close the file before setting modification time
 	// This is important for network filesystems like SMB
-	if err := destFile.Close(); err != nil {
+	err = destFile.Close()
+	if err != nil {
 		return stats, err
 	}
 
 	// Preserve modification time
-	if err := os.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime()); err != nil {
+	err = os.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	if err != nil {
 		return stats, err
 	}
 
 	// Mark copy as completed successfully
 	copyCompleted = true
+
 	return stats, nil
 }
 
@@ -401,7 +407,7 @@ func CompareFilesBytes(path1, path2 string) (bool, error) {
 		}
 
 		// Compare buffer contents
-		for i := 0; i < n1; i++ {
+		for i := range n1 {
 			if buf1[i] != buf2[i] {
 				return false, nil
 			}
@@ -418,4 +424,3 @@ func CompareFilesBytes(path1, path2 string) (bool, error) {
 		}
 	}
 }
-

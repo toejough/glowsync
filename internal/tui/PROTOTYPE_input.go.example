@@ -1,0 +1,165 @@
+package tui
+
+// PROTOTYPE - Example of what InputScreen would look like
+
+import (
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/joe/copy-files/internal/config"
+)
+
+// InputScreen handles path input from the user
+type InputScreen struct {
+	config          *config.Config
+	sourceInput     textinput.Model
+	destInput       textinput.Model
+	focusIndex      int
+	completions     []string
+	completionIndex int
+	showCompletions bool
+	width           int
+	height          int
+}
+
+// NewInputScreen creates a new input screen
+func NewInputScreen(cfg *config.Config) *InputScreen {
+	sourceInput := textinput.New()
+	sourceInput.Placeholder = "/path/to/source"
+	sourceInput.Focus()
+	sourceInput.Prompt = "▶ "
+
+	destInput := textinput.New()
+	destInput.Placeholder = "/path/to/destination"
+	destInput.Prompt = "  "
+
+	return &InputScreen{
+		config:      cfg,
+		sourceInput: sourceInput,
+		destInput:   destInput,
+		focusIndex:  0,
+	}
+}
+
+// Init implements tea.Model
+func (s InputScreen) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+// Update implements tea.Model - MUCH SIMPLER!
+func (s InputScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		s.width = msg.Width
+		s.height = msg.Height
+		return s, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			return s, tea.Quit
+		case "ctrl+n", "down":
+			return s.moveToNextField()
+		case "ctrl+p", "up":
+			return s.moveToPreviousField()
+		case "tab":
+			return s.handleTabCompletion(), nil
+		case "shift+tab":
+			return s.handleShiftTabCompletion(), nil
+		case "right":
+			return s.handleRightArrow(), nil
+		case "enter":
+			return s.handleEnter()
+		default:
+			s.showCompletions = false
+		}
+	}
+
+	// Update the focused input
+	var cmd tea.Cmd
+	if s.focusIndex == 0 {
+		s.sourceInput, cmd = s.sourceInput.Update(msg)
+	} else {
+		s.destInput, cmd = s.destInput.Update(msg)
+	}
+
+	return s, cmd
+}
+
+// View implements tea.Model - ONLY RENDERS INPUT STATE
+func (s InputScreen) View() string {
+	// ... render input view only
+	// No switch statement needed!
+	return s.renderInputView()
+}
+
+// handleEnter validates paths and triggers transition
+func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
+	// If not on last field, move to next
+	if s.focusIndex < 1 {
+		return s.moveToNextField()
+	}
+
+	// Validate paths
+	s.config.SourcePath = s.sourceInput.Value()
+	s.config.DestPath = s.destInput.Value()
+
+	if err := s.config.ValidatePaths(); err != nil {
+		// Could return an error message or show inline error
+		// For now, just stay on the screen
+		return s, nil
+	}
+
+	// Paths are valid - trigger transition to analysis
+	return s, func() tea.Msg {
+		return TransitionToAnalysisMsg{
+			SourcePath: s.config.SourcePath,
+			DestPath:   s.config.DestPath,
+		}
+	}
+}
+
+// Helper methods (same as before, but scoped to this screen)
+func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
+	s.focusIndex = (s.focusIndex + 1) % 2
+	if s.focusIndex == 0 {
+		s.sourceInput.Focus()
+		s.destInput.Blur()
+	} else {
+		s.sourceInput.Blur()
+		s.destInput.Focus()
+	}
+	return s, nil
+}
+
+func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
+	s.focusIndex = (s.focusIndex - 1 + 2) % 2
+	if s.focusIndex == 0 {
+		s.sourceInput.Focus()
+		s.destInput.Blur()
+	} else {
+		s.sourceInput.Blur()
+		s.destInput.Focus()
+	}
+	return s, nil
+}
+
+func (s InputScreen) handleTabCompletion() InputScreen {
+	// ... tab completion logic
+	return s
+}
+
+func (s InputScreen) handleShiftTabCompletion() InputScreen {
+	// ... shift-tab completion logic
+	return s
+}
+
+func (s InputScreen) handleRightArrow() InputScreen {
+	// ... right arrow completion logic
+	return s
+}
+
+func (s InputScreen) renderInputView() string {
+	// ... same rendering logic as before
+	return "Input View"
+}
+

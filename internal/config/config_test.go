@@ -139,6 +139,7 @@ func TestValidatePaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			err := tt.cfg.ValidatePaths()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidatePaths() error = %v, wantErr %v", err, tt.wantErr)
@@ -151,10 +152,10 @@ func TestPostProcessConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name              string
-		cfg               config.Config
-		wantInteractive   bool
-		wantErr           bool
+		name            string
+		cfg             config.Config
+		wantInteractive bool
+		wantErr         bool
 	}{
 		{
 			name:            "no paths - should enable interactive mode",
@@ -178,6 +179,7 @@ func TestPostProcessConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// Use imptest wrapper
 			wrapper := config.NewPostProcessConfigImp(t, config.PostProcessConfig)
 			wrapper.Start(&tt.cfg)
@@ -198,6 +200,7 @@ func TestPostProcessConfig(t *testing.T) {
 }
 
 func TestParseFlags(t *testing.T) {
+	t.Parallel()
 	// This test is tricky because ParseFlags calls arg.MustParse which modifies os.Args.
 	// We can't easily mock this without changing the implementation, so we test
 	// the PostProcessConfig function instead, which contains the testable logic.
@@ -217,4 +220,3 @@ func TestParseFlags(t *testing.T) {
 		t.Error("InteractiveMode should be true when no paths are provided")
 	}
 }
-

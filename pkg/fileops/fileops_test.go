@@ -24,10 +24,10 @@ func TestCountFilesStandalone(t *testing.T) {
 
 	// Create temp directory with test files
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("test"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("test"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -41,8 +41,8 @@ func TestCountFilesWithProgressStandalone(t *testing.T) {
 
 	// Create temp directory with 10 test files to trigger progress callback
 	dir := t.TempDir()
-	for i := 0; i < 10; i++ {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file%d.txt", i)), []byte("test"), 0644); err != nil {
+	for i := range 10 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file%d.txt", i)), []byte("test"), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 	}
@@ -76,10 +76,10 @@ func TestScanDirectory(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tmpDir, file)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 			t.Fatalf("Failed to create directory: %v", err)
 		}
-		if err := os.WriteFile(fullPath, []byte("test content"), 0644); err != nil {
+		if err := os.WriteFile(fullPath, []byte("test content"), 0o600); err != nil {
 			t.Fatalf("Failed to write file: %v", err)
 		}
 	}
@@ -106,7 +106,7 @@ func TestComputeFileHash(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	content := []byte("test content for hashing")
-	if err := os.WriteFile(testFile, content, 0644); err != nil {
+	if err := os.WriteFile(testFile, content, 0o600); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func TestComputeFileHash(t *testing.T) {
 	hashImp2.ExpectReturnedValuesAre(hash1, nil)
 
 	// Different content should produce different hash
-	if err := os.WriteFile(testFile, []byte("different content"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("different content"), 0o600); err != nil {
 		t.Fatalf("Failed to write different content: %v", err)
 	}
 	hashImp3 := NewComputeFileHashImp(t, fileops.ComputeFileHash).Start(testFile)
@@ -141,7 +141,7 @@ func TestCopyFile(t *testing.T) {
 	dstFile := filepath.Join(tmpDir, "dest", "destination.txt")
 
 	content := []byte("test content to copy")
-	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
 		t.Fatalf("Failed to write source file: %v", err)
 	}
 
@@ -221,7 +221,6 @@ func TestFilesNeedSync(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -243,7 +242,7 @@ func TestCopyFileWithProgress(t *testing.T) {
 	for i := range content {
 		content[i] = byte(i % 256)
 	}
-	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -300,9 +299,8 @@ func TestCopyFileWithStatsProgress(t *testing.T) {
 	// We test the progress callback mechanism by verifying the function signature.
 
 	// Track progress callbacks
-	progressCalls := 0
 	progressCallback := func(bytesTransferred int64, totalBytes int64, currentFile string) {
-		progressCalls++
+		// Progress callback for testing
 	}
 
 	// Use imptest wrapper
@@ -345,10 +343,10 @@ func TestCompareFilesBytes(t *testing.T) {
 	file1 := filepath.Join(tmpDir, "file1.txt")
 	file2 := filepath.Join(tmpDir, "file2.txt")
 	content := []byte("test content")
-	if err := os.WriteFile(file1, content, 0644); err != nil {
+	if err := os.WriteFile(file1, content, 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(file2, content, 0644); err != nil {
+	if err := os.WriteFile(file2, content, 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -365,10 +363,10 @@ func TestCompareFilesBytesDifferent(t *testing.T) {
 	// Create two different files
 	file1 := filepath.Join(tmpDir, "file1.txt")
 	file2 := filepath.Join(tmpDir, "file2.txt")
-	if err := os.WriteFile(file1, []byte("content1"), 0644); err != nil {
+	if err := os.WriteFile(file1, []byte("content1"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(file2, []byte("content2"), 0644); err != nil {
+	if err := os.WriteFile(file2, []byte("content2"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 

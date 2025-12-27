@@ -40,7 +40,7 @@ func TestRealFileSystem(t *testing.T) {
 	}
 
 	// Test that MkdirAll fails for invalid paths
-	err = fs.MkdirAll("/invalid/path/that/cannot/be/created", 0755)
+	err = fs.MkdirAll("/invalid/path/that/cannot/be/created", 0o755)
 	if err == nil {
 		t.Error("MkdirAll should return error for invalid path")
 	}
@@ -57,4 +57,3 @@ func TestRealFileSystem(t *testing.T) {
 		t.Error("Chtimes should return error for nonexistent path")
 	}
 }
-

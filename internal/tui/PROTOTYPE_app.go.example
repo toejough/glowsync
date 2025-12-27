@@ -1,0 +1,165 @@
+package tui
+
+// PROTOTYPE - Example of what the top-level AppModel would look like
+
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/joe/copy-files/internal/config"
+	"github.com/joe/copy-files/internal/syncengine"
+)
+
+// Screen represents which screen is currently active
+type Screen int
+
+const (
+	ScreenInput Screen = iota
+	ScreenAnalysis
+	ScreenSync
+	ScreenSummary
+	ScreenQuitting
+)
+
+// AppModel is the top-level router that manages screen transitions
+type AppModel struct {
+	config  *config.Config
+	screen  Screen
+	width   int
+	height  int
+	
+	// Sub-models (only one is active at a time)
+	inputScreen    tea.Model
+	analysisScreen tea.Model
+	syncScreen     tea.Model
+	summaryScreen  tea.Model
+	
+	// Shared state that gets passed between screens
+	engine *syncengine.Engine
+	status *syncengine.Status
+	err    error
+}
+
+// NewAppModel creates the top-level app model
+func NewAppModel(cfg *config.Config) AppModel {
+	// Determine initial screen
+	initialScreen := ScreenInput
+	if !cfg.InteractiveMode {
+		initialScreen = ScreenAnalysis
+	}
+	
+	return AppModel{
+		config:      cfg,
+		screen:      initialScreen,
+		inputScreen: NewInputScreen(cfg),
+	}
+}
+
+// Init implements tea.Model
+func (m AppModel) Init() tea.Cmd {
+	// Initialize the active screen
+	switch m.screen {
+	case ScreenInput:
+		return m.inputScreen.Init()
+	case ScreenAnalysis:
+		// Create analysis screen and initialize
+		m.analysisScreen = NewAnalysisScreen(m.config)
+		return m.analysisScreen.Init()
+	default:
+		return nil
+	}
+}
+
+// Update implements tea.Model - SIMPLE ROUTER!
+func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle global messages
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		// Fall through to let active screen handle it too
+		
+	// Handle transition messages
+	case TransitionToAnalysisMsg:
+		return m.transitionToAnalysis(msg)
+	case TransitionToSyncMsg:
+		return m.transitionToSync(msg)
+	case TransitionToSummaryMsg:
+		return m.transitionToSummary(msg)
+	}
+	
+	// Route to active screen
+	var cmd tea.Cmd
+	switch m.screen {
+	case ScreenInput:
+		m.inputScreen, cmd = m.inputScreen.Update(msg)
+	case ScreenAnalysis:
+		m.analysisScreen, cmd = m.analysisScreen.Update(msg)
+	case ScreenSync:
+		m.syncScreen, cmd = m.syncScreen.Update(msg)
+	case ScreenSummary:
+		m.summaryScreen, cmd = m.summaryScreen.Update(msg)
+	case ScreenQuitting:
+		return m, tea.Quit
+	}
+	
+	return m, cmd
+}
+
+// View implements tea.Model - SIMPLE ROUTER!
+func (m AppModel) View() string {
+	switch m.screen {
+	case ScreenInput:
+		return m.inputScreen.View()
+	case ScreenAnalysis:
+		return m.analysisScreen.View()
+	case ScreenSync:
+		return m.syncScreen.View()
+	case ScreenSummary:
+		return m.summaryScreen.View()
+	case ScreenQuitting:
+		return ""
+	}
+	return ""
+}
+
+// Transition handlers - clean and focused
+
+func (m AppModel) transitionToAnalysis(msg TransitionToAnalysisMsg) (tea.Model, tea.Cmd) {
+	m.screen = ScreenAnalysis
+	m.config.SourcePath = msg.SourcePath
+	m.config.DestPath = msg.DestPath
+	m.analysisScreen = NewAnalysisScreen(m.config)
+	return m, m.analysisScreen.Init()
+}
+
+func (m AppModel) transitionToSync(msg TransitionToSyncMsg) (tea.Model, tea.Cmd) {
+	m.screen = ScreenSync
+	m.engine = msg.Engine
+	m.syncScreen = NewSyncScreen(m.config, m.engine)
+	return m, m.syncScreen.Init()
+}
+
+func (m AppModel) transitionToSummary(msg TransitionToSummaryMsg) (tea.Model, tea.Cmd) {
+	m.screen = ScreenSummary
+	m.err = msg.Err
+	
+	// Get final status from engine if available
+	if m.engine != nil {
+		m.status = m.engine.GetStatus()
+		m.engine.CloseLog()
+	}
+	
+	m.summaryScreen = NewSummaryScreen(m.status, msg.FinalState, m.err)
+	return m, m.summaryScreen.Init()
+}
+
+// Complexity Analysis:
+// - Update(): 5 complexity (4 transition messages + 5 screen cases = 9, but simplified routing)
+// - View(): 6 complexity (5 screen cases + 1 base)
+// - Each transition handler: 1 complexity
+//
+// Compare to current:
+// - Update(): 11 complexity
+// - View(): 9 complexity
+//
+// And each sub-screen has even lower complexity (2-6 each)!
+

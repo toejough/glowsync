@@ -28,8 +28,8 @@ const (
 )
 
 // String returns the string representation of ChangeType
-func (ct ChangeType) String() string {
-	switch ct {
+func (ct *ChangeType) String() string {
+	switch *ct {
 	case MonotonicCount:
 		return "monotonic-count"
 	case FluctuatingCount:
@@ -71,17 +71,18 @@ func (ct *ChangeType) UnmarshalText(text []byte) error {
 		return err
 	}
 	*ct = parsed
+
 	return nil
 }
 
 // Config holds the application configuration
 type Config struct {
-	SourcePath      string     `arg:"-s,--source" help:"Source directory path"`
-	DestPath        string     `arg:"-d,--dest" help:"Destination directory path"`
-	InteractiveMode bool       `arg:"-i,--interactive" help:"Run in interactive mode"`
-	AdaptiveMode    bool       `arg:"--adaptive" default:"true" help:"Use adaptive concurrency"`
-	Workers         int        `arg:"-w,--workers" default:"4" help:"Number of concurrent workers (0 = adaptive)"`
-	TypeOfChange    ChangeType `arg:"--type-of-change,--type" default:"monotonic-count" help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"`
+	SourcePath      string     `arg:"-s,--source"             help:"Source directory path"`
+	DestPath        string     `arg:"-d,--dest"               help:"Destination directory path"`
+	InteractiveMode bool       `arg:"-i,--interactive"        help:"Run in interactive mode"`
+	AdaptiveMode    bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`
+	Workers         int        `arg:"-w,--workers"            default:"4"                       help:"Number of concurrent workers (0 = adaptive)"`
+	TypeOfChange    ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"`
 }
 
 // Description returns the program description for go-arg
@@ -116,7 +117,8 @@ func PostProcessConfig(cfg *Config) (*Config, error) {
 
 	// Validate paths if not in interactive mode
 	if !cfg.InteractiveMode {
-		if err := cfg.ValidatePaths(); err != nil {
+		err := cfg.ValidatePaths()
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -125,7 +127,7 @@ func PostProcessConfig(cfg *Config) (*Config, error) {
 }
 
 // ValidatePaths validates that source and destination paths are valid
-func (cfg *Config) ValidatePaths() error {
+func (cfg Config) ValidatePaths() error {
 	// Check source path is provided
 	if cfg.SourcePath == "" {
 		return fmt.Errorf("source path is required")

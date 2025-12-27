@@ -118,7 +118,6 @@ func TestFormatBytes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -161,7 +160,7 @@ func TestEngineAnalyze(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
 func TestEngineSync(t *testing.T) {
@@ -174,7 +173,7 @@ func TestEngineSync(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
 func TestEngineSyncAdaptive(t *testing.T) {
@@ -188,7 +187,7 @@ func TestEngineSyncAdaptive(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
 func TestEngineSyncWithFile(t *testing.T) {
@@ -204,7 +203,7 @@ func TestEngineSyncWithFile(t *testing.T) {
 
 	// Create a test file in source
 	testFile := filepath.Join(sourceDir, "test.txt")
-	err := os.WriteFile(testFile, []byte("test content"), 0644)
+	err := os.WriteFile(testFile, []byte("test content"), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -223,13 +222,10 @@ func TestEngineSyncWithFile(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 
 	// Verify file was copied
 	destFile := filepath.Join(destDir, "test.txt")
 	_, err = os.Stat(destFile)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
-
-
-

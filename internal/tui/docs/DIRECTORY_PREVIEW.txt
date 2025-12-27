@@ -1,0 +1,116 @@
+BEFORE REFACTORING:
+==================
+
+internal/tui/
+├── model.go                          (127 lines - mixed concerns)
+├── update.go                         (539 lines - handles ALL states)
+└── view.go                           (1156 lines - renders ALL states)
+
+Total: 3 files, 1822 lines
+Complexity: Update=11, View=9 (both OVER threshold)
+
+
+AFTER REFACTORING:
+==================
+
+internal/tui/
+│
+├── README.md                         📖 Package overview & architecture
+│
+├── app.go                            🎯 Top-level router (~150 lines)
+│   └── AppModel
+│       ├── Update()   [complexity: 7]  ✅
+│       └── View()     [complexity: 6]  ✅
+│
+├── screens/                          📱 Individual screens (flow order)
+│   │
+│   ├── 1_input.go                    ⌨️  Input Screen (~250 lines)
+│   │   └── InputScreen
+│   │       ├── Update()   [complexity: 4]  ✅
+│   │       └── View()     [complexity: 1]  ✅
+│   │
+│   ├── 2_analysis.go                 🔍 Analysis Screen (~200 lines)
+│   │   └── AnalysisScreen
+│   │       ├── Update()   [complexity: 5]  ✅
+│   │       └── View()     [complexity: 3]  ✅
+│   │
+│   ├── 3_sync.go                     🔄 Sync Screen (~400 lines)
+│   │   └── SyncScreen
+│   │       ├── Update()   [complexity: 7]  ✅
+│   │       └── View()     [complexity: 1]  ✅
+│   │
+│   └── 4_summary.go                  ✅ Summary Screen (~300 lines)
+│       └── SummaryScreen
+│           ├── Update()   [complexity: 2]  ✅
+│           └── View()     [complexity: 4]  ✅
+│
+├── shared/                           🔧 Shared utilities
+│   ├── messages.go                   📨 Message types (~50 lines)
+│   ├── styles.go                     🎨 Lipgloss styles (~50 lines)
+│   └── helpers.go                    🛠️  Helper functions (~150 lines)
+│
+└── docs/                             📚 Documentation
+    ├── ARCHITECTURE.md
+    ├── COMPLEXITY_COMPARISON.md
+    └── REFACTORING_PLAN.md
+
+Total: 11 files, ~1550 lines (more modular, less total code)
+Complexity: ALL functions under threshold of 10 ✅
+
+
+WHAT YOU SEE AT A GLANCE:
+==========================
+
+$ ls internal/tui/
+README.md                    # Start here to understand the package
+app.go                       # Top-level router
+screens/                     # Look here for screen implementations
+shared/                      # Look here for shared code
+docs/                        # Look here for detailed documentation
+
+$ ls internal/tui/screens/
+1_input.go                   # First: gather paths
+2_analysis.go                # Second: analyze files
+3_sync.go                    # Third: sync files
+4_summary.go                 # Fourth: show results
+
+$ ls internal/tui/shared/
+helpers.go                   # Utility functions
+messages.go                  # Message type definitions
+styles.go                    # UI styling
+
+
+NAVIGATION EXAMPLES:
+====================
+
+"I want to change how paths are entered"
+→ Look in screens/1_input.go
+
+"I want to change the progress display during sync"
+→ Look in screens/3_sync.go
+
+"I want to add a new message type"
+→ Look in shared/messages.go
+
+"I want to change the color scheme"
+→ Look in shared/styles.go
+
+"I want to understand the overall flow"
+→ Read README.md or docs/ARCHITECTURE.md
+
+"I want to add a new screen between analysis and sync"
+→ Create screens/2.5_preparation.go (or renumber existing screens)
+
+
+BENEFITS:
+=========
+
+✅ Self-documenting structure
+✅ Clear separation of concerns
+✅ Easy to navigate
+✅ Numbered files show flow
+✅ All complexity under threshold
+✅ Each screen independently testable
+✅ Shared code clearly separated
+✅ Documentation organized
+

@@ -1,0 +1,106 @@
+package tui
+
+// PROTOTYPE - Shared message types for screen transitions and internal communication
+
+import (
+	"github.com/joe/copy-files/internal/syncengine"
+)
+
+// ============================================================================
+// Transition Messages (sent by screens to trigger screen changes)
+// ============================================================================
+
+// TransitionToAnalysisMsg is sent by InputScreen when paths are validated
+type TransitionToAnalysisMsg struct {
+	SourcePath string
+	DestPath   string
+}
+
+// TransitionToSyncMsg is sent by AnalysisScreen when analysis completes
+type TransitionToSyncMsg struct {
+	Engine *syncengine.Engine
+}
+
+// TransitionToSummaryMsg is sent by SyncScreen when sync completes/fails/cancelled
+type TransitionToSummaryMsg struct {
+	FinalState string // "complete", "cancelled", "error"
+	Err        error  // only set if FinalState is "error"
+}
+
+// ============================================================================
+// Internal Messages (used within screens)
+// ============================================================================
+
+// AnalysisScreen messages
+type EngineInitializedMsg struct {
+	Engine *syncengine.Engine
+}
+
+type AnalysisCompleteMsg struct{}
+
+// SyncScreen messages
+type SyncCompleteMsg struct{}
+
+type ErrorMsg struct {
+	Err error
+}
+
+// ============================================================================
+// Benefits of this approach:
+// ============================================================================
+//
+// 1. Clear Communication Contract:
+//    - Transition messages are explicit and typed
+//    - Easy to see what data flows between screens
+//
+// 2. Decoupling:
+//    - Screens don't need to know about each other
+//    - They just emit transition messages
+//    - AppModel handles the routing
+//
+// 3. Testability:
+//    - Can test screen transitions by checking for transition messages
+//    - Can test screens in isolation by injecting messages
+//
+// 4. Type Safety:
+//    - Compiler ensures correct data is passed between screens
+//    - No string-based state management
+//
+// 5. Discoverability:
+//    - All possible transitions are defined in one place
+//    - Easy to understand the flow of the application
+//
+// ============================================================================
+// Message Flow Example:
+// ============================================================================
+//
+// User enters paths and presses Enter
+//   ↓
+// InputScreen.handleEnter() validates paths
+//   ↓
+// InputScreen returns TransitionToAnalysisMsg{source, dest}
+//   ↓
+// AppModel.Update() receives TransitionToAnalysisMsg
+//   ↓
+// AppModel.transitionToAnalysis() creates AnalysisScreen
+//   ↓
+// AppModel.screen = ScreenAnalysis
+//   ↓
+// AnalysisScreen.Init() starts engine initialization
+//   ↓
+// AnalysisScreen receives EngineInitializedMsg
+//   ↓
+// AnalysisScreen starts analysis
+//   ↓
+// AnalysisScreen receives AnalysisCompleteMsg
+//   ↓
+// AnalysisScreen returns TransitionToSyncMsg{engine}
+//   ↓
+// AppModel.Update() receives TransitionToSyncMsg
+//   ↓
+// AppModel.transitionToSync() creates SyncScreen
+//   ↓
+// ... and so on
+//
+// ============================================================================
+

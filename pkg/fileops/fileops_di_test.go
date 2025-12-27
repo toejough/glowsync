@@ -38,7 +38,7 @@ func TestCountFiles(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(count).Should(Equal(3))
 }
 
@@ -60,7 +60,7 @@ func TestCountFilesWithProgress(t *testing.T) {
 		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/test").InjectResult(scannerImp.Mock)
 
 		// Expect Next calls - return 10 files to trigger progress callback
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{RelativePath: "file.txt", IsDir: false}, true)
 		}
 		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
@@ -74,7 +74,7 @@ func TestCountFilesWithProgress(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(count).Should(Equal(10))
 	// Progress callback is called every 10 files, so should be called once
 	g.Expect(progressCalls).Should(Equal(1))
@@ -116,7 +116,7 @@ func TestFileOpsScanDirectory(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(files).Should(HaveLen(2))
 	g.Expect(files).Should(HaveKey("file1.txt"))
 	g.Expect(files).Should(HaveKey("file2.txt"))
@@ -165,7 +165,7 @@ func TestFileOpsScanDirectoryWithProgress(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(files).Should(HaveLen(2))
 	g.Expect(progressCalls).Should(Equal(2))
 }
@@ -179,7 +179,7 @@ func TestFileOpsComputeFileHash(t *testing.T) {
 
 	// Create a test file
 	content := []byte("test content for hashing")
-	err := os.WriteFile(testFile, content, 0644)
+	err := os.WriteFile(testFile, content, 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestFileOpsComputeFileHash(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(hash).Should(Not(BeEmpty()))
 }
 
@@ -206,10 +206,10 @@ func TestFileOpsCompareFilesBytes(t *testing.T) {
 
 	// Create two identical files
 	content := []byte("test content")
-	if err := os.WriteFile(file1, content, 0644); err != nil {
+	if err := os.WriteFile(file1, content, 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(file2, content, 0644); err != nil {
+	if err := os.WriteFile(file2, content, 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -221,7 +221,7 @@ func TestFileOpsCompareFilesBytes(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(same).Should(BeTrue())
 }
 
@@ -235,7 +235,7 @@ func TestFileOpsCopyFile(t *testing.T) {
 
 	// Create source file
 	content := []byte("test content to copy")
-	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -247,12 +247,12 @@ func TestFileOpsCopyFile(t *testing.T) {
 
 	// Verify results
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(bytesWritten).Should(Equal(int64(len(content))))
 
 	// Verify destination file exists and has same content
 	dstContent, err := os.ReadFile(dstFile)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(dstContent).Should(Equal(content))
 }
 
@@ -261,7 +261,7 @@ func TestFileOpsRemove(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	testFile := tmpDir + "/test.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -269,7 +269,7 @@ func TestFileOpsRemove(t *testing.T) {
 	err := ops.Remove(testFile)
 
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
 func TestFileOpsStat(t *testing.T) {
@@ -277,7 +277,7 @@ func TestFileOpsStat(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	testFile := tmpDir + "/test.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -285,7 +285,7 @@ func TestFileOpsStat(t *testing.T) {
 	info, err := ops.Stat(testFile)
 
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(info).Should(Not(BeNil()))
 }
 
@@ -294,7 +294,7 @@ func TestFileOpsChtimes(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	testFile := tmpDir + "/test.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -303,7 +303,7 @@ func TestFileOpsChtimes(t *testing.T) {
 	err := ops.Chtimes(testFile, now, now)
 
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
 func TestFileOpsCopyFileWithStats(t *testing.T) {
@@ -314,7 +314,7 @@ func TestFileOpsCopyFileWithStats(t *testing.T) {
 	dstFile := tmpDir + "/dest.txt"
 
 	content := []byte("test content")
-	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -322,7 +322,7 @@ func TestFileOpsCopyFileWithStats(t *testing.T) {
 	stats, err := ops.CopyFileWithStats(srcFile, dstFile, nil, nil)
 
 	g := NewWithT(t)
-	g.Expect(err).Should(BeNil())
+	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(stats).Should(Not(BeNil()))
 	g.Expect(stats.BytesCopied).Should(Equal(int64(len(content))))
 }

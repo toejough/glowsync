@@ -34,4 +34,3 @@ type FileInfo struct {
 	// IsDir indicates if this is a directory
 	IsDir bool
 }
-

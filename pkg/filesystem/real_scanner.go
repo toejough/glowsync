@@ -79,4 +79,3 @@ func (s *realFileScanner) scan() {
 		return nil
 	})
 }
-
