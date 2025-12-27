@@ -1,5 +1,8 @@
 package fileops_test
 
+//go:generate impgen filesystem.FileSystem
+//go:generate impgen filesystem.FileScanner
+
 import (
 	"os"
 	"testing"
@@ -14,8 +17,8 @@ import (
 func TestCountFiles(t *testing.T) {
 	t.Parallel()
 
-	fsImp := filesystem.NewFileSystemImp(t)
-	scannerImp := filesystem.NewFileScannerImp(t)
+	fsImp := NewFileSystemImp(t)
+	scannerImp := NewFileScannerImp(t)
 	ops := fileops.NewFileOps(fsImp.Mock)
 
 	// Set up expectations in a goroutine
@@ -45,8 +48,8 @@ func TestCountFiles(t *testing.T) {
 func TestCountFilesWithProgress(t *testing.T) {
 	t.Parallel()
 
-	fsImp := filesystem.NewFileSystemImp(t)
-	scannerImp := filesystem.NewFileScannerImp(t)
+	fsImp := NewFileSystemImp(t)
+	scannerImp := NewFileScannerImp(t)
 	ops := fileops.NewFileOps(fsImp.Mock)
 
 	progressCalls := 0
@@ -83,8 +86,8 @@ func TestCountFilesWithProgress(t *testing.T) {
 func TestFileOpsScanDirectory(t *testing.T) {
 	t.Parallel()
 
-	fsImp := filesystem.NewFileSystemImp(t)
-	scannerImp := filesystem.NewFileScannerImp(t)
+	fsImp := NewFileSystemImp(t)
+	scannerImp := NewFileScannerImp(t)
 	ops := fileops.NewFileOps(fsImp.Mock)
 
 	// Set up expectations in a goroutine
@@ -127,8 +130,8 @@ func TestFileOpsScanDirectory(t *testing.T) {
 func TestFileOpsScanDirectoryWithProgress(t *testing.T) {
 	t.Parallel()
 
-	fsImp := filesystem.NewFileSystemImp(t)
-	scannerImp := filesystem.NewFileScannerImp(t)
+	fsImp := NewFileSystemImp(t)
+	scannerImp := NewFileScannerImp(t)
 	ops := fileops.NewFileOps(fsImp.Mock)
 
 	progressCalls := 0

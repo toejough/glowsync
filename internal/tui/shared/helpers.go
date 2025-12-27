@@ -55,19 +55,3 @@ func FormatRate(bytesPerSec float64) string {
 	return fmt.Sprintf("%.1f %cB/s", bytesPerSec/div, "KMGTPE"[exp])
 }
 
-// FormatPercentage formats a percentage with one decimal place
-func FormatPercentage(value float64) string {
-	return fmt.Sprintf("%.1f%%", value*100)
-}
-
-// FormatCount formats a count with thousand separators
-func FormatCount(count int) string {
-	if count < 1000 {
-		return fmt.Sprintf("%d", count)
-	}
-	if count < 1000000 {
-		return fmt.Sprintf("%d,%03d", count/1000, count%1000)
-	}
-	return fmt.Sprintf("%d,%03d,%03d", count/1000000, (count/1000)%1000, count%1000)
-}
-

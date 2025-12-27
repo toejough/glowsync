@@ -2,8 +2,6 @@
 // to enable dependency injection and testing without actual filesystem I/O.
 package filesystem
 
-//go:generate impgen filesystem.FileSystem
-
 import (
 	"io"
 	"os"

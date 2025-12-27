@@ -7,8 +7,8 @@ import _reflect "reflect"
 import _testing "testing"
 import _time "time"
 import filesystem "github.com/joe/copy-files/pkg/filesystem"
-import "os"
-import "time"
+import os "os"
+import time "time"
 
 // FileSystemImp is the test controller for mocking the interface.
 // Create with NewFileSystemImp(t), then use Mock field to get the mock implementation

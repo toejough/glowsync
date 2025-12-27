@@ -1,7 +1,5 @@
 package filesystem
 
-//go:generate impgen filesystem.FileScanner
-
 import (
 	"time"
 )

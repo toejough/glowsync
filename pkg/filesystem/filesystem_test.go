@@ -1,5 +1,8 @@
 package filesystem_test
 
+//go:generate impgen filesystem.FileSystem
+//go:generate impgen filesystem.FileScanner
+
 import (
 	"testing"
 	"time"

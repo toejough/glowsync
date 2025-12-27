@@ -115,6 +115,7 @@ type Engine struct {
 	AdaptiveMode    bool              // Enable adaptive concurrency scaling
 	ChangeType      config.ChangeType // Type of changes expected (default: MonotonicCount)
 	FileOps         *fileops.FileOps  // File operations (for dependency injection)
+	TimeProvider    TimeProvider      // Time provider (for dependency injection)
 	statusCallbacks []func(*Status)
 	mu              sync.RWMutex
 	cancelChan      chan struct{} // Channel to signal cancellation
@@ -126,8 +127,9 @@ type Engine struct {
 // NewEngine creates a new sync engine
 func NewEngine(source, dest string) *Engine {
 	return &Engine{
-		SourcePath: source,
-		DestPath:   dest,
+		SourcePath:   source,
+		DestPath:     dest,
+		TimeProvider: &RealTimeProvider{},
 		Workers:    4,                        // Default to 4 concurrent workers
 		ChangeType: config.MonotonicCount,    // Default to monotonic count
 		FileOps:    fileops.NewRealFileOps(), // Use real filesystem by default
@@ -761,6 +763,41 @@ func (e *Engine) logFileDeletionSummary(deletedCount, deleteErrorCount int) {
 	}
 }
 
+// processFileDeletion handles the deletion of a single orphaned file.
+func (e *Engine) processFileDeletion(relPath string, deletedCount int) (deleted bool, err error) {
+	if err := e.deleteFile(relPath, deletedCount); err != nil {
+		if err.Error() == "delete failed" {
+			return false, nil // Count as error but continue
+		}
+		return false, err // Error limit reached
+	}
+	return true, nil
+}
+
+// updateDeletionStatus updates the engine status for file deletion progress.
+func (e *Engine) updateDeletionStatus(checkedCount int, relPath string) {
+	e.Status.mu.Lock()
+	e.Status.ScannedFiles = checkedCount
+	e.Status.CurrentPath = relPath
+	e.Status.mu.Unlock()
+}
+
+// processOrphanedFile processes a single file for deletion if it's orphaned.
+func (e *Engine) processOrphanedFile(relPath string, sourceFiles map[string]*fileops.FileInfo, deletedCount, deleteErrorCount int) (newDeletedCount, newDeleteErrorCount int, err error) {
+	if _, exists := sourceFiles[relPath]; !exists {
+		// Delete this file from destination
+		deleted, err := e.processFileDeletion(relPath, deletedCount)
+		if err != nil {
+			return deletedCount, deleteErrorCount, err
+		}
+		if deleted {
+			return deletedCount + 1, deleteErrorCount, nil
+		}
+		return deletedCount, deleteErrorCount + 1, nil
+	}
+	return deletedCount, deleteErrorCount, nil
+}
+
 func (e *Engine) deleteOrphanedFiles(sourceFiles, destFiles map[string]*fileops.FileInfo, filesToDelete int) error {
 	if filesToDelete == 0 {
 		return nil
@@ -786,22 +823,12 @@ func (e *Engine) deleteOrphanedFiles(sourceFiles, destFiles map[string]*fileops.
 		}
 
 		checkedCount++
-		e.Status.mu.Lock()
-		e.Status.ScannedFiles = checkedCount
-		e.Status.CurrentPath = relPath
-		e.Status.mu.Unlock()
+		e.updateDeletionStatus(checkedCount, relPath)
 
-		if _, exists := sourceFiles[relPath]; !exists {
-			// Delete this file from destination
-			if err := e.deleteFile(relPath, deletedCount); err != nil {
-				if err.Error() == "delete failed" {
-					deleteErrorCount++
-				} else {
-					return err // Error limit reached
-				}
-			} else {
-				deletedCount++
-			}
+		var err error
+		deletedCount, deleteErrorCount, err = e.processOrphanedFile(relPath, sourceFiles, deletedCount, deleteErrorCount)
+		if err != nil {
+			return err
 		}
 
 		// Notify every 100 files
@@ -1045,8 +1072,8 @@ func (e *Engine) enqueueFilesForSync(jobs chan *FileToSync) {
 	}()
 }
 
-func (e *Engine) collectErrors(errors chan error) ([]error, *sync.WaitGroup) {
-	var allErrors []error
+func (e *Engine) collectErrors(errors chan error) (*[]error, *sync.Mutex, *sync.WaitGroup) {
+	allErrors := make([]error, 0)
 	var errorsMu sync.Mutex
 	var errorsWg sync.WaitGroup
 	errorsWg.Go(func() {
@@ -1056,7 +1083,7 @@ func (e *Engine) collectErrors(errors chan error) ([]error, *sync.WaitGroup) {
 			errorsMu.Unlock()
 		}
 	})
-	return allErrors, &errorsWg
+	return &allErrors, &errorsMu, &errorsWg
 }
 
 func (e *Engine) finalizeSyncPhase() {
@@ -1105,7 +1132,7 @@ func (e *Engine) syncFixed() error {
 	e.enqueueFilesForSync(jobs)
 
 	// Collect errors concurrently
-	allErrors, errorsWg := e.collectErrors(errors)
+	allErrors, errorsMu, errorsWg := e.collectErrors(errors)
 
 	// Wait for all workers to complete
 	wg.Wait()
@@ -1118,8 +1145,16 @@ func (e *Engine) syncFixed() error {
 	e.finalizeSyncPhase()
 
 	// Return combined error if any failures occurred
-	if len(allErrors) > 0 {
-		return fmt.Errorf("%d file(s) failed to sync (first error: %w)", len(allErrors), allErrors[0])
+	errorsMu.Lock()
+	errorCount := len(*allErrors)
+	var firstError error
+	if errorCount > 0 {
+		firstError = (*allErrors)[0]
+	}
+	errorsMu.Unlock()
+
+	if errorCount > 0 {
+		return fmt.Errorf("%d file(s) failed to sync (first error: %w)", errorCount, firstError)
 	}
 
 	return nil
@@ -1178,16 +1213,7 @@ func (e *Engine) syncAdaptive() error {
 	e.distributeJobs(jobs)
 
 	// Collect errors concurrently to avoid blocking workers
-	var allErrors []error
-	var errorsMu sync.Mutex
-	var errorsWg sync.WaitGroup
-	errorsWg.Go(func() {
-		for err := range errors {
-			errorsMu.Lock()
-			allErrors = append(allErrors, err)
-			errorsMu.Unlock()
-		}
-	})
+	allErrors, errorsMu, errorsWg := e.collectErrors(errors)
 
 	// Wait for all workers to complete
 	wg.Wait()
@@ -1219,29 +1245,33 @@ func (e *Engine) syncAdaptive() error {
 	e.notifyStatusUpdate()
 
 	// Return combined error if any failures occurred (but didn't hit limit)
-	if len(allErrors) > 0 {
-		return fmt.Errorf("%d file(s) failed to sync (see error details in completion screen)", len(allErrors))
+	errorsMu.Lock()
+	errorCountFromChannel := len(*allErrors)
+	errorsMu.Unlock()
+
+	if errorCountFromChannel > 0 {
+		return fmt.Errorf("%d file(s) failed to sync (see error details in completion screen)", errorCountFromChannel)
 	}
 
 	return nil
 }
 
-// adaptiveScalingState holds the state for adaptive scaling algorithm
-type adaptiveScalingState struct {
-	lastProcessedFiles int
-	lastPerWorkerSpeed float64
-	filesAtLastCheck   int
-	lastCheckTime      time.Time
+// AdaptiveScalingState holds the state for adaptive scaling algorithm
+type AdaptiveScalingState struct {
+	LastProcessedFiles int
+	LastPerWorkerSpeed float64
+	FilesAtLastCheck   int
+	LastCheckTime      time.Time
 }
 
-// evaluateAndScale evaluates current performance and decides whether to add workers
-func (e *Engine) evaluateAndScale(state *adaptiveScalingState, currentProcessedFiles, currentWorkers int, currentBytes int64, maxWorkers int, workerControl chan bool) {
-	now := time.Now()
+// EvaluateAndScale evaluates current performance and decides whether to add workers
+func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedFiles, currentWorkers int, currentBytes int64, maxWorkers int, workerControl chan bool) {
+	now := e.TimeProvider.Now()
 
 	// Calculate current per-worker speed (bytes per second per worker)
-	if state.lastProcessedFiles > 0 && !state.lastCheckTime.IsZero() {
-		filesProcessed := currentProcessedFiles - state.lastProcessedFiles
-		elapsed := now.Sub(state.lastCheckTime).Seconds()
+	if state.LastProcessedFiles > 0 && !state.LastCheckTime.IsZero() {
+		filesProcessed := currentProcessedFiles - state.LastProcessedFiles
+		elapsed := now.Sub(state.LastCheckTime).Seconds()
 
 		if filesProcessed > 0 && elapsed > 0 {
 			// Calculate per-worker throughput
@@ -1250,35 +1280,35 @@ func (e *Engine) evaluateAndScale(state *adaptiveScalingState, currentProcessedF
 			currentPerWorkerSpeed := (bytesPerFile * filesPerSecond) / float64(currentWorkers)
 
 			e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s)",
-				currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/1024/1024, state.lastPerWorkerSpeed/1024/1024))
+				currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/1024/1024, state.LastPerWorkerSpeed/1024/1024))
 
 			// Make scaling decision based on per-worker speed
-			e.makeScalingDecision(state.lastPerWorkerSpeed, currentPerWorkerSpeed, currentWorkers, maxWorkers, workerControl)
+			e.MakeScalingDecision(state.LastPerWorkerSpeed, currentPerWorkerSpeed, currentWorkers, maxWorkers, workerControl)
 
 			// Update tracking variables
-			state.lastPerWorkerSpeed = currentPerWorkerSpeed
-			state.lastProcessedFiles = currentProcessedFiles
-			state.filesAtLastCheck = currentProcessedFiles
-			state.lastCheckTime = now
+			state.LastPerWorkerSpeed = currentPerWorkerSpeed
+			state.LastProcessedFiles = currentProcessedFiles
+			state.FilesAtLastCheck = currentProcessedFiles
+			state.LastCheckTime = now
 		}
 	} else {
 		// First check - just record baseline
-		state.lastProcessedFiles = currentProcessedFiles
-		state.filesAtLastCheck = currentProcessedFiles
-		state.lastCheckTime = now
+		state.LastProcessedFiles = currentProcessedFiles
+		state.FilesAtLastCheck = currentProcessedFiles
+		state.LastCheckTime = now
 
 		// Add a worker to start scaling
 		if currentWorkers < maxWorkers {
 			workerControl <- true
-			filesSinceLastCheck := currentProcessedFiles - state.filesAtLastCheck
+			filesSinceLastCheck := currentProcessedFiles - state.FilesAtLastCheck
 			e.logToFile(fmt.Sprintf("Adaptive: Baseline established after %d files, adding worker (%d -> %d)",
 				filesSinceLastCheck, currentWorkers, currentWorkers+1))
 		}
 	}
 }
 
-// makeScalingDecision decides whether to add workers based on per-worker speed comparison
-func (e *Engine) makeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed float64, currentWorkers, maxWorkers int, workerControl chan bool) {
+// MakeScalingDecision decides whether to add workers based on per-worker speed comparison
+func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed float64, currentWorkers, maxWorkers int, workerControl chan bool) {
 	// First measurement - add a worker to test
 	if lastPerWorkerSpeed == 0 {
 		if currentWorkers < maxWorkers {
@@ -1322,11 +1352,11 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 	}
 
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := e.TimeProvider.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		// Files-per-worker based scaling algorithm - continuously dynamic
-		state := &adaptiveScalingState{}
+		state := &AdaptiveScalingState{}
 		targetFilesPerWorker := 5
 		maxWorkers := len(e.Status.FilesToSync) // Cap at total files
 
@@ -1336,12 +1366,12 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 			select {
 			case <-done:
 				return
-			case <-ticker.C:
+			case <-ticker.C():
 				e.Status.mu.RLock()
 				currentProcessedFiles := e.Status.ProcessedFiles
 				currentWorkers := e.Status.ActiveWorkers
-				currentBytes := e.Status.TransferredBytes
 				e.Status.mu.RUnlock()
+				currentBytes := atomic.LoadInt64(&e.Status.TransferredBytes)
 
 				// Only scale if we have pending work
 				pendingWork := len(jobs)
@@ -1350,11 +1380,11 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 				}
 
 				// Calculate how many files have been processed since last check
-				filesSinceLastCheck := currentProcessedFiles - state.filesAtLastCheck
+				filesSinceLastCheck := currentProcessedFiles - state.FilesAtLastCheck
 
 				// Check if we've processed enough files to evaluate (targetFilesPerWorker files per worker)
 				if filesSinceLastCheck >= currentWorkers*targetFilesPerWorker {
-					e.evaluateAndScale(state, currentProcessedFiles, currentWorkers, currentBytes, maxWorkers, workerControl)
+					e.EvaluateAndScale(state, currentProcessedFiles, currentWorkers, currentBytes, maxWorkers, workerControl)
 				}
 			}
 		}

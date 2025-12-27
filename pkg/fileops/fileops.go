@@ -156,6 +156,38 @@ func ComputeFileHash(filePath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+// osSimpleCopyLoop performs a basic file copy with progress tracking for os.File.
+func osSimpleCopyLoop(sourceFile, destFile *os.File, sourceSize int64, srcPath string, progress ProgressCallback) (int64, error) {
+	var written int64
+	buf := make([]byte, 32*1024) // 32KB buffer
+
+	for {
+		nr, err := sourceFile.Read(buf)
+		if nr > 0 {
+			nw, err := destFile.Write(buf[0:nr])
+			if err != nil {
+				return written, err
+			}
+			if nr != nw {
+				return written, io.ErrShortWrite
+			}
+			written += int64(nw)
+
+			if progress != nil {
+				progress(written, sourceSize, srcPath)
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return written, err
+		}
+	}
+
+	return written, nil
+}
+
 // CopyFile copies a file from src to dst with progress reporting
 func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 	sourceFile, err := os.Open(src) // #nosec G304 - file path is controlled by caller
@@ -188,13 +220,54 @@ func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 	}()
 
 	// Copy with progress tracking
+	written, err := osSimpleCopyLoop(sourceFile, destFile, sourceInfo.Size(), src, progress)
+	if err != nil {
+		return written, err
+	}
+
+	// Preserve modification time
+	err = os.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	if err != nil {
+		return written, err
+	}
+
+	return written, nil
+}
+
+// checkCancellation checks if the copy operation has been cancelled.
+func checkCancellation(cancelChan <-chan struct{}) error {
+	if cancelChan == nil {
+		return nil
+	}
+	select {
+	case <-cancelChan:
+		return fmt.Errorf("copy cancelled")
+	default:
+		return nil
+	}
+}
+
+// osCopyLoopWithStats performs the actual file copy with progress tracking and timing for os.File.
+func osCopyLoopWithStats(sourceFile, destFile *os.File, stats *CopyStats, sourceSize int64, srcPath string, progress ProgressCallback, cancelChan <-chan struct{}) (int64, error) {
 	var written int64
 	buf := make([]byte, 32*1024) // 32KB buffer
 
 	for {
+		if err := checkCancellation(cancelChan); err != nil {
+			return written, err
+		}
+
+		// Time the read operation
+		readStart := time.Now()
 		nr, err := sourceFile.Read(buf)
+		stats.ReadTime += time.Since(readStart)
+
 		if nr > 0 {
+			// Time the write operation
+			writeStart := time.Now()
 			nw, err := destFile.Write(buf[0:nr])
+			stats.WriteTime += time.Since(writeStart)
+
 			if err != nil {
 				return written, err
 			}
@@ -204,7 +277,7 @@ func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 			written += int64(nw)
 
 			if progress != nil {
-				progress(written, sourceInfo.Size(), src)
+				progress(written, sourceSize, srcPath)
 			}
 		}
 		if err == io.EOF {
@@ -213,12 +286,6 @@ func CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
 		if err != nil {
 			return written, err
 		}
-	}
-
-	// Preserve modification time
-	err = os.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
-	if err != nil {
-		return written, err
 	}
 
 	return written, nil
@@ -266,48 +333,9 @@ func CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-
 	}()
 
 	// Copy with progress tracking and timing
-	var written int64
-	buf := make([]byte, 32*1024) // 32KB buffer
-
-	for {
-		// Check for cancellation before each read
-		if cancelChan != nil {
-			select {
-			case <-cancelChan:
-				return stats, fmt.Errorf("copy cancelled")
-			default:
-			}
-		}
-
-		// Time the read operation
-		readStart := time.Now()
-		nr, err := sourceFile.Read(buf)
-		stats.ReadTime += time.Since(readStart)
-
-		if nr > 0 {
-			// Time the write operation
-			writeStart := time.Now()
-			nw, err := destFile.Write(buf[0:nr])
-			stats.WriteTime += time.Since(writeStart)
-
-			if err != nil {
-				return stats, err
-			}
-			if nr != nw {
-				return stats, io.ErrShortWrite
-			}
-			written += int64(nw)
-
-			if progress != nil {
-				progress(written, sourceInfo.Size(), src)
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return stats, err
-		}
+	written, err := osCopyLoopWithStats(sourceFile, destFile, stats, sourceInfo.Size(), src, progress, cancelChan)
+	if err != nil {
+		return stats, err
 	}
 
 	stats.BytesCopied = written
@@ -352,6 +380,52 @@ func FilesNeedSync(src, dst *FileInfo) bool {
 
 // CompareFilesBytes performs byte-by-byte comparison of two files
 // Returns true if files are identical, false if they differ
+// checkReadErrors checks for read errors (excluding EOF).
+func checkReadErrors(err1, err2 error) error {
+	if err1 != nil && err1 != io.EOF {
+		return err1
+	}
+	if err2 != nil && err2 != io.EOF {
+		return err2
+	}
+	return nil
+}
+
+// compareOSFileContents performs byte-by-byte comparison of two open os.File instances.
+func compareOSFileContents(file1, file2 *os.File) (bool, error) {
+	buf1 := make([]byte, 32*1024)
+	buf2 := make([]byte, 32*1024)
+
+	for {
+		n1, err1 := file1.Read(buf1)
+		n2, err2 := file2.Read(buf2)
+
+		// Check for read errors
+		if err := checkReadErrors(err1, err2); err != nil {
+			return false, err
+		}
+
+		// Compare bytes read
+		if n1 != n2 {
+			return false, nil
+		}
+
+		// Compare buffer contents
+		if n1 > 0 {
+			for i := range n1 {
+				if buf1[i] != buf2[i] {
+					return false, nil
+				}
+			}
+		}
+
+		// Check if we've reached EOF on both files
+		if err1 == io.EOF && err2 == io.EOF {
+			return true, nil
+		}
+	}
+}
+
 func CompareFilesBytes(path1, path2 string) (bool, error) {
 	// Open both files
 	file1, err := os.Open(path1) // #nosec G304 - file path is controlled by caller
@@ -386,41 +460,5 @@ func CompareFilesBytes(path1, path2 string) (bool, error) {
 	}
 
 	// Compare byte-by-byte
-	buf1 := make([]byte, 32*1024) // 32KB buffer
-	buf2 := make([]byte, 32*1024)
-
-	for {
-		n1, err1 := file1.Read(buf1)
-		n2, err2 := file2.Read(buf2)
-
-		// Check for read errors
-		if err1 != nil && err1 != io.EOF {
-			return false, err1
-		}
-		if err2 != nil && err2 != io.EOF {
-			return false, err2
-		}
-
-		// Compare bytes read
-		if n1 != n2 {
-			return false, nil
-		}
-
-		// Compare buffer contents
-		for i := range n1 {
-			if buf1[i] != buf2[i] {
-				return false, nil
-			}
-		}
-
-		// Check if we've reached EOF on both files
-		if err1 == io.EOF && err2 == io.EOF {
-			return true, nil
-		}
-
-		// If only one file reached EOF, they're different
-		if err1 == io.EOF || err2 == io.EOF {
-			return false, nil
-		}
-	}
+	return compareOSFileContents(file1, file2)
 }

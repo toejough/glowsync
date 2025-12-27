@@ -151,9 +151,3 @@ func RenderDim(text string) string {
 func RenderBox(content string) string {
 	return BoxStyle.Render(content)
 }
-
-// RenderInlineBox renders content in an inline box with consistent styling
-func RenderInlineBox(content string) string {
-	return InlineBoxStyle.Render(content)
-}
-
