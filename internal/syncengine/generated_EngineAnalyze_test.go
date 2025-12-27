@@ -3,16 +3,16 @@
 package syncengine_test
 
 import (
-	"github.com/toejough/imptest/imptest"
-	"reflect"
-	"testing"
+	_imptest "github.com/toejough/imptest/imptest"
+	_reflect "reflect"
+	_testing "testing"
 )
 
 // EngineAnalyze wraps a callable function for testing.
 // Create with NewEngineAnalyze(t, yourFunction), call Start() to execute,
 // then use ExpectReturnedValuesAre/Should() or ExpectPanicWith() to verify behavior.
 type EngineAnalyze struct {
-	*imptest.CallableController[EngineAnalyzeReturn]
+	*_imptest.CallableController[EngineAnalyzeReturn]
 	callable func() error
 }
 
@@ -23,9 +23,9 @@ type EngineAnalyze struct {
 //
 //	wrapper := NewEngineAnalyze(t, myFunction)
 //	wrapper.Start(args...).ExpectReturnedValuesAre(expectedVals...)
-func NewEngineAnalyze(t testing.TB, callable func() error) *EngineAnalyze {
+func NewEngineAnalyze(t _testing.TB, callable func() error) *EngineAnalyze {
 	return &EngineAnalyze{
-		CallableController: imptest.NewCallableController[EngineAnalyzeReturn](t),
+		CallableController: _imptest.NewCallableController[EngineAnalyzeReturn](t),
 		callable:           callable,
 	}
 }
@@ -38,7 +38,7 @@ func (s *EngineAnalyze) ExpectPanicWith(expected any) {
 	s.WaitForResponse()
 
 	if s.Panicked != nil {
-		ok, msg := imptest.MatchValue(s.Panicked, expected)
+		ok, msg := _imptest.MatchValue(s.Panicked, expected)
 		if !ok {
 			s.T.Fatalf("panic value: %s", msg)
 		}
@@ -56,7 +56,7 @@ func (s *EngineAnalyze) ExpectReturnedValuesAre(v1 error) {
 	s.WaitForResponse()
 
 	if s.Returned != nil {
-		if !reflect.DeepEqual(s.Returned.Result0, v1) {
+		if !_reflect.DeepEqual(s.Returned.Result0, v1) {
 			s.T.Fatalf("expected return value 0 to be %v, got %v", v1, s.Returned.Result0)
 		}
 		return
@@ -75,7 +75,7 @@ func (s *EngineAnalyze) ExpectReturnedValuesShould(v1 any) {
 	if s.Returned != nil {
 		var ok bool
 		var msg string
-		ok, msg = imptest.MatchValue(s.Returned.Result0, v1)
+		ok, msg = _imptest.MatchValue(s.Returned.Result0, v1)
 		if !ok {
 			s.T.Fatalf("return value 0: %s", msg)
 		}

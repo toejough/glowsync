@@ -1,0 +1,61 @@
+version = '2'
+
+[linters]
+default = 'all'
+disable = [
+	'exhaustruct',    # too noisy for zero value structs
+	'forbidigo',      # I print output on purpose sometimes
+	'godot',          # has a bug that causes panics on some files
+	'godox',          # saving todos till another validation step
+	'ireturn',        # I like generic return types
+	'nonamedreturns', # I like named returns
+	'wsl',            # deprecated
+]
+
+[linters.settings]
+[linters.settings.depguard]
+[linters.settings.depguard.rules]
+[linters.settings.depguard.rules.all]
+files = ['$all', '!$test']
+allow = [
+	'$gostd',
+	'github.com/alexflint/go-arg',
+	'github.com/akedrou/textdiff',
+	'github.com/toejough/go-reorder',
+]
+
+[linters.settings.depguard.rules.test]
+files = ['$test']
+allow = [
+	'$gostd',
+	'github.com/onsi/gomega',
+	'pgregory.net/rapid',
+	'github.com/toejough/imptest',
+	'github.com/toejough/go-reorder',
+]
+
+[linters.settings.nlreturn]
+block-size = 2
+
+[linters.settings.unused]
+field-writes-are-uses = false
+exported-fields-are-used = false
+local-variables-are-used = false
+
+[linters.exclusions]
+generated = 'lax'
+presets = ['comments', 'common-false-positives', 'legacy', 'std-error-handling']
+paths = ['third_party$', 'builtin$', 'examples$']
+
+fix = true
+[[linters.exclusions.rules]]
+# Dynamic errors are acceptable and often clearer in test code/predicates.
+path = "_test\\.go"
+linters = ['err113', 'goconst']
+
+[formatters]
+enable = ['gofmt', 'gofumpt', 'goimports']
+
+[formatters.exclusions]
+generated = 'lax'
+paths = ['third_party$', 'builtin$', 'examples$']

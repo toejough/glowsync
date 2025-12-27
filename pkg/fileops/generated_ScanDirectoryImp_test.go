@@ -4,16 +4,16 @@ package fileops_test
 
 import (
 	fileops "github.com/joe/copy-files/pkg/fileops"
-	"github.com/toejough/imptest/imptest"
-	"reflect"
-	"testing"
+	_imptest "github.com/toejough/imptest/imptest"
+	_reflect "reflect"
+	_testing "testing"
 )
 
 // ScanDirectoryImp wraps a callable function for testing.
 // Create with NewScanDirectoryImp(t, yourFunction), call Start() to execute,
 // then use ExpectReturnedValuesAre/Should() or ExpectPanicWith() to verify behavior.
 type ScanDirectoryImp struct {
-	*imptest.CallableController[ScanDirectoryImpReturn]
+	*_imptest.CallableController[ScanDirectoryImpReturn]
 	callable func(rootPath string) (map[string]*fileops.FileInfo, error)
 }
 
@@ -24,9 +24,9 @@ type ScanDirectoryImp struct {
 //
 //	wrapper := NewScanDirectoryImp(t, myFunction)
 //	wrapper.Start(args...).ExpectReturnedValuesAre(expectedVals...)
-func NewScanDirectoryImp(t testing.TB, callable func(rootPath string) (map[string]*fileops.FileInfo, error)) *ScanDirectoryImp {
+func NewScanDirectoryImp(t _testing.TB, callable func(rootPath string) (map[string]*fileops.FileInfo, error)) *ScanDirectoryImp {
 	return &ScanDirectoryImp{
-		CallableController: imptest.NewCallableController[ScanDirectoryImpReturn](t),
+		CallableController: _imptest.NewCallableController[ScanDirectoryImpReturn](t),
 		callable:           callable,
 	}
 }
@@ -39,7 +39,7 @@ func (s *ScanDirectoryImp) ExpectPanicWith(expected any) {
 	s.WaitForResponse()
 
 	if s.Panicked != nil {
-		ok, msg := imptest.MatchValue(s.Panicked, expected)
+		ok, msg := _imptest.MatchValue(s.Panicked, expected)
 		if !ok {
 			s.T.Fatalf("panic value: %s", msg)
 		}
@@ -57,10 +57,10 @@ func (s *ScanDirectoryImp) ExpectReturnedValuesAre(v1 map[string]*fileops.FileIn
 	s.WaitForResponse()
 
 	if s.Returned != nil {
-		if !reflect.DeepEqual(s.Returned.Result0, v1) {
+		if !_reflect.DeepEqual(s.Returned.Result0, v1) {
 			s.T.Fatalf("expected return value 0 to be %v, got %v", v1, s.Returned.Result0)
 		}
-		if s.Returned.Result1 != v2 {
+		if !_reflect.DeepEqual(s.Returned.Result1, v2) {
 			s.T.Fatalf("expected return value 1 to be %v, got %v", v2, s.Returned.Result1)
 		}
 		return
@@ -79,11 +79,11 @@ func (s *ScanDirectoryImp) ExpectReturnedValuesShould(v1 any, v2 any) {
 	if s.Returned != nil {
 		var ok bool
 		var msg string
-		ok, msg = imptest.MatchValue(s.Returned.Result0, v1)
+		ok, msg = _imptest.MatchValue(s.Returned.Result0, v1)
 		if !ok {
 			s.T.Fatalf("return value 0: %s", msg)
 		}
-		ok, msg = imptest.MatchValue(s.Returned.Result1, v2)
+		ok, msg = _imptest.MatchValue(s.Returned.Result1, v2)
 		if !ok {
 			s.T.Fatalf("return value 1: %s", msg)
 		}
@@ -91,25 +91,6 @@ func (s *ScanDirectoryImp) ExpectReturnedValuesShould(v1 any, v2 any) {
 	}
 
 	s.T.Fatalf("expected function to return, but it panicked with: %v", s.Panicked)
-}
-
-// GetResponse waits for and returns the callable's response.
-// Use this when you need to inspect the response without asserting specific values.
-// The response indicates whether the callable returned or panicked.
-func (s *ScanDirectoryImp) GetResponse() *ScanDirectoryImpResponse {
-	s.WaitForResponse()
-
-	if s.Returned != nil {
-		return &ScanDirectoryImpResponse{
-			EventType: "ReturnEvent",
-			ReturnVal: s.Returned,
-		}
-	}
-
-	return &ScanDirectoryImpResponse{
-		EventType: "PanicEvent",
-		PanicVal:  s.Panicked,
-	}
 }
 
 // Start begins execution of the callable in a goroutine with the provided arguments.
@@ -138,20 +119,11 @@ func (s *ScanDirectoryImp) Start(rootPath string) *ScanDirectoryImp {
 
 // ScanDirectoryImpResponse represents the response from the callable (either return or panic).
 // Check EventType to determine if the callable returned normally or panicked.
-// Use AsReturn() to get return values as a slice, or access PanicVal directly.
+// Access ReturnVal for return values or PanicVal for panic information.
 type ScanDirectoryImpResponse struct {
 	EventType string // "return" or "panic"
 	ReturnVal *ScanDirectoryImpReturn
 	PanicVal  any
-}
-
-// AsReturn converts the return values to a slice of any for generic processing.
-// Returns nil if the response was a panic or if there are no return values.
-func (r *ScanDirectoryImpResponse) AsReturn() []any {
-	if r.ReturnVal == nil {
-		return nil
-	}
-	return []any{r.ReturnVal.Result0, r.ReturnVal.Result1}
 }
 
 // Type returns the event type: "return" for normal returns, "panic" for panics.

@@ -46,6 +46,7 @@ issues:
   exclude-rules:
     # Dynamic errors are acceptable and often clearer in test code/predicates.
     - path: _test\.go
+      source: ".*"
       linters:
         - err113
 

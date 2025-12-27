@@ -1,6 +1,11 @@
 // Package syncengine provides file synchronization functionality.
 package syncengine
 
+//go:generate impgen syncengine.Engine.Cancel
+//go:generate impgen syncengine.Engine.EnableFileLogging
+//go:generate impgen syncengine.Engine.CloseLog
+//go:generate impgen syncengine.FormatBytes
+
 import (
 	"fmt"
 	"os"
@@ -20,8 +25,8 @@ const (
 	MaxErrorsBeforeAbort = 10
 )
 
-// formatBytes formats bytes into human-readable format
-func formatBytes(bytes int64) string {
+// FormatBytes formats bytes into human-readable format
+func FormatBytes(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
@@ -600,7 +605,7 @@ func (e *Engine) Analyze() error {
 	alreadySynced := e.Status.AlreadySyncedFiles
 	e.Status.mu.Unlock()
 
-	e.logAnalysis(fmt.Sprintf("Found %d files to sync (%s total)", totalFiles, formatBytes(totalBytes)))
+	e.logAnalysis(fmt.Sprintf("Found %d files to sync (%s total)", totalFiles, FormatBytes(totalBytes)))
 	if alreadySynced > 0 {
 		e.logAnalysis(fmt.Sprintf("%d files already up-to-date", alreadySynced))
 	}
@@ -1390,7 +1395,7 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 
 	// Log first 10 completed files
 	if e.Status.ProcessedFiles <= 10 {
-		e.logToFile(fmt.Sprintf("  ✓ Copied: %s (%s)", fileToSync.RelativePath, formatBytes(fileToSync.Size)))
+		e.logToFile(fmt.Sprintf("  ✓ Copied: %s (%s)", fileToSync.RelativePath, FormatBytes(fileToSync.Size)))
 	}
 
 	e.Status.mu.Unlock()

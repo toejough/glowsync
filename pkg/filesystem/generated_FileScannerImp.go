@@ -2,9 +2,9 @@
 
 package filesystem
 
-import "github.com/toejough/imptest/imptest"
-import "testing"
-import "time"
+import _imptest "github.com/toejough/imptest/imptest"
+import _testing "testing"
+import _time "time"
 
 // FileScannerImp is the test controller for mocking the interface.
 // Create with NewFileScannerImp(t), then use Mock field to get the mock implementation
@@ -16,7 +16,7 @@ import "time"
 //	go codeUnderTest(imp.Mock)
 //	imp.ExpectCallIs.MethodName().ExpectArgsAre(...).InjectResult(...)
 type FileScannerImp struct {
-	*imptest.Controller[*FileScannerImpCall]
+	*_imptest.Controller[*FileScannerImpCall]
 	Mock         *FileScannerImpMock
 	ExpectCallIs *FileScannerImpExpectCallIs
 	currentCall  *FileScannerImpCall
@@ -31,9 +31,9 @@ type FileScannerImp struct {
 //	imp := NewFileScannerImp(t)
 //	go codeUnderTest(imp.Mock)
 //	imp.ExpectCallIs.Method().ExpectArgsAre(...).InjectResult(...)
-func NewFileScannerImp(t *testing.T) *FileScannerImp {
+func NewFileScannerImp(t *_testing.T) *FileScannerImp {
 	imp := &FileScannerImp{
-		Controller: imptest.NewController[*FileScannerImpCall](t),
+		Controller: _imptest.NewController[*FileScannerImpCall](t),
 	}
 	imp.Mock = &FileScannerImpMock{imp: imp}
 	imp.ExpectCallIs = &FileScannerImpExpectCallIs{imp: imp}
@@ -56,8 +56,8 @@ func (i *FileScannerImp) GetCurrentCall() *FileScannerImpCall {
 //
 // Example:
 //
-//	imp.Within(100*time.Millisecond).ExpectCallIs.Method().ExpectArgsAre(...)
-func (i *FileScannerImp) Within(d time.Duration) *FileScannerImpTimed {
+//	imp.Within(100*_time.Millisecond).ExpectCallIs.Method().ExpectArgsAre(...)
+func (i *FileScannerImp) Within(d _time.Duration) *FileScannerImpTimed {
 	return &FileScannerImpTimed{
 		ExpectCallIs: &FileScannerImpExpectCallIs{imp: i, timeout: d},
 	}
@@ -67,30 +67,30 @@ func (i *FileScannerImp) Within(d time.Duration) *FileScannerImpTimed {
 // Only one method field is non-nil at a time, indicating which method was called.
 // Use Name() to identify the method and As{{Method}() to access typed call details.
 type FileScannerImpCall struct {
-	Next *FileScannerImpNextCall
-	Err  *FileScannerImpErrCall
+	next *FileScannerImpNextCall
+	err  *FileScannerImpErrCall
 }
 
 // AsErr returns the call cast to FileScannerImpErrCall for accessing call details.
 // Returns nil if the call was not to Err.
 func (c *FileScannerImpCall) AsErr() *FileScannerImpErrCall {
-	return c.Err
+	return c.err
 }
 
 // AsNext returns the call cast to FileScannerImpNextCall for accessing call details.
 // Returns nil if the call was not to Next.
 func (c *FileScannerImpCall) AsNext() *FileScannerImpNextCall {
-	return c.Next
+	return c.next
 }
 
 // Done returns true if the call has been completed (response injected).
 // Used internally to track call state.
 func (c *FileScannerImpCall) Done() bool {
-	if c.Next != nil {
-		return c.Next.done
+	if c.next != nil {
+		return c.next.done
 	}
-	if c.Err != nil {
-		return c.Err.done
+	if c.err != nil {
+		return c.err.done
 	}
 	return false
 }
@@ -98,10 +98,10 @@ func (c *FileScannerImpCall) Done() bool {
 // Name returns the name of the method that was called.
 // Returns an empty string if the call struct is invalid.
 func (c *FileScannerImpCall) Name() string {
-	if c.Next != nil {
+	if c.next != nil {
 		return "Next"
 	}
-	if c.Err != nil {
+	if c.err != nil {
 		return "Err"
 	}
 	return ""
@@ -111,7 +111,7 @@ func (c *FileScannerImpCall) Name() string {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileScannerImpErrBuilder struct {
 	imp     *FileScannerImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // InjectPanic waits for a Err call and causes it to panic with the given value.
@@ -177,7 +177,7 @@ type FileScannerImpErrCallResponse struct {
 // Use Within() on the parent FileScannerImp to configure timeouts.
 type FileScannerImpExpectCallIs struct {
 	imp     *FileScannerImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // Err returns a builder for setting expectations on Err method calls.
@@ -207,7 +207,7 @@ func (m *FileScannerImpMock) Err() error {
 	}
 
 	callEvent := &FileScannerImpCall{
-		Err: call,
+		err: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -231,7 +231,7 @@ func (m *FileScannerImpMock) Next() (FileInfo, bool) {
 	}
 
 	callEvent := &FileScannerImpCall{
-		Next: call,
+		next: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -249,7 +249,7 @@ func (m *FileScannerImpMock) Next() (FileInfo, bool) {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileScannerImpNextBuilder struct {
 	imp     *FileScannerImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // InjectPanic waits for a Next call and causes it to panic with the given value.

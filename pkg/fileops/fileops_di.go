@@ -1,6 +1,8 @@
 // Package fileops provides file operation utilities with dependency injection support.
 package fileops
 
+//go:generate impgen fileops.CopyFileWithStats
+
 import (
 	"crypto/sha256"
 	"fmt"

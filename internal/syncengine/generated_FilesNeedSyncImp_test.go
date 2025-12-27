@@ -4,15 +4,15 @@ package syncengine_test
 
 import (
 	fileops "github.com/joe/copy-files/pkg/fileops"
-	"github.com/toejough/imptest/imptest"
-	"testing"
+	_imptest "github.com/toejough/imptest/imptest"
+	_testing "testing"
 )
 
 // FilesNeedSyncImp wraps a callable function for testing.
 // Create with NewFilesNeedSyncImp(t, yourFunction), call Start() to execute,
 // then use ExpectReturnedValuesAre/Should() or ExpectPanicWith() to verify behavior.
 type FilesNeedSyncImp struct {
-	*imptest.CallableController[FilesNeedSyncImpReturn]
+	*_imptest.CallableController[FilesNeedSyncImpReturn]
 	callable func(src, dst *fileops.FileInfo) bool
 }
 
@@ -23,9 +23,9 @@ type FilesNeedSyncImp struct {
 //
 //	wrapper := NewFilesNeedSyncImp(t, myFunction)
 //	wrapper.Start(args...).ExpectReturnedValuesAre(expectedVals...)
-func NewFilesNeedSyncImp(t testing.TB, callable func(src, dst *fileops.FileInfo) bool) *FilesNeedSyncImp {
+func NewFilesNeedSyncImp(t _testing.TB, callable func(src, dst *fileops.FileInfo) bool) *FilesNeedSyncImp {
 	return &FilesNeedSyncImp{
-		CallableController: imptest.NewCallableController[FilesNeedSyncImpReturn](t),
+		CallableController: _imptest.NewCallableController[FilesNeedSyncImpReturn](t),
 		callable:           callable,
 	}
 }
@@ -38,7 +38,7 @@ func (s *FilesNeedSyncImp) ExpectPanicWith(expected any) {
 	s.WaitForResponse()
 
 	if s.Panicked != nil {
-		ok, msg := imptest.MatchValue(s.Panicked, expected)
+		ok, msg := _imptest.MatchValue(s.Panicked, expected)
 		if !ok {
 			s.T.Fatalf("panic value: %s", msg)
 		}
@@ -75,7 +75,7 @@ func (s *FilesNeedSyncImp) ExpectReturnedValuesShould(v1 any) {
 	if s.Returned != nil {
 		var ok bool
 		var msg string
-		ok, msg = imptest.MatchValue(s.Returned.Result0, v1)
+		ok, msg = _imptest.MatchValue(s.Returned.Result0, v1)
 		if !ok {
 			s.T.Fatalf("return value 0: %s", msg)
 		}

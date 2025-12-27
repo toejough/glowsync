@@ -2,12 +2,13 @@
 
 package filesystem_test
 
-import "github.com/toejough/imptest/imptest"
-import "reflect"
-import "testing"
-import "time"
+import _imptest "github.com/toejough/imptest/imptest"
+import _reflect "reflect"
+import _testing "testing"
+import _time "time"
 import filesystem "github.com/joe/copy-files/pkg/filesystem"
 import "os"
+import "time"
 
 // FileSystemImp is the test controller for mocking the interface.
 // Create with NewFileSystemImp(t), then use Mock field to get the mock implementation
@@ -19,7 +20,7 @@ import "os"
 //	go codeUnderTest(imp.Mock)
 //	imp.ExpectCallIs.MethodName().ExpectArgsAre(...).InjectResult(...)
 type FileSystemImp struct {
-	*imptest.Controller[*FileSystemImpCall]
+	*_imptest.Controller[*FileSystemImpCall]
 	Mock         *FileSystemImpMock
 	ExpectCallIs *FileSystemImpExpectCallIs
 	currentCall  *FileSystemImpCall
@@ -34,9 +35,9 @@ type FileSystemImp struct {
 //	imp := NewFileSystemImp(t)
 //	go codeUnderTest(imp.Mock)
 //	imp.ExpectCallIs.Method().ExpectArgsAre(...).InjectResult(...)
-func NewFileSystemImp(t *testing.T) *FileSystemImp {
+func NewFileSystemImp(t *_testing.T) *FileSystemImp {
 	imp := &FileSystemImp{
-		Controller: imptest.NewController[*FileSystemImpCall](t),
+		Controller: _imptest.NewController[*FileSystemImpCall](t),
 	}
 	imp.Mock = &FileSystemImpMock{imp: imp}
 	imp.ExpectCallIs = &FileSystemImpExpectCallIs{imp: imp}
@@ -59,8 +60,8 @@ func (i *FileSystemImp) GetCurrentCall() *FileSystemImpCall {
 //
 // Example:
 //
-//	imp.Within(100*time.Millisecond).ExpectCallIs.Method().ExpectArgsAre(...)
-func (i *FileSystemImp) Within(d time.Duration) *FileSystemImpTimed {
+//	imp.Within(100*_time.Millisecond).ExpectCallIs.Method().ExpectArgsAre(...)
+func (i *FileSystemImp) Within(d _time.Duration) *FileSystemImpTimed {
 	return &FileSystemImpTimed{
 		ExpectCallIs: &FileSystemImpExpectCallIs{imp: i, timeout: d},
 	}
@@ -70,80 +71,80 @@ func (i *FileSystemImp) Within(d time.Duration) *FileSystemImpTimed {
 // Only one method field is non-nil at a time, indicating which method was called.
 // Use Name() to identify the method and As{{Method}() to access typed call details.
 type FileSystemImpCall struct {
-	Scan     *FileSystemImpScanCall
-	Open     *FileSystemImpOpenCall
-	Create   *FileSystemImpCreateCall
-	MkdirAll *FileSystemImpMkdirAllCall
-	Chtimes  *FileSystemImpChtimesCall
-	Remove   *FileSystemImpRemoveCall
-	Stat     *FileSystemImpStatCall
+	scan     *FileSystemImpScanCall
+	open     *FileSystemImpOpenCall
+	create   *FileSystemImpCreateCall
+	mkdirAll *FileSystemImpMkdirAllCall
+	chtimes  *FileSystemImpChtimesCall
+	remove   *FileSystemImpRemoveCall
+	stat     *FileSystemImpStatCall
 }
 
 // AsChtimes returns the call cast to FileSystemImpChtimesCall for accessing call details.
 // Returns nil if the call was not to Chtimes.
 func (c *FileSystemImpCall) AsChtimes() *FileSystemImpChtimesCall {
-	return c.Chtimes
+	return c.chtimes
 }
 
 // AsCreate returns the call cast to FileSystemImpCreateCall for accessing call details.
 // Returns nil if the call was not to Create.
 func (c *FileSystemImpCall) AsCreate() *FileSystemImpCreateCall {
-	return c.Create
+	return c.create
 }
 
 // AsMkdirAll returns the call cast to FileSystemImpMkdirAllCall for accessing call details.
 // Returns nil if the call was not to MkdirAll.
 func (c *FileSystemImpCall) AsMkdirAll() *FileSystemImpMkdirAllCall {
-	return c.MkdirAll
+	return c.mkdirAll
 }
 
 // AsOpen returns the call cast to FileSystemImpOpenCall for accessing call details.
 // Returns nil if the call was not to Open.
 func (c *FileSystemImpCall) AsOpen() *FileSystemImpOpenCall {
-	return c.Open
+	return c.open
 }
 
 // AsRemove returns the call cast to FileSystemImpRemoveCall for accessing call details.
 // Returns nil if the call was not to Remove.
 func (c *FileSystemImpCall) AsRemove() *FileSystemImpRemoveCall {
-	return c.Remove
+	return c.remove
 }
 
 // AsScan returns the call cast to FileSystemImpScanCall for accessing call details.
 // Returns nil if the call was not to Scan.
 func (c *FileSystemImpCall) AsScan() *FileSystemImpScanCall {
-	return c.Scan
+	return c.scan
 }
 
 // AsStat returns the call cast to FileSystemImpStatCall for accessing call details.
 // Returns nil if the call was not to Stat.
 func (c *FileSystemImpCall) AsStat() *FileSystemImpStatCall {
-	return c.Stat
+	return c.stat
 }
 
 // Done returns true if the call has been completed (response injected).
 // Used internally to track call state.
 func (c *FileSystemImpCall) Done() bool {
-	if c.Scan != nil {
-		return c.Scan.done
+	if c.scan != nil {
+		return c.scan.done
 	}
-	if c.Open != nil {
-		return c.Open.done
+	if c.open != nil {
+		return c.open.done
 	}
-	if c.Create != nil {
-		return c.Create.done
+	if c.create != nil {
+		return c.create.done
 	}
-	if c.MkdirAll != nil {
-		return c.MkdirAll.done
+	if c.mkdirAll != nil {
+		return c.mkdirAll.done
 	}
-	if c.Chtimes != nil {
-		return c.Chtimes.done
+	if c.chtimes != nil {
+		return c.chtimes.done
 	}
-	if c.Remove != nil {
-		return c.Remove.done
+	if c.remove != nil {
+		return c.remove.done
 	}
-	if c.Stat != nil {
-		return c.Stat.done
+	if c.stat != nil {
+		return c.stat.done
 	}
 	return false
 }
@@ -151,25 +152,25 @@ func (c *FileSystemImpCall) Done() bool {
 // Name returns the name of the method that was called.
 // Returns an empty string if the call struct is invalid.
 func (c *FileSystemImpCall) Name() string {
-	if c.Scan != nil {
+	if c.scan != nil {
 		return "Scan"
 	}
-	if c.Open != nil {
+	if c.open != nil {
 		return "Open"
 	}
-	if c.Create != nil {
+	if c.create != nil {
 		return "Create"
 	}
-	if c.MkdirAll != nil {
+	if c.mkdirAll != nil {
 		return "MkdirAll"
 	}
-	if c.Chtimes != nil {
+	if c.chtimes != nil {
 		return "Chtimes"
 	}
-	if c.Remove != nil {
+	if c.remove != nil {
 		return "Remove"
 	}
-	if c.Stat != nil {
+	if c.stat != nil {
 		return "Stat"
 	}
 	return ""
@@ -179,7 +180,7 @@ func (c *FileSystemImpCall) Name() string {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpChtimesBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a Chtimes call with exactly the specified argument values.
@@ -195,10 +196,10 @@ func (bldr *FileSystemImpChtimesBuilder) ExpectArgsAre(path string, atime time.T
 		if methodCall.path != path {
 			return false
 		}
-		if !reflect.DeepEqual(methodCall.atime, atime) {
+		if !_reflect.DeepEqual(methodCall.atime, atime) {
 			return false
 		}
-		if !reflect.DeepEqual(methodCall.mtime, mtime) {
+		if !_reflect.DeepEqual(methodCall.mtime, mtime) {
 			return false
 		}
 		return true
@@ -219,15 +220,15 @@ func (bldr *FileSystemImpChtimesBuilder) ExpectArgsShould(path any, atime any, m
 		}
 		methodCall := callToCheck.AsChtimes()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}
-		ok, _ = imptest.MatchValue(methodCall.atime, atime)
+		ok, _ = _imptest.MatchValue(methodCall.atime, atime)
 		if !ok {
 			return false
 		}
-		ok, _ = imptest.MatchValue(methodCall.mtime, mtime)
+		ok, _ = _imptest.MatchValue(methodCall.mtime, mtime)
 		if !ok {
 			return false
 		}
@@ -303,7 +304,7 @@ type FileSystemImpChtimesCallResponse struct {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpCreateBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a Create call with exactly the specified argument values.
@@ -337,7 +338,7 @@ func (bldr *FileSystemImpCreateBuilder) ExpectArgsShould(path any) *FileSystemIm
 		}
 		methodCall := callToCheck.AsCreate()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}
@@ -414,7 +415,7 @@ type FileSystemImpCreateCallResponse struct {
 // Use Within() on the parent FileSystemImp to configure timeouts.
 type FileSystemImpExpectCallIs struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // Chtimes returns a builder for setting expectations on Chtimes method calls.
@@ -456,7 +457,7 @@ func (e *FileSystemImpExpectCallIs) Stat() *FileSystemImpStatBuilder {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpMkdirAllBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a MkdirAll call with exactly the specified argument values.
@@ -472,7 +473,7 @@ func (bldr *FileSystemImpMkdirAllBuilder) ExpectArgsAre(path string, perm os.Fil
 		if methodCall.path != path {
 			return false
 		}
-		if !reflect.DeepEqual(methodCall.perm, perm) {
+		if !_reflect.DeepEqual(methodCall.perm, perm) {
 			return false
 		}
 		return true
@@ -493,11 +494,11 @@ func (bldr *FileSystemImpMkdirAllBuilder) ExpectArgsShould(path any, perm any) *
 		}
 		methodCall := callToCheck.AsMkdirAll()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}
-		ok, _ = imptest.MatchValue(methodCall.perm, perm)
+		ok, _ = _imptest.MatchValue(methodCall.perm, perm)
 		if !ok {
 			return false
 		}
@@ -588,7 +589,7 @@ func (m *FileSystemImpMock) Chtimes(path string, atime time.Time, mtime time.Tim
 	}
 
 	callEvent := &FileSystemImpCall{
-		Chtimes: call,
+		chtimes: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -613,7 +614,7 @@ func (m *FileSystemImpMock) Create(path string) (filesystem.File, error) {
 	}
 
 	callEvent := &FileSystemImpCall{
-		Create: call,
+		create: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -639,7 +640,7 @@ func (m *FileSystemImpMock) MkdirAll(path string, perm os.FileMode) error {
 	}
 
 	callEvent := &FileSystemImpCall{
-		MkdirAll: call,
+		mkdirAll: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -664,7 +665,7 @@ func (m *FileSystemImpMock) Open(path string) (filesystem.File, error) {
 	}
 
 	callEvent := &FileSystemImpCall{
-		Open: call,
+		open: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -689,7 +690,7 @@ func (m *FileSystemImpMock) Remove(path string) error {
 	}
 
 	callEvent := &FileSystemImpCall{
-		Remove: call,
+		remove: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -714,7 +715,7 @@ func (m *FileSystemImpMock) Scan(path string) filesystem.FileScanner {
 	}
 
 	callEvent := &FileSystemImpCall{
-		Scan: call,
+		scan: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -739,7 +740,7 @@ func (m *FileSystemImpMock) Stat(path string) (os.FileInfo, error) {
 	}
 
 	callEvent := &FileSystemImpCall{
-		Stat: call,
+		stat: call,
 	}
 
 	m.imp.CallChan <- callEvent
@@ -757,7 +758,7 @@ func (m *FileSystemImpMock) Stat(path string) (os.FileInfo, error) {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpOpenBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a Open call with exactly the specified argument values.
@@ -791,7 +792,7 @@ func (bldr *FileSystemImpOpenBuilder) ExpectArgsShould(path any) *FileSystemImpO
 		}
 		methodCall := callToCheck.AsOpen()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}
@@ -867,7 +868,7 @@ type FileSystemImpOpenCallResponse struct {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpRemoveBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a Remove call with exactly the specified argument values.
@@ -901,7 +902,7 @@ func (bldr *FileSystemImpRemoveBuilder) ExpectArgsShould(path any) *FileSystemIm
 		}
 		methodCall := callToCheck.AsRemove()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}
@@ -975,7 +976,7 @@ type FileSystemImpRemoveCallResponse struct {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpScanBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a Scan call with exactly the specified argument values.
@@ -1009,7 +1010,7 @@ func (bldr *FileSystemImpScanBuilder) ExpectArgsShould(path any) *FileSystemImpS
 		}
 		methodCall := callToCheck.AsScan()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}
@@ -1083,7 +1084,7 @@ type FileSystemImpScanCallResponse struct {
 // Use ExpectArgsAre for exact matching or ExpectArgsShould for matcher-based matching.
 type FileSystemImpStatBuilder struct {
 	imp     *FileSystemImp
-	timeout time.Duration
+	timeout _time.Duration
 }
 
 // ExpectArgsAre waits for a Stat call with exactly the specified argument values.
@@ -1117,7 +1118,7 @@ func (bldr *FileSystemImpStatBuilder) ExpectArgsShould(path any) *FileSystemImpS
 		}
 		methodCall := callToCheck.AsStat()
 		var ok bool
-		ok, _ = imptest.MatchValue(methodCall.path, path)
+		ok, _ = _imptest.MatchValue(methodCall.path, path)
 		if !ok {
 			return false
 		}

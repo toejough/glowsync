@@ -3,16 +3,15 @@ module github.com/joe/copy-files
 go 1.25.5
 
 require (
+	github.com/alexflint/go-arg v1.6.1
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/magefile/mage v1.15.0
 	github.com/onsi/gomega v1.38.3
 	github.com/toejough/imptest v0.0.0-20251226073255-2a7778c95449
 )
 
 require (
-	github.com/alexflint/go-arg v1.6.1 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

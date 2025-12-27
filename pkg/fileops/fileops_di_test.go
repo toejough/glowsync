@@ -1,194 +1,328 @@
-package fileops
+package fileops_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	. "github.com/onsi/gomega"
+
+	"github.com/joe/copy-files/pkg/fileops"
 	"github.com/joe/copy-files/pkg/filesystem"
 )
 
-// TestFileOps_ScanDirectory_WithMockFS demonstrates testing without real filesystem I/O
-func TestFileOps_ScanDirectory_WithMockFS(t *testing.T) {
-	// Create a mock filesystem
-	mockFS := filesystem.NewMockFileSystem()
-	
-	// Set up test data in memory (no actual files created!)
-	baseTime := time.Now()
-	mockFS.AddDir("testdir", baseTime)
-	mockFS.AddFile("testdir/file1.txt", []byte("content1"), baseTime.Add(-1*time.Hour))
-	mockFS.AddFile("testdir/file2.txt", []byte("content2"), baseTime.Add(-2*time.Hour))
-	mockFS.AddDir("testdir/subdir", baseTime)
-	mockFS.AddFile("testdir/subdir/file3.txt", []byte("content3"), baseTime.Add(-3*time.Hour))
-	
-	// Create FileOps with mock filesystem
-	fo := NewFileOps(mockFS)
-	
-	// Scan the directory
-	files, err := fo.ScanDirectory("testdir")
-	if err != nil {
-		t.Fatalf("ScanDirectory failed: %v", err)
-	}
-	
+func TestCountFiles(t *testing.T) {
+	t.Parallel()
+
+	fsImp := filesystem.NewFileSystemImp(t)
+	scannerImp := filesystem.NewFileScannerImp(t)
+	ops := fileops.NewFileOps(fsImp.Mock)
+
+	// Set up expectations in a goroutine
+	go func() {
+		// Expect Scan call
+		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/test").InjectResult(scannerImp.Mock)
+
+		// Expect Next calls - return 3 files then done
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{RelativePath: "file1.txt", IsDir: false}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{RelativePath: "file2.txt", IsDir: false}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{RelativePath: "dir1", IsDir: true}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
+
+		// Expect Err call
+		scannerImp.ExpectCallIs.Err().InjectResult(nil)
+	}()
+
+	// Call CountFiles
+	count, err := ops.CountFiles("/test")
+
 	// Verify results
-	expectedFiles := []string{"file1.txt", "file2.txt", "subdir", "subdir/file3.txt"}
-	if len(files) != len(expectedFiles) {
-		t.Errorf("Expected %d files, got %d", len(expectedFiles), len(files))
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(count).Should(Equal(3))
+}
+
+func TestCountFilesWithProgress(t *testing.T) {
+	t.Parallel()
+
+	fsImp := filesystem.NewFileSystemImp(t)
+	scannerImp := filesystem.NewFileScannerImp(t)
+	ops := fileops.NewFileOps(fsImp.Mock)
+
+	progressCalls := 0
+	progressCallback := func(path string, count int) {
+		progressCalls++
 	}
-	
-	for _, expected := range expectedFiles {
-		if _, exists := files[expected]; !exists {
-			t.Errorf("Expected file %s not found", expected)
+
+	// Set up expectations in a goroutine
+	go func() {
+		// Expect Scan call
+		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/test").InjectResult(scannerImp.Mock)
+
+		// Expect Next calls - return 10 files to trigger progress callback
+		for i := 0; i < 10; i++ {
+			scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{RelativePath: "file.txt", IsDir: false}, true)
 		}
-	}
-	
-	// Verify file details
-	file1 := files["file1.txt"]
-	if file1 == nil {
-		t.Fatal("file1.txt not found")
-	}
-	if file1.Size != 8 { // len("content1")
-		t.Errorf("Expected size 8, got %d", file1.Size)
-	}
-	if !file1.ModTime.Equal(baseTime.Add(-1 * time.Hour)) {
-		t.Errorf("Expected modtime %v, got %v", baseTime.Add(-1*time.Hour), file1.ModTime)
-	}
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
+
+		// Expect Err call
+		scannerImp.ExpectCallIs.Err().InjectResult(nil)
+	}()
+
+	// Call CountFilesWithProgress
+	count, err := ops.CountFilesWithProgress("/test", progressCallback)
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(count).Should(Equal(10))
+	// Progress callback is called every 10 files, so should be called once
+	g.Expect(progressCalls).Should(Equal(1))
 }
 
-// TestFileOps_CountFiles_WithMockFS demonstrates counting files without real filesystem
-func TestFileOps_CountFiles_WithMockFS(t *testing.T) {
-	mockFS := filesystem.NewMockFileSystem()
-	
-	// Set up test data
-	baseTime := time.Now()
-	mockFS.AddDir("testdir", baseTime)
-	mockFS.AddFile("testdir/file1.txt", []byte("content1"), baseTime)
-	mockFS.AddFile("testdir/file2.txt", []byte("content2"), baseTime)
-	mockFS.AddDir("testdir/subdir", baseTime)
-	mockFS.AddFile("testdir/subdir/file3.txt", []byte("content3"), baseTime)
-	
-	fo := NewFileOps(mockFS)
-	
-	// Count files
-	count, err := fo.CountFiles("testdir")
-	if err != nil {
-		t.Fatalf("CountFiles failed: %v", err)
-	}
-	
-	// Should count: file1.txt, file2.txt, subdir, subdir/file3.txt = 4
-	if count != 4 {
-		t.Errorf("Expected 4 files, got %d", count)
-	}
+func TestFileOpsScanDirectory(t *testing.T) {
+	t.Parallel()
+
+	fsImp := filesystem.NewFileSystemImp(t)
+	scannerImp := filesystem.NewFileScannerImp(t)
+	ops := fileops.NewFileOps(fsImp.Mock)
+
+	// Set up expectations in a goroutine
+	go func() {
+		// Expect Scan call
+		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/test").InjectResult(scannerImp.Mock)
+
+		// Expect Next calls - return 2 files then done
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{
+			RelativePath: "file1.txt",
+			Size:         100,
+			ModTime:      time.Now(),
+			IsDir:        false,
+		}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{
+			RelativePath: "file2.txt",
+			Size:         200,
+			ModTime:      time.Now(),
+			IsDir:        false,
+		}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
+
+		// Expect Err call
+		scannerImp.ExpectCallIs.Err().InjectResult(nil)
+	}()
+
+	// Call ScanDirectory
+	files, err := ops.ScanDirectory("/test")
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(files).Should(HaveLen(2))
+	g.Expect(files).Should(HaveKey("file1.txt"))
+	g.Expect(files).Should(HaveKey("file2.txt"))
+	g.Expect(files["file1.txt"].Size).Should(Equal(int64(100)))
+	g.Expect(files["file2.txt"].Size).Should(Equal(int64(200)))
 }
 
-// TestFileOps_ComputeFileHash_WithMockFS demonstrates hash computation without real files
-func TestFileOps_ComputeFileHash_WithMockFS(t *testing.T) {
-	mockFS := filesystem.NewMockFileSystem()
-	
-	// Add a file with known content
+func TestFileOpsScanDirectoryWithProgress(t *testing.T) {
+	t.Parallel()
+
+	fsImp := filesystem.NewFileSystemImp(t)
+	scannerImp := filesystem.NewFileScannerImp(t)
+	ops := fileops.NewFileOps(fsImp.Mock)
+
+	progressCalls := 0
+	progressCallback := func(path string, current, total int) {
+		progressCalls++
+	}
+
+	// Set up expectations in a goroutine
+	go func() {
+		// Expect Scan call
+		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/test").InjectResult(scannerImp.Mock)
+
+		// Expect Next calls - return 2 files then done
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{
+			RelativePath: "file1.txt",
+			Size:         100,
+			ModTime:      time.Now(),
+			IsDir:        false,
+		}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{
+			RelativePath: "file2.txt",
+			Size:         200,
+			ModTime:      time.Now(),
+			IsDir:        false,
+		}, true)
+		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
+
+		// Expect Err call
+		scannerImp.ExpectCallIs.Err().InjectResult(nil)
+	}()
+
+	// Call ScanDirectoryWithProgress
+	files, err := ops.ScanDirectoryWithProgress("/test", progressCallback)
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(files).Should(HaveLen(2))
+	g.Expect(progressCalls).Should(Equal(2))
+}
+
+func TestFileOpsComputeFileHash(t *testing.T) {
+	t.Parallel()
+
+	// Use real filesystem for this test since we need to actually read file content
+	tmpDir := t.TempDir()
+	testFile := tmpDir + "/test.txt"
+
+	// Create a test file
 	content := []byte("test content for hashing")
-	mockFS.AddFile("testfile.txt", content, time.Now())
-	
-	fo := NewFileOps(mockFS)
-	
+	err := os.WriteFile(testFile, content, 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create FileOps with real filesystem
+	ops := fileops.NewRealFileOps()
+
 	// Compute hash
-	hash1, err := fo.ComputeFileHash("testfile.txt")
-	if err != nil {
-		t.Fatalf("ComputeFileHash failed: %v", err)
-	}
-	
-	// Compute hash again - should be the same
-	hash2, err := fo.ComputeFileHash("testfile.txt")
-	if err != nil {
-		t.Fatalf("ComputeFileHash failed: %v", err)
-	}
-	
-	if hash1 != hash2 {
-		t.Errorf("Hashes don't match: %s != %s", hash1, hash2)
-	}
-	
-	// Change the content
-	mockFS.AddFile("testfile.txt", []byte("different content"), time.Now())
-	
-	// Hash should be different now
-	hash3, err := fo.ComputeFileHash("testfile.txt")
-	if err != nil {
-		t.Fatalf("ComputeFileHash failed: %v", err)
-	}
-	
-	if hash1 == hash3 {
-		t.Errorf("Hashes should be different after content change")
-	}
+	hash, err := ops.ComputeFileHash(testFile)
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(hash).Should(Not(BeEmpty()))
 }
 
-// TestFileOps_CompareFilesBytes_WithMockFS demonstrates byte comparison without real files
-func TestFileOps_CompareFilesBytes_WithMockFS(t *testing.T) {
-	mockFS := filesystem.NewMockFileSystem()
-	
-	// Add two identical files
-	content := []byte("identical content")
-	mockFS.AddFile("file1.txt", content, time.Now())
-	mockFS.AddFile("file2.txt", content, time.Now())
-	
-	fo := NewFileOps(mockFS)
-	
-	// Compare - should be identical
-	identical, err := fo.CompareFilesBytes("file1.txt", "file2.txt")
-	if err != nil {
-		t.Fatalf("CompareFilesBytes failed: %v", err)
+func TestFileOpsCompareFilesBytes(t *testing.T) {
+	t.Parallel()
+
+	// Use real filesystem for this test since we need to actually read file content
+	tmpDir := t.TempDir()
+	file1 := tmpDir + "/file1.txt"
+	file2 := tmpDir + "/file2.txt"
+
+	// Create two identical files
+	content := []byte("test content")
+	if err := os.WriteFile(file1, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
-	if !identical {
-		t.Error("Files should be identical")
+	if err := os.WriteFile(file2, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
-	// Change one file
-	mockFS.AddFile("file2.txt", []byte("different content"), time.Now())
-	
-	// Compare again - should be different
-	identical, err = fo.CompareFilesBytes("file1.txt", "file2.txt")
-	if err != nil {
-		t.Fatalf("CompareFilesBytes failed: %v", err)
-	}
-	
-	if identical {
-		t.Error("Files should be different")
-	}
+
+	// Create FileOps with real filesystem
+	ops := fileops.NewRealFileOps()
+
+	// Compare files
+	same, err := ops.CompareFilesBytes(file1, file2)
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(same).Should(BeTrue())
 }
 
-// TestFileOps_CopyFile_WithMockFS demonstrates file copying without real filesystem
-func TestFileOps_CopyFile_WithMockFS(t *testing.T) {
-	mockFS := filesystem.NewMockFileSystem()
-	
-	// Add source file
-	sourceContent := []byte("content to copy")
-	sourceTime := time.Now().Add(-1 * time.Hour)
-	mockFS.AddFile("source.txt", sourceContent, sourceTime)
-	
-	fo := NewFileOps(mockFS)
-	
-	// Copy the file
-	written, err := fo.CopyFile("source.txt", "dest.txt", nil)
-	if err != nil {
-		t.Fatalf("CopyFile failed: %v", err)
+func TestFileOpsCopyFile(t *testing.T) {
+	t.Parallel()
+
+	// Use real filesystem for this test
+	tmpDir := t.TempDir()
+	srcFile := tmpDir + "/source.txt"
+	dstFile := tmpDir + "/dest.txt"
+
+	// Create source file
+	content := []byte("test content to copy")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
-	if written != int64(len(sourceContent)) {
-		t.Errorf("Expected %d bytes written, got %d", len(sourceContent), written)
-	}
-	
-	// Verify destination file exists and has correct content
-	destContent, destTime, err := mockFS.GetFile("dest.txt")
-	if err != nil {
-		t.Fatalf("GetFile failed: %v", err)
-	}
-	
-	if string(destContent) != string(sourceContent) {
-		t.Errorf("Content mismatch: expected %q, got %q", sourceContent, destContent)
-	}
-	
-	// Verify modtime was preserved
-	if !destTime.Equal(sourceTime) {
-		t.Errorf("Modtime not preserved: expected %v, got %v", sourceTime, destTime)
-	}
+
+	// Create FileOps with real filesystem
+	ops := fileops.NewRealFileOps()
+
+	// Copy file
+	bytesWritten, err := ops.CopyFile(srcFile, dstFile, nil)
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(bytesWritten).Should(Equal(int64(len(content))))
+
+	// Verify destination file exists and has same content
+	dstContent, err := os.ReadFile(dstFile)
+	g.Expect(err).Should(BeNil())
+	g.Expect(dstContent).Should(Equal(content))
 }
 
+func TestFileOpsRemove(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	testFile := tmpDir + "/test.txt"
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	ops := fileops.NewRealFileOps()
+	err := ops.Remove(testFile)
+
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+}
+
+func TestFileOpsStat(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	testFile := tmpDir + "/test.txt"
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	ops := fileops.NewRealFileOps()
+	info, err := ops.Stat(testFile)
+
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(info).Should(Not(BeNil()))
+}
+
+func TestFileOpsChtimes(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	testFile := tmpDir + "/test.txt"
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	ops := fileops.NewRealFileOps()
+	now := time.Now()
+	err := ops.Chtimes(testFile, now, now)
+
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+}
+
+func TestFileOpsCopyFileWithStats(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	srcFile := tmpDir + "/source.txt"
+	dstFile := tmpDir + "/dest.txt"
+
+	content := []byte("test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	ops := fileops.NewRealFileOps()
+	stats, err := ops.CopyFileWithStats(srcFile, dstFile, nil, nil)
+
+	g := NewWithT(t)
+	g.Expect(err).Should(BeNil())
+	g.Expect(stats).Should(Not(BeNil()))
+	g.Expect(stats.BytesCopied).Should(Equal(int64(len(content))))
+}

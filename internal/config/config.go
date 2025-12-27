@@ -1,6 +1,8 @@
 // Package config handles application configuration and command-line argument parsing.
 package config
 
+//go:generate impgen config.PostProcessConfig
+
 import (
 	"fmt"
 	"os"
@@ -102,6 +104,11 @@ func ParseFlags() (*Config, error) {
 
 	arg.MustParse(cfg)
 
+	return PostProcessConfig(cfg)
+}
+
+// PostProcessConfig applies post-processing logic to a parsed config
+func PostProcessConfig(cfg *Config) (*Config, error) {
 	// If no flags provided, default to interactive mode
 	if cfg.SourcePath == "" && cfg.DestPath == "" {
 		cfg.InteractiveMode = true

@@ -4,15 +4,15 @@ package syncengine_test
 
 import (
 	syncengine "github.com/joe/copy-files/internal/syncengine"
-	"github.com/toejough/imptest/imptest"
-	"testing"
+	_imptest "github.com/toejough/imptest/imptest"
+	_testing "testing"
 )
 
 // EngineGetStatus wraps a callable function for testing.
 // Create with NewEngineGetStatus(t, yourFunction), call Start() to execute,
 // then use ExpectReturnedValuesAre/Should() or ExpectPanicWith() to verify behavior.
 type EngineGetStatus struct {
-	*imptest.CallableController[EngineGetStatusReturn]
+	*_imptest.CallableController[EngineGetStatusReturn]
 	callable func() *syncengine.Status
 }
 
@@ -23,9 +23,9 @@ type EngineGetStatus struct {
 //
 //	wrapper := NewEngineGetStatus(t, myFunction)
 //	wrapper.Start(args...).ExpectReturnedValuesAre(expectedVals...)
-func NewEngineGetStatus(t testing.TB, callable func() *syncengine.Status) *EngineGetStatus {
+func NewEngineGetStatus(t _testing.TB, callable func() *syncengine.Status) *EngineGetStatus {
 	return &EngineGetStatus{
-		CallableController: imptest.NewCallableController[EngineGetStatusReturn](t),
+		CallableController: _imptest.NewCallableController[EngineGetStatusReturn](t),
 		callable:           callable,
 	}
 }
@@ -38,7 +38,7 @@ func (s *EngineGetStatus) ExpectPanicWith(expected any) {
 	s.WaitForResponse()
 
 	if s.Panicked != nil {
-		ok, msg := imptest.MatchValue(s.Panicked, expected)
+		ok, msg := _imptest.MatchValue(s.Panicked, expected)
 		if !ok {
 			s.T.Fatalf("panic value: %s", msg)
 		}
@@ -75,7 +75,7 @@ func (s *EngineGetStatus) ExpectReturnedValuesShould(v1 any) {
 	if s.Returned != nil {
 		var ok bool
 		var msg string
-		ok, msg = imptest.MatchValue(s.Returned.Result0, v1)
+		ok, msg = _imptest.MatchValue(s.Returned.Result0, v1)
 		if !ok {
 			s.T.Fatalf("return value 0: %s", msg)
 		}

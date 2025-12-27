@@ -3,16 +3,16 @@
 package syncengine_test
 
 import (
-	"github.com/toejough/imptest/imptest"
-	"reflect"
-	"testing"
+	_imptest "github.com/toejough/imptest/imptest"
+	_reflect "reflect"
+	_testing "testing"
 )
 
 // EngineSync wraps a callable function for testing.
 // Create with NewEngineSync(t, yourFunction), call Start() to execute,
 // then use ExpectReturnedValuesAre/Should() or ExpectPanicWith() to verify behavior.
 type EngineSync struct {
-	*imptest.CallableController[EngineSyncReturn]
+	*_imptest.CallableController[EngineSyncReturn]
 	callable func() error
 }
 
@@ -23,9 +23,9 @@ type EngineSync struct {
 //
 //	wrapper := NewEngineSync(t, myFunction)
 //	wrapper.Start(args...).ExpectReturnedValuesAre(expectedVals...)
-func NewEngineSync(t testing.TB, callable func() error) *EngineSync {
+func NewEngineSync(t _testing.TB, callable func() error) *EngineSync {
 	return &EngineSync{
-		CallableController: imptest.NewCallableController[EngineSyncReturn](t),
+		CallableController: _imptest.NewCallableController[EngineSyncReturn](t),
 		callable:           callable,
 	}
 }
@@ -38,7 +38,7 @@ func (s *EngineSync) ExpectPanicWith(expected any) {
 	s.WaitForResponse()
 
 	if s.Panicked != nil {
-		ok, msg := imptest.MatchValue(s.Panicked, expected)
+		ok, msg := _imptest.MatchValue(s.Panicked, expected)
 		if !ok {
 			s.T.Fatalf("panic value: %s", msg)
 		}
@@ -56,7 +56,7 @@ func (s *EngineSync) ExpectReturnedValuesAre(v1 error) {
 	s.WaitForResponse()
 
 	if s.Returned != nil {
-		if !reflect.DeepEqual(s.Returned.Result0, v1) {
+		if !_reflect.DeepEqual(s.Returned.Result0, v1) {
 			s.T.Fatalf("expected return value 0 to be %v, got %v", v1, s.Returned.Result0)
 		}
 		return
@@ -75,7 +75,7 @@ func (s *EngineSync) ExpectReturnedValuesShould(v1 any) {
 	if s.Returned != nil {
 		var ok bool
 		var msg string
-		ok, msg = imptest.MatchValue(s.Returned.Result0, v1)
+		ok, msg = _imptest.MatchValue(s.Returned.Result0, v1)
 		if !ok {
 			s.T.Fatalf("return value 0: %s", msg)
 		}
