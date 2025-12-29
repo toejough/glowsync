@@ -4,7 +4,6 @@ package syncengine
 //go:generate impgen syncengine.Engine.Cancel
 //go:generate impgen syncengine.Engine.EnableFileLogging
 //go:generate impgen syncengine.Engine.CloseLog
-//go:generate impgen syncengine.FormatBytes
 
 import (
 	"errors"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/pkg/fileops"
+	"github.com/joe/copy-files/pkg/formatters"
 )
 
 // Exported constants.
@@ -910,7 +910,7 @@ func (e *Engine) handleCopySuccess(fileToSync *FileToSync) {
 
 	// Log first 10 completed files
 	if e.Status.ProcessedFiles <= RecentlyCompletedLimit {
-		e.logToFile(fmt.Sprintf("  ✓ Copied: %s (%s)", fileToSync.RelativePath, FormatBytes(fileToSync.Size)))
+		e.logToFile(fmt.Sprintf("  ✓ Copied: %s (%s)", fileToSync.RelativePath, formatters.FormatBytes(fileToSync.Size)))
 	}
 }
 
@@ -952,7 +952,7 @@ func (e *Engine) logComparisonSummary(sourceFiles, destFiles map[string]*fileops
 	alreadySynced := e.Status.AlreadySyncedFiles
 	e.Status.mu.Unlock()
 
-	e.logAnalysis(fmt.Sprintf("Found %d files to sync (%s total)", totalFiles, FormatBytes(totalBytes)))
+	e.logAnalysis(fmt.Sprintf("Found %d files to sync (%s total)", totalFiles, formatters.FormatBytes(totalBytes)))
 
 	if alreadySynced > 0 {
 		e.logAnalysis(fmt.Sprintf("%d files already up-to-date", alreadySynced))
@@ -1872,22 +1872,6 @@ type Status struct {
 	FinalizationPhase string // "updating_cache", "complete", or empty
 
 	mu sync.RWMutex
-}
-
-// FormatBytes formats bytes into human-readable format
-func FormatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // unexported constants.

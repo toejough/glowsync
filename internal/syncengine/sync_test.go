@@ -584,34 +584,6 @@ func TestEvaluateAndScaleDirectly(t *testing.T) {
 	<-done
 }
 
-func TestFormatBytes(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		bytes    int64
-		expected string
-	}{
-		{"zero bytes", 0, "0 B"},
-		{"small bytes", 512, "512 B"},
-		{"1 KB", 1024, "1.0 KB"},
-		{"1.5 KB", 1536, "1.5 KB"},
-		{"1 MB", 1024 * 1024, "1.0 MB"},
-		{"1 GB", 1024 * 1024 * 1024, "1.0 GB"},
-		{"1.5 GB", 1536 * 1024 * 1024, "1.5 GB"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			wrapper := syncengine.NewFormatBytesImp(t, syncengine.FormatBytes)
-			wrapper.Start(tt.bytes)
-			wrapper.ExpectReturnedValuesAre(tt.expected)
-		})
-	}
-}
-
 func TestHandleCopyError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
