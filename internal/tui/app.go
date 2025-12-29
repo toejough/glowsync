@@ -17,9 +17,18 @@ type AppModel struct {
 
 // NewAppModel creates a new app model
 func NewAppModel(cfg *config.Config) *AppModel {
+	var initialScreen tea.Model
+
+	// If paths are provided via command-line flags, skip input screen
+	if cfg.InteractiveMode {
+		initialScreen = screens.NewInputScreen(cfg)
+	} else {
+		initialScreen = screens.NewAnalysisScreen(cfg)
+	}
+
 	return &AppModel{
 		config:        cfg,
-		currentScreen: screens.NewInputScreen(cfg),
+		currentScreen: initialScreen,
 	}
 }
 
@@ -51,6 +60,11 @@ func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View implements tea.Model
 func (a AppModel) View() string {
 	return a.currentScreen.View()
+}
+
+// CurrentScreen returns the current screen (for testing)
+func (a AppModel) CurrentScreen() tea.Model {
+	return a.currentScreen
 }
 
 // ============================================================================
