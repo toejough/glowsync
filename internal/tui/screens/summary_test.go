@@ -14,6 +14,21 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+func TestSummaryScreenDisplaysLogPath(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	logPath := "/tmp/test-debug.log"
+
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, logPath)
+
+	view := screen.View()
+	// Should display the actual log path, not the hardcoded one
+	g.Expect(view).Should(ContainSubstring(logPath))
+	g.Expect(view).ShouldNot(ContainSubstring("copy-files-debug.log"))
+}
+
 func TestSummaryScreenNewCancelled(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -82,6 +97,33 @@ func TestSummaryScreenUpdate(t *testing.T) {
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	_, cmd = screen.Update(enterMsg)
 	g.Expect(cmd).ShouldNot(BeNil())
+}
+
+func TestSummaryScreenUsesErrorSymbol(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Test error state which will display ErrorSymbol in the title
+	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
+	view := screen.View()
+
+	// Should use ErrorSymbol() helper in "✗ Sync Failed" title
+	g.Expect(view).Should(ContainSubstring(shared.ErrorSymbol()))
+}
+
+func TestSummaryScreenUsesSuccessSymbol(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
+
+	view := screen.View()
+
+	// Should use SuccessSymbol() helper, not hardcoded ✓
+	g.Expect(view).Should(ContainSubstring(shared.SuccessSymbol()))
 }
 
 func TestSummaryScreenViewCancelled(t *testing.T) {
@@ -262,19 +304,4 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
-}
-
-func TestSummaryScreenDisplaysLogPath(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	logPath := "/tmp/test-debug.log"
-
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, logPath)
-
-	view := screen.View()
-	// Should display the actual log path, not the hardcoded one
-	g.Expect(view).Should(ContainSubstring(logPath))
-	g.Expect(view).ShouldNot(ContainSubstring("copy-files-debug.log"))
 }

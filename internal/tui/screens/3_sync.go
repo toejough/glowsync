@@ -400,7 +400,9 @@ func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 	maxWidth := s.getMaxPathWidth()
 	for i := startIdx; i < len(s.status.Errors); i++ {
 		fileErr := s.status.Errors[i]
-		fmt.Fprintf(builder, "  ✗ %s\n", s.truncatePath(fileErr.FilePath, maxWidth))
+		fmt.Fprintf(builder, "  %s %s\n",
+			shared.ErrorSymbol(),
+			shared.FileItemErrorStyle().Render(s.truncatePath(fileErr.FilePath, maxWidth)))
 		// Truncate error message if too long
 		errMsg := fileErr.Error.Error()
 		if len(errMsg) > maxWidth {

@@ -130,7 +130,10 @@ func (s SummaryScreen) renderCancelledErrors(builder *strings.Builder) {
 			break
 		}
 
-		fmt.Fprintf(builder, "  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error)
+		fmt.Fprintf(builder, "  %s %s: %v\n",
+			shared.ErrorSymbol(),
+			shared.FileItemErrorStyle().Render(fileErr.FilePath),
+			fileErr.Error)
 	}
 }
 
@@ -243,7 +246,10 @@ func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
 			break
 		}
 
-		fmt.Fprintf(builder, "  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error)
+		fmt.Fprintf(builder, "  %s %s: %v\n",
+			shared.ErrorSymbol(),
+			shared.FileItemErrorStyle().Render(fileErr.FilePath),
+			fileErr.Error)
 	}
 }
 
@@ -313,7 +319,7 @@ func (s SummaryScreen) renderCompleteView() string {
 	if s.status != nil && s.status.FailedFiles > 0 {
 		builder.WriteString(shared.RenderError("⚠ Sync Complete with Errors"))
 	} else {
-		builder.WriteString(shared.RenderSuccess("✓ Sync Complete!"))
+		builder.WriteString(shared.RenderSuccess(shared.SuccessSymbol() + " Sync Complete!"))
 	}
 
 	builder.WriteString("\n\n")
@@ -352,7 +358,7 @@ func (s SummaryScreen) renderCompleteView() string {
 func (s SummaryScreen) renderErrorView() string {
 	var builder strings.Builder
 
-	builder.WriteString(shared.RenderError("✗ Sync Failed"))
+	builder.WriteString(shared.RenderError(shared.ErrorSymbol() + " Sync Failed"))
 	builder.WriteString("\n\n")
 
 	if s.err != nil {
@@ -387,7 +393,10 @@ func (s SummaryScreen) renderErrorView() string {
 					break
 				}
 
-				builder.WriteString(fmt.Sprintf("  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error))
+				fmt.Fprintf(&builder, "  %s %s: %v\n",
+					shared.ErrorSymbol(),
+					shared.FileItemErrorStyle().Render(fileErr.FilePath),
+					fileErr.Error)
 			}
 
 			builder.WriteString("\n")
@@ -434,7 +443,9 @@ func (s SummaryScreen) renderRecentlyCompleted(builder *strings.Builder) {
 
 	maxWidth := s.getMaxPathWidth()
 	for _, file := range s.status.RecentlyCompleted {
-		fmt.Fprintf(builder, "  ✓ %s\n", s.truncatePath(file, maxWidth))
+		fmt.Fprintf(builder, "  %s %s\n",
+			shared.SuccessSymbol(),
+			shared.FileItemCompleteStyle().Render(s.truncatePath(file, maxWidth)))
 	}
 }
 

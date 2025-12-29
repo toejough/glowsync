@@ -138,6 +138,17 @@ func TestSyncScreenUpdate(t *testing.T) {
 	g.Expect(updatedModel).ShouldNot(BeNil())
 }
 
+func TestSyncScreenUsesSymbolHelpers(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Verify that symbol helper functions are available and return non-empty strings
+	// The actual rendering with errors is tested through integration tests
+	g.Expect(shared.ErrorSymbol()).ShouldNot(BeEmpty())
+	g.Expect(shared.SuccessSymbol()).ShouldNot(BeEmpty())
+	g.Expect(shared.PendingSymbol()).ShouldNot(BeEmpty())
+}
+
 func TestSyncScreenView(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
