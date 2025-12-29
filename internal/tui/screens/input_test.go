@@ -11,6 +11,26 @@ import (
 	"github.com/joe/copy-files/internal/tui/screens"
 )
 
+func TestInputScreenCtrlCQuitsApp(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Press Ctrl+C key
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := screen.Update(ctrlCMsg)
+
+	// Should return tea.Quit command
+	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
+
+	// Execute the command to verify it's tea.Quit
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
+		"Ctrl+C should send tea.QuitMsg")
+}
+
 func TestInputScreenEnter(t *testing.T) {
 	t.Parallel()
 
@@ -55,6 +75,68 @@ func TestInputScreenEnterWithValidPaths(t *testing.T) {
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	updatedModel, _ = screen.Update(enterMsg)
 	g.Expect(updatedModel).ShouldNot(BeNil())
+}
+
+func TestInputScreenEscClearsDestField(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Move to destination field
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	updatedModel, _ := screen.Update(downMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	screen = &inputScreen
+
+	// Simulate typing in dest field
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/dest/path")}
+	updatedModel, _ = screen.Update(typeMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	screen = &inputScreen
+
+	// Press Esc - should clear the dest field
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, cmd := screen.Update(escMsg)
+	g.Expect(cmd).Should(BeNil(), "Esc should not quit, just clear field")
+
+	// Verify field was cleared by checking the view
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+	view := inputScreen.View()
+	g.Expect(view).ShouldNot(ContainSubstring("/dest/path"), "Dest field should be cleared")
+}
+
+func TestInputScreenEscClearsSourceField(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Simulate typing in source field
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/some/path")}
+	updatedModel, _ := screen.Update(typeMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	screen = &inputScreen
+
+	// Press Esc - should clear the source field
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, cmd := screen.Update(escMsg)
+	g.Expect(cmd).Should(BeNil(), "Esc should not quit, just clear field")
+
+	// Verify field was cleared by checking the view
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+	view := inputScreen.View()
+	g.Expect(view).ShouldNot(ContainSubstring("/some/path"), "Source field should be cleared")
 }
 
 func TestInputScreenFieldNavigation(t *testing.T) {
@@ -284,86 +366,4 @@ func TestInputScreenWindowSize(t *testing.T) {
 	updatedModel, _ := screen.Update(msg)
 	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
-}
-
-func TestInputScreenEscClearsSourceField(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Simulate typing in source field
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/some/path")}
-	updatedModel, _ := screen.Update(typeMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	screen = &inputScreen
-
-	// Press Esc - should clear the source field
-	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
-	updatedModel, cmd := screen.Update(escMsg)
-	g.Expect(cmd).Should(BeNil(), "Esc should not quit, just clear field")
-
-	// Verify field was cleared by checking the view
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-	view := inputScreen.View()
-	g.Expect(view).ShouldNot(ContainSubstring("/some/path"), "Source field should be cleared")
-}
-
-func TestInputScreenEscClearsDestField(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Move to destination field
-	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	updatedModel, _ := screen.Update(downMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	screen = &inputScreen
-
-	// Simulate typing in dest field
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/dest/path")}
-	updatedModel, _ = screen.Update(typeMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	screen = &inputScreen
-
-	// Press Esc - should clear the dest field
-	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
-	updatedModel, cmd := screen.Update(escMsg)
-	g.Expect(cmd).Should(BeNil(), "Esc should not quit, just clear field")
-
-	// Verify field was cleared by checking the view
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-	view := inputScreen.View()
-	g.Expect(view).ShouldNot(ContainSubstring("/dest/path"), "Dest field should be cleared")
-}
-
-func TestInputScreenCtrlCQuitsApp(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Press Ctrl+C key
-	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
-	_, cmd := screen.Update(ctrlCMsg)
-
-	// Should return tea.Quit command
-	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
-
-	// Execute the command to verify it's tea.Quit
-	msg := cmd()
-	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
-		"Ctrl+C should send tea.QuitMsg")
 }
