@@ -140,9 +140,25 @@ func (s SyncScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 }
 
 func (s SyncScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		// Emergency exit - quit immediately
+		return s, tea.Quit
+
+	case tea.KeyEsc:
+		// Cancel the sync gracefully
+		s.cancelled = true
+		if s.engine != nil {
+			s.engine.Cancel()
+		}
+
+		return s, nil
+	}
+
+	// Handle other keys by string
 	switch msg.String() {
-	case shared.KeyCtrlC, "q":
-		// Cancel the sync
+	case "q":
+		// Cancel the sync gracefully
 		s.cancelled = true
 		if s.engine != nil {
 			s.engine.Cancel()
@@ -465,7 +481,7 @@ func (s SyncScreen) renderSyncingView() string {
 	if s.cancelled {
 		builder.WriteString(shared.RenderDim("Cancelling... waiting for workers to finish"))
 	} else {
-		builder.WriteString(shared.RenderDim("Press Ctrl+C or q to cancel"))
+		builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
 	}
 
 	return shared.RenderBox(builder.String())

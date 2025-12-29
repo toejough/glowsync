@@ -182,7 +182,12 @@ func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 }
 
 func (s AnalysisScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		// Emergency exit - quit immediately
+		return s, tea.Quit
+
+	case tea.KeyEsc:
 		// Cancel analysis if running
 		if s.engine != nil {
 			s.engine.Cancel()
@@ -327,7 +332,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 
 	// Show help text
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Press Esc to change paths"))
+	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
 	return shared.RenderBox(builder.String())
 }
@@ -350,7 +355,7 @@ func (s AnalysisScreen) renderInitializingView() string {
 	builder.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
 	builder.WriteString("\n\n")
 
-	builder.WriteString(shared.RenderDim("Press Esc to change paths"))
+	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
 	return shared.RenderBox(builder.String())
 }

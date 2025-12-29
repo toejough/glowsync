@@ -195,21 +195,41 @@ func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case shared.KeyCtrlC, "esc":
+	// Handle special keys using msg.Type (consistent with other screens)
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		// Emergency exit - quit immediately
 		return s, tea.Quit
-	case "ctrl+n", "down":
+	case tea.KeyEsc:
+		// Clear the current input field
+		if s.focusIndex == 0 {
+			s.sourceInput.SetValue("")
+		} else {
+			s.destInput.SetValue("")
+		}
+		s.showCompletions = false
+		s.validationError = ""
+		return s, nil
+	case tea.KeyDown:
 		return s.moveToNextField()
-	case "ctrl+p", "up":
+	case tea.KeyUp:
 		return s.moveToPreviousField()
-	case "tab":
+	case tea.KeyTab:
 		return s.handleTabCompletion(), nil
-	case "shift+tab":
+	case tea.KeyShiftTab:
 		return s.handleShiftTabCompletion(), nil
-	case "right":
+	case tea.KeyRight:
 		return s.handleRightArrow(), nil
-	case "enter":
+	case tea.KeyEnter:
 		return s.handleEnter()
+	}
+
+	// Handle string-based keys for ctrl+n, ctrl+p
+	switch msg.String() {
+	case "ctrl+n":
+		return s.moveToNextField()
+	case "ctrl+p":
+		return s.moveToPreviousField()
 	default:
 		s.showCompletions = false
 		s.validationError = "" // Clear error when user types
@@ -373,7 +393,7 @@ func (s InputScreen) renderInputView() string {
 	}
 
 	content += "\n" +
-		shared.RenderSubtitle("Tab/Shift+Tab to cycle • → to accept & continue • ↑↓ to switch fields • Enter to continue • Ctrl+C to quit") //nolint:lll // Help text with keyboard shortcuts
+		shared.RenderSubtitle("Tab/Shift+Tab to cycle • → to accept & continue • ↑↓ to switch fields • Enter to continue • Esc to clear field • Ctrl+C to exit") //nolint:lll // Help text with keyboard shortcuts
 
 	return shared.RenderBox(content)
 }

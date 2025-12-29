@@ -45,8 +45,20 @@ func (s SummaryScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return s, nil
 	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC:
+			// Emergency exit - quit immediately
+			return s, tea.Quit
+		case tea.KeyEsc:
+			// Return to input screen for a new session
+			return s, func() tea.Msg {
+				return shared.TransitionToInputMsg{}
+			}
+		}
+
+		// Handle other keys by string
 		switch msg.String() {
-		case shared.KeyCtrlC, "q", "enter":
+		case "q", "enter":
 			return s, tea.Quit
 		}
 	}
@@ -216,7 +228,7 @@ func (s SummaryScreen) renderCancelledView() string {
 	}
 
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
+	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
 	builder.WriteString("\n")
 
 	if s.logPath != "" {
@@ -341,7 +353,7 @@ func (s SummaryScreen) renderCompleteView() string {
 	}
 
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
+	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
 	builder.WriteString("\n")
 
 	if s.logPath != "" {
@@ -403,7 +415,7 @@ func (s SummaryScreen) renderErrorView() string {
 		}
 	}
 
-	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
+	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
 	builder.WriteString("\n")
 
 	if s.logPath != "" {

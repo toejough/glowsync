@@ -60,13 +60,17 @@ func (s ConfirmationScreen) View() string {
 
 	// Help text
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Press Enter to begin sync, Esc to cancel"))
+	builder.WriteString(shared.RenderDim("Press Enter to begin sync • Esc to cancel • Ctrl+C to exit"))
 
 	return builder.String()
 }
 
 func (s ConfirmationScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
+	case tea.KeyCtrlC:
+		// Emergency exit - quit immediately
+		return s, tea.Quit
+
 	case tea.KeyEnter:
 		// Confirm and proceed to sync
 		return s, func() tea.Msg {
