@@ -13,6 +13,7 @@ type AppModel struct {
 	config        *config.Config
 	currentScreen tea.Model
 	engine        *syncengine.Engine
+	logPath       string
 }
 
 // NewAppModel creates a new app model
@@ -35,6 +36,11 @@ func NewAppModel(cfg *config.Config) *AppModel {
 // CurrentScreen returns the current screen (for testing)
 func (a AppModel) CurrentScreen() tea.Model {
 	return a.currentScreen
+}
+
+// LogPath returns the debug log path (for testing)
+func (a AppModel) LogPath() string {
+	return a.logPath
 }
 
 // Init implements tea.Model
@@ -83,15 +89,16 @@ func (a AppModel) transitionToAnalysis(msg shared.TransitionToAnalysisMsg) (tea.
 }
 
 func (a AppModel) transitionToSummary(msg shared.TransitionToSummaryMsg) (tea.Model, tea.Cmd) {
-	// Create summary screen
-	a.currentScreen = screens.NewSummaryScreen(a.engine, msg.FinalState, msg.Err)
+	// Create summary screen with log path
+	a.currentScreen = screens.NewSummaryScreen(a.engine, msg.FinalState, msg.Err, a.logPath)
 
 	return a, a.currentScreen.Init()
 }
 
 func (a AppModel) transitionToSync(msg shared.TransitionToSyncMsg) (tea.Model, tea.Cmd) {
-	// Store engine reference
+	// Store engine and log path references
 	a.engine = msg.Engine
+	a.logPath = msg.LogPath
 
 	// Create sync screen
 	a.currentScreen = screens.NewSyncScreen(a.engine)

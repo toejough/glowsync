@@ -55,5 +55,6 @@ type TransitionToSummaryMsg struct {
 
 // TransitionToSyncMsg is sent by AnalysisScreen when analysis completes
 type TransitionToSyncMsg struct {
-	Engine *syncengine.Engine
+	Engine  *syncengine.Engine
+	LogPath string
 }

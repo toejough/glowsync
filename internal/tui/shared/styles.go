@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/charmbracelet/lipgloss"
@@ -270,6 +271,13 @@ func RightArrow() string {
 	}
 
 	return "→"
+}
+
+// MakePathClickable wraps a file path with OSC 8 hyperlink escape codes
+// to make it clickable in supported terminals (iTerm2, Terminal.app, etc.)
+func MakePathClickable(path string) string {
+	// OSC 8 format: \033]8;;file://path\033\\text\033]8;;\033\\
+	return fmt.Sprintf("\033]8;;file://%s\033\\%s\033]8;;\033\\", path, path)
 }
 
 // SubtitleStyle returns the style for subtitles

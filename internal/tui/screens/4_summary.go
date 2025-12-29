@@ -16,10 +16,11 @@ type SummaryScreen struct {
 	finalState string // "complete", "cancelled", "error"
 	err        error
 	width      int
+	logPath    string
 }
 
 // NewSummaryScreen creates a new summary screen
-func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error) *SummaryScreen {
+func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error, logPath string) *SummaryScreen {
 	var status *syncengine.Status
 	if engine != nil {
 		status = engine.GetStatus()
@@ -29,6 +30,7 @@ func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error) *
 		status:     status,
 		finalState: finalState,
 		err:        err,
+		logPath:    logPath,
 	}
 }
 
@@ -213,7 +215,10 @@ func (s SummaryScreen) renderCancelledView() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+
+	if s.logPath != "" {
+		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
+	}
 
 	return shared.RenderBox(builder.String())
 }
@@ -332,7 +337,10 @@ func (s SummaryScreen) renderCompleteView() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+
+	if s.logPath != "" {
+		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
+	}
 
 	return shared.RenderBox(builder.String())
 }
@@ -388,7 +396,10 @@ func (s SummaryScreen) renderErrorView() string {
 
 	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+
+	if s.logPath != "" {
+		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
+	}
 
 	return shared.RenderBox(builder.String())
 }

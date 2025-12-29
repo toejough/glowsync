@@ -25,6 +25,7 @@ type AnalysisScreen struct {
 	overallProgress progress.Model
 	state           string // "initializing" or "analyzing"
 	lastUpdate      time.Time
+	logPath         string
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -106,10 +107,11 @@ func (s AnalysisScreen) getAnalysisPhaseText() string {
 }
 
 func (s AnalysisScreen) handleAnalysisComplete() (tea.Model, tea.Cmd) {
-	// Transition to sync screen
+	// Transition to sync screen with log path
 	return s, func() tea.Msg {
 		return shared.TransitionToSyncMsg{
-			Engine: s.engine,
+			Engine:  s.engine,
+			LogPath: s.logPath,
 		}
 	}
 }
@@ -132,15 +134,16 @@ func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg)
 	// Start analysis
 	s.state = "analyzing"
 
+	// Determine log path
+	s.logPath = os.Getenv("COPY_FILES_LOG")
+	if s.logPath == "" {
+		s.logPath = filepath.Join(os.TempDir(), "copy-files-debug.log")
+	}
+
 	return s, tea.Batch(
 		func() tea.Msg {
 			// Enable file logging for debugging (non-fatal if it fails)
-			logPath := os.Getenv("COPY_FILES_LOG")
-			if logPath == "" {
-				logPath = filepath.Join(os.TempDir(), "copy-files-debug.log")
-			}
-
-			_ = engine.EnableFileLogging(logPath)
+			_ = engine.EnableFileLogging(s.logPath)
 
 			return nil
 		},

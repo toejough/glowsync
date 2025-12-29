@@ -19,7 +19,7 @@ func TestSummaryScreenNewCancelled(t *testing.T) {
 	g := NewWithT(t)
 
 	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil, "")
 
 	g.Expect(screen).ShouldNot(BeNil())
 }
@@ -29,7 +29,7 @@ func TestSummaryScreenNewComplete(t *testing.T) {
 	g := NewWithT(t)
 
 	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	g.Expect(screen).ShouldNot(BeNil())
 
@@ -43,7 +43,7 @@ func TestSummaryScreenNewError(t *testing.T) {
 	g := NewWithT(t)
 
 	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("test error"))
+	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("test error"), "")
 
 	g.Expect(screen).ShouldNot(BeNil())
 }
@@ -52,7 +52,7 @@ func TestSummaryScreenNewNilEngine(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	screen := screens.NewSummaryScreen(nil, shared.StateError, errors.New("test error"))
+	screen := screens.NewSummaryScreen(nil, shared.StateError, errors.New("test error"), "")
 
 	g.Expect(screen).ShouldNot(BeNil())
 }
@@ -61,7 +61,7 @@ func TestSummaryScreenUpdate(t *testing.T) {
 	t.Parallel()
 
 	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	// Test WindowSizeMsg
 	sizeMsg := tea.WindowSizeMsg{Width: 100, Height: 50}
@@ -97,7 +97,7 @@ func TestSummaryScreenViewCancelled(t *testing.T) {
 	status.TotalFiles = 100
 	status.CancelledFiles = 25
 
-	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Cancelled"))
@@ -117,7 +117,7 @@ func TestSummaryScreenViewCancelledAdaptive(t *testing.T) {
 	status.ActiveWorkers = 4
 	status.Bottleneck = "destination"
 
-	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Cancelled"))
@@ -136,7 +136,7 @@ func TestSummaryScreenViewCancelledWithErrors(t *testing.T) {
 		{FilePath: "/path/to/file1", Error: errors.New("error 1")},
 	}
 
-	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Cancelled"))
@@ -157,7 +157,7 @@ func TestSummaryScreenViewComplete(t *testing.T) {
 	status.TotalBytes = 1024 * 1024
 	status.TransferredBytes = 1024 * 1024
 
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	// Test View rendering
 	view := screen.View()
@@ -171,7 +171,7 @@ func TestSummaryScreenViewCompleteWithAlreadySynced(t *testing.T) {
 	engine := syncengine.NewEngine("/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
@@ -184,7 +184,7 @@ func TestSummaryScreenViewCompleteWithErrors(t *testing.T) {
 	engine := syncengine.NewEngine("/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
@@ -196,7 +196,7 @@ func TestSummaryScreenViewError(t *testing.T) {
 
 	engine := syncengine.NewEngine("/source", "/dest")
 
-	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"))
+	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Failed"))
@@ -210,7 +210,7 @@ func TestSummaryScreenViewErrorWithAdditionalErrors(t *testing.T) {
 	engine := syncengine.NewEngine("/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
-	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"))
+	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Failed"))
@@ -223,7 +223,7 @@ func TestSummaryScreenViewErrorWithPartialProgress(t *testing.T) {
 	engine := syncengine.NewEngine("/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
-	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"))
+	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Failed"))
@@ -245,7 +245,7 @@ func TestSummaryScreenViewWithAdaptiveMode(t *testing.T) {
 	status.TotalWriteTime = 3 * time.Second
 	status.Bottleneck = "source"
 
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
@@ -258,8 +258,23 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 	engine := syncengine.NewEngine("/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil)
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+}
+
+func TestSummaryScreenDisplaysLogPath(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	logPath := "/tmp/test-debug.log"
+
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, logPath)
+
+	view := screen.View()
+	// Should display the actual log path, not the hardcoded one
+	g.Expect(view).Should(ContainSubstring(logPath))
+	g.Expect(view).ShouldNot(ContainSubstring("copy-files-debug.log"))
 }
