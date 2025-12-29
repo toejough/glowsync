@@ -367,3 +367,27 @@ func TestInputScreenWindowSize(t *testing.T) {
 	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
 }
+
+func TestInputScreenRenderHelpMultiLineFormat(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	view := screen.View()
+
+	// Verify help text contains multiple lines with expected keywords
+	g.Expect(view).Should(ContainSubstring("Navigation:"), "Help text should have Navigation section")
+	g.Expect(view).Should(ContainSubstring("Tab"), "Help text should mention Tab key")
+	g.Expect(view).Should(ContainSubstring("Shift+Tab"), "Help text should mention Shift+Tab key")
+	g.Expect(view).Should(ContainSubstring("↑↓"), "Help text should mention up/down arrows")
+
+	g.Expect(view).Should(ContainSubstring("Actions:"), "Help text should have Actions section")
+	g.Expect(view).Should(ContainSubstring("→"), "Help text should mention right arrow")
+	g.Expect(view).Should(ContainSubstring("Enter"), "Help text should mention Enter key")
+
+	g.Expect(view).Should(ContainSubstring("Other:"), "Help text should have Other section")
+	g.Expect(view).Should(ContainSubstring("Esc"), "Help text should mention Esc key")
+	g.Expect(view).Should(ContainSubstring("Ctrl+C"), "Help text should mention Ctrl+C")
+}
