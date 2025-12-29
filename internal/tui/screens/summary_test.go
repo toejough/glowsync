@@ -305,3 +305,42 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
 }
+
+func TestSummaryScreenEscReturnsToInput(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
+
+	// Press Esc key - should return to InputScreen
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	_, cmd := screen.Update(escMsg)
+
+	g.Expect(cmd).ShouldNot(BeNil(), "Esc should return a transition command")
+
+	// Execute the command to get the message
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(shared.TransitionToInputMsg{}),
+		"Esc should send TransitionToInputMsg to start new session")
+}
+
+func TestSummaryScreenCtrlCQuitsApp(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
+
+	// Press Ctrl+C key
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := screen.Update(ctrlCMsg)
+
+	// Should return tea.Quit command
+	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
+
+	// Execute the command to verify it's tea.Quit
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
+		"Ctrl+C should send tea.QuitMsg")
+}

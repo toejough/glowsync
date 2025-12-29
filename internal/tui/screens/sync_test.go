@@ -202,3 +202,53 @@ func TestSyncScreenWindowSize(t *testing.T) {
 	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
 }
+
+func TestSyncScreenEscCancelsAndTransitionsToSummary(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Press Esc key - should cancel and mark as cancelled
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := screen.Update(escMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	screen = &syncScreen
+
+	// Then complete the sync
+	completeMsg := shared.SyncCompleteMsg{}
+	_, cmd := screen.Update(completeMsg)
+
+	g.Expect(cmd).ShouldNot(BeNil(), "Esc should trigger cancellation and transition to summary")
+
+	// Execute the command to get the transition message
+	msg := cmd()
+	transitionMsg, ok := msg.(shared.TransitionToSummaryMsg)
+	g.Expect(ok).Should(BeTrue(), "Should transition to summary screen")
+	g.Expect(transitionMsg.FinalState).Should(Equal(shared.StateCancelled),
+		"Final state should be cancelled")
+}
+
+func TestSyncScreenCtrlCQuitsApp(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Press Ctrl+C key
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := screen.Update(ctrlCMsg)
+
+	// Should return tea.Quit command
+	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
+
+	// Execute the command to verify it's tea.Quit
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
+		"Ctrl+C should send tea.QuitMsg")
+}

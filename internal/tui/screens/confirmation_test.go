@@ -89,3 +89,25 @@ func TestNewConfirmationScreen(t *testing.T) {
 	// Verify screen is created
 	g.Expect(screen).ShouldNot(BeNil(), "Expected screen to be created")
 }
+
+func TestConfirmationScreen_Update_CtrlCKey(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create test engine and screen
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	logPath := "/tmp/test-debug.log"
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	// Press Ctrl+C key
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := screen.Update(ctrlCMsg)
+
+	// Should return tea.Quit command
+	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
+
+	// Execute the command to verify it's tea.Quit
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
+		"Ctrl+C should send tea.QuitMsg")
+}

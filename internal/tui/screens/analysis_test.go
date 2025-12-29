@@ -243,3 +243,26 @@ func TestAnalysisScreenWindowSize(t *testing.T) {
 	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
 }
+
+func TestAnalysisScreenCtrlCQuitsApp(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/source",
+		DestPath:   "/dest",
+	}
+	screen := screens.NewAnalysisScreen(cfg)
+
+	// Press Ctrl+C key
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := screen.Update(ctrlCMsg)
+
+	// Should return tea.Quit command
+	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
+
+	// Execute the command to verify it's tea.Quit
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
+		"Ctrl+C should send tea.QuitMsg")
+}
