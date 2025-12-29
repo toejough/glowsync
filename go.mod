@@ -4,12 +4,12 @@ go 1.25.5
 
 require (
 	github.com/alexflint/go-arg v1.6.1
+	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/onsi/gomega v1.38.3
 	github.com/toejough/imptest v0.0.0-20251226073255-2a7778c95449
-	golang.org/x/term v0.37.0
 )
 
 require (
