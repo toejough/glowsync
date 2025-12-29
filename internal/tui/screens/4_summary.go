@@ -76,16 +76,16 @@ func (s SummaryScreen) getMaxPathWidth() int {
 	return maxWidth
 }
 
-func (s SummaryScreen) renderAdaptiveStats(b *strings.Builder) {
+func (s SummaryScreen) renderAdaptiveStats(builder *strings.Builder) {
 	// Show adaptive concurrency stats if used
 	if !s.status.AdaptiveMode || s.status.MaxWorkers == 0 {
 		return
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderLabel("Adaptive Concurrency:"))
-	b.WriteString("\n")
-	fmt.Fprintf(b, "Max workers used: %d\n", s.status.MaxWorkers)
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Adaptive Concurrency:"))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "Max workers used: %d\n", s.status.MaxWorkers)
 
 	// Show bottleneck analysis
 	if s.status.TotalReadTime > 0 || s.status.TotalWriteTime > 0 {
@@ -93,51 +93,51 @@ func (s SummaryScreen) renderAdaptiveStats(b *strings.Builder) {
 		readPercent := float64(s.status.TotalReadTime) / float64(totalIOTime) * shared.ProgressPercentageScale
 		writePercent := float64(s.status.TotalWriteTime) / float64(totalIOTime) * shared.ProgressPercentageScale
 
-		fmt.Fprintf(b, "I/O breakdown: %.1f%% read, %.1f%% write", readPercent, writePercent)
+		fmt.Fprintf(builder, "I/O breakdown: %.1f%% read, %.1f%% write", readPercent, writePercent)
 
 		if s.status.Bottleneck != "" {
 			switch s.status.Bottleneck {
 			case shared.StateSource:
-				b.WriteString(" (source-limited)")
+				builder.WriteString(" (source-limited)")
 			case shared.StateDestination:
-				b.WriteString(" (dest-limited)")
+				builder.WriteString(" (dest-limited)")
 			case shared.StateBalanced:
-				b.WriteString(" (balanced)")
+				builder.WriteString(" (balanced)")
 			}
 		}
 
-		b.WriteString("\n")
+		builder.WriteString("\n")
 	}
 }
 
-func (s SummaryScreen) renderCancelledErrors(b *strings.Builder) {
+func (s SummaryScreen) renderCancelledErrors(builder *strings.Builder) {
 	// Show error details if any
 	if len(s.status.Errors) == 0 {
 		return
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderError("Errors:"))
-	b.WriteString("\n")
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderError("Errors:"))
+	builder.WriteString("\n")
 
 	// Show up to 5 errors
 	maxErrors := 5
 	for i, fileErr := range s.status.Errors {
 		if i >= maxErrors {
 			remaining := len(s.status.Errors) - maxErrors
-			fmt.Fprintf(b, "... and %d more error(s)\n", remaining)
+			fmt.Fprintf(builder, "... and %d more error(s)\n", remaining)
 
 			break
 		}
 
-		fmt.Fprintf(b, "  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error)
+		fmt.Fprintf(builder, "  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error)
 	}
 }
 
-func (s SummaryScreen) renderCancelledStatistics(b *strings.Builder) {
-	b.WriteString("\n")
-	b.WriteString(shared.RenderLabel("Statistics:"))
-	b.WriteString("\n")
+func (s SummaryScreen) renderCancelledStatistics(builder *strings.Builder) {
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Statistics:"))
+	builder.WriteString("\n")
 
 	// Show worker count with bottleneck info
 	if s.status.AdaptiveMode {
@@ -154,37 +154,37 @@ func (s SummaryScreen) renderCancelledStatistics(b *strings.Builder) {
 			}
 		}
 
-		fmt.Fprintf(b, "Workers: %d (max: %d)%s\n",
+		fmt.Fprintf(builder, "Workers: %d (max: %d)%s\n",
 			s.status.ActiveWorkers,
 			s.status.MaxWorkers,
 			bottleneckInfo)
 	} else {
-		fmt.Fprintf(b, "Workers: %d\n", s.status.ActiveWorkers)
+		fmt.Fprintf(builder, "Workers: %d\n", s.status.ActiveWorkers)
 	}
 }
 
-func (s SummaryScreen) renderCancelledSummary(b *strings.Builder, elapsed time.Duration) {
-	b.WriteString(shared.RenderLabel("Summary:"))
-	b.WriteString("\n")
-	fmt.Fprintf(b, "Files completed: %d / %d\n", s.status.ProcessedFiles, s.status.TotalFiles)
-	fmt.Fprintf(b, "Bytes transferred: %s / %s\n",
+func (s SummaryScreen) renderCancelledSummary(builder *strings.Builder, elapsed time.Duration) {
+	builder.WriteString(shared.RenderLabel("Summary:"))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "Files completed: %d / %d\n", s.status.ProcessedFiles, s.status.TotalFiles)
+	fmt.Fprintf(builder, "Bytes transferred: %s / %s\n",
 		shared.FormatBytes(s.status.TransferredBytes),
 		shared.FormatBytes(s.status.TotalBytes))
 
 	if s.status.CancelledFiles > 0 {
-		fmt.Fprintf(b, "Files cancelled: %d\n", s.status.CancelledFiles)
+		fmt.Fprintf(builder, "Files cancelled: %d\n", s.status.CancelledFiles)
 	}
 
 	if s.status.FailedFiles > 0 {
-		fmt.Fprintf(b, "Files failed: %d\n", s.status.FailedFiles)
+		fmt.Fprintf(builder, "Files failed: %d\n", s.status.FailedFiles)
 	}
 
-	fmt.Fprintf(b, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
+	fmt.Fprintf(builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
 
 	// Calculate average speed
 	if elapsed.Seconds() > 0 && s.status.TransferredBytes > 0 {
 		avgSpeed := float64(s.status.TransferredBytes) / elapsed.Seconds()
-		fmt.Fprintf(b, "Average speed: %s/s\n", shared.FormatBytes(int64(avgSpeed)))
+		fmt.Fprintf(builder, "Average speed: %s/s\n", shared.FormatBytes(int64(avgSpeed)))
 	}
 }
 
@@ -193,10 +193,10 @@ func (s SummaryScreen) renderCancelledSummary(b *strings.Builder, elapsed time.D
 // ============================================================================
 
 func (s SummaryScreen) renderCancelledView() string {
-	var b strings.Builder
+	var builder strings.Builder
 
-	b.WriteString(shared.RenderWarning("⚠ Sync Cancelled"))
-	b.WriteString("\n\n")
+	builder.WriteString(shared.RenderWarning("⚠ Sync Cancelled"))
+	builder.WriteString("\n\n")
 
 	if s.status != nil {
 		// Use EndTime if available, otherwise fall back to current time
@@ -207,95 +207,95 @@ func (s SummaryScreen) renderCancelledView() string {
 
 		elapsed := endTime.Sub(s.status.StartTime)
 
-		s.renderCancelledSummary(&b, elapsed)
-		s.renderCancelledStatistics(&b)
-		s.renderCancelledErrors(&b)
+		s.renderCancelledSummary(&builder, elapsed)
+		s.renderCancelledStatistics(&builder)
+		s.renderCancelledErrors(&builder)
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
-	b.WriteString("\n")
-	b.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
 
-	return shared.RenderBox(b.String())
+	return shared.RenderBox(builder.String())
 }
 
-func (s SummaryScreen) renderCompleteErrors(b *strings.Builder) {
+func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
 	// Show error details if any
 	if len(s.status.Errors) == 0 {
 		return
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderError("Errors:"))
-	b.WriteString("\n")
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderError("Errors:"))
+	builder.WriteString("\n")
 
 	// Show up to 10 errors
 	maxErrors := 10
 	for i, fileErr := range s.status.Errors {
 		if i >= maxErrors {
 			remaining := len(s.status.Errors) - maxErrors
-			fmt.Fprintf(b, "... and %d more error(s)\n", remaining)
+			fmt.Fprintf(builder, "... and %d more error(s)\n", remaining)
 
 			break
 		}
 
-		fmt.Fprintf(b, "  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error)
+		fmt.Fprintf(builder, "  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error)
 	}
 }
 
-func (s SummaryScreen) renderCompleteStatistics(b *strings.Builder) {
-	b.WriteString("\n")
-	b.WriteString(shared.RenderLabel("Statistics:"))
-	b.WriteString("\n")
+func (s SummaryScreen) renderCompleteStatistics(builder *strings.Builder) {
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Statistics:"))
+	builder.WriteString("\n")
 
 	// Show worker count
 	if s.status.AdaptiveMode && s.status.MaxWorkers > 0 {
-		fmt.Fprintf(b, "Workers: %d (max: %d)\n", s.status.ActiveWorkers, s.status.MaxWorkers)
+		fmt.Fprintf(builder, "Workers: %d (max: %d)\n", s.status.ActiveWorkers, s.status.MaxWorkers)
 	} else {
-		fmt.Fprintf(b, "Workers: %d\n", s.status.ActiveWorkers)
+		fmt.Fprintf(builder, "Workers: %d\n", s.status.ActiveWorkers)
 	}
 
 	// Show read/write speeds if available
-	s.renderReadWriteSpeeds(b)
+	s.renderReadWriteSpeeds(builder)
 }
 
-func (s SummaryScreen) renderCompleteSummary(b *strings.Builder, elapsed time.Duration) {
+func (s SummaryScreen) renderCompleteSummary(builder *strings.Builder, elapsed time.Duration) {
 	// Overall summary
-	b.WriteString(shared.RenderLabel("Summary:"))
-	b.WriteString("\n")
-	fmt.Fprintf(b, "Total files in source: %d (%s)\n",
+	builder.WriteString(shared.RenderLabel("Summary:"))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "Total files in source: %d (%s)\n",
 		s.status.TotalFilesInSource,
 		shared.FormatBytes(s.status.TotalBytesInSource))
 
 	if s.status.AlreadySyncedFiles > 0 {
-		fmt.Fprintf(b, "Already up-to-date: %d files (%s)\n",
+		fmt.Fprintf(builder, "Already up-to-date: %d files (%s)\n",
 			s.status.AlreadySyncedFiles,
 			shared.FormatBytes(s.status.AlreadySyncedBytes))
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderLabel("This Session:"))
-	b.WriteString("\n")
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("This Session:"))
+	builder.WriteString("\n")
 
-	fmt.Fprintf(b, "Files synced successfully: %d\n", s.status.ProcessedFiles)
+	fmt.Fprintf(builder, "Files synced successfully: %d\n", s.status.ProcessedFiles)
 
 	if s.status.CancelledFiles > 0 {
-		fmt.Fprintf(b, "Files cancelled: %d\n", s.status.CancelledFiles)
+		fmt.Fprintf(builder, "Files cancelled: %d\n", s.status.CancelledFiles)
 	}
 
 	if s.status.FailedFiles > 0 {
-		fmt.Fprintf(b, "Files failed: %d\n", s.status.FailedFiles)
+		fmt.Fprintf(builder, "Files failed: %d\n", s.status.FailedFiles)
 	}
 
-	fmt.Fprintf(b, "Total files to copy: %d\n", s.status.TotalFiles)
-	fmt.Fprintf(b, "Total bytes to copy: %s\n", shared.FormatBytes(s.status.TotalBytes))
-	fmt.Fprintf(b, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
+	fmt.Fprintf(builder, "Total files to copy: %d\n", s.status.TotalFiles)
+	fmt.Fprintf(builder, "Total bytes to copy: %s\n", shared.FormatBytes(s.status.TotalBytes))
+	fmt.Fprintf(builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
 
 	// Calculate average speed based on actual elapsed time
 	if elapsed.Seconds() > 0 {
 		avgSpeed := float64(s.status.TotalBytes) / elapsed.Seconds()
-		fmt.Fprintf(b, "Average speed: %s/s\n", shared.FormatBytes(int64(avgSpeed)))
+		fmt.Fprintf(builder, "Average speed: %s/s\n", shared.FormatBytes(int64(avgSpeed)))
 	}
 }
 
@@ -304,16 +304,16 @@ func (s SummaryScreen) renderCompleteSummary(b *strings.Builder, elapsed time.Du
 // ============================================================================
 
 func (s SummaryScreen) renderCompleteView() string {
-	var b strings.Builder
+	var builder strings.Builder
 
 	// Show different title based on whether there were errors
 	if s.status != nil && s.status.FailedFiles > 0 {
-		b.WriteString(shared.RenderError("⚠ Sync Complete with Errors"))
+		builder.WriteString(shared.RenderError("⚠ Sync Complete with Errors"))
 	} else {
-		b.WriteString(shared.RenderSuccess("✓ Sync Complete!"))
+		builder.WriteString(shared.RenderSuccess("✓ Sync Complete!"))
 	}
 
-	b.WriteString("\n\n")
+	builder.WriteString("\n\n")
 
 	if s.status != nil {
 		// Use EndTime if available, otherwise fall back to current time
@@ -324,19 +324,19 @@ func (s SummaryScreen) renderCompleteView() string {
 
 		elapsed := endTime.Sub(s.status.StartTime)
 
-		s.renderCompleteSummary(&b, elapsed)
-		s.renderCompleteStatistics(&b)
-		s.renderRecentlyCompleted(&b)
-		s.renderAdaptiveStats(&b)
-		s.renderCompleteErrors(&b)
+		s.renderCompleteSummary(&builder, elapsed)
+		s.renderCompleteStatistics(&builder)
+		s.renderRecentlyCompleted(&builder)
+		s.renderAdaptiveStats(&builder)
+		s.renderCompleteErrors(&builder)
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
-	b.WriteString("\n")
-	b.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
 
-	return shared.RenderBox(b.String())
+	return shared.RenderBox(builder.String())
 }
 
 // ============================================================================
@@ -344,58 +344,58 @@ func (s SummaryScreen) renderCompleteView() string {
 // ============================================================================
 
 func (s SummaryScreen) renderErrorView() string {
-	var b strings.Builder
+	var builder strings.Builder
 
-	b.WriteString(shared.RenderError("✗ Sync Failed"))
-	b.WriteString("\n\n")
+	builder.WriteString(shared.RenderError("✗ Sync Failed"))
+	builder.WriteString("\n\n")
 
 	if s.err != nil {
-		b.WriteString(shared.RenderLabel("Error:"))
-		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("%v\n", s.err))
-		b.WriteString("\n")
+		builder.WriteString(shared.RenderLabel("Error:"))
+		builder.WriteString("\n")
+		builder.WriteString(fmt.Sprintf("%v\n", s.err))
+		builder.WriteString("\n")
 	}
 
 	if s.status != nil {
 		// Show partial progress if any
 		if s.status.ProcessedFiles > 0 {
-			b.WriteString(shared.RenderLabel("Partial Progress:"))
-			b.WriteString("\n")
-			b.WriteString(fmt.Sprintf("Files completed: %d\n", s.status.ProcessedFiles))
-			b.WriteString(fmt.Sprintf("Bytes transferred: %s\n", shared.FormatBytes(s.status.TransferredBytes)))
-			b.WriteString("\n")
+			builder.WriteString(shared.RenderLabel("Partial Progress:"))
+			builder.WriteString("\n")
+			builder.WriteString(fmt.Sprintf("Files completed: %d\n", s.status.ProcessedFiles))
+			builder.WriteString(fmt.Sprintf("Bytes transferred: %s\n", shared.FormatBytes(s.status.TransferredBytes)))
+			builder.WriteString("\n")
 		}
 
 		// Show errors if any
 		if len(s.status.Errors) > 0 {
-			b.WriteString(shared.RenderError("Additional Errors:"))
-			b.WriteString("\n")
+			builder.WriteString(shared.RenderError("Additional Errors:"))
+			builder.WriteString("\n")
 
 			// Show up to 5 errors
 			maxErrors := 5
 			for i, fileErr := range s.status.Errors {
 				if i >= maxErrors {
 					remaining := len(s.status.Errors) - maxErrors
-					b.WriteString(fmt.Sprintf("... and %d more error(s)\n", remaining))
+					builder.WriteString(fmt.Sprintf("... and %d more error(s)\n", remaining))
 
 					break
 				}
 
-				b.WriteString(fmt.Sprintf("  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error))
+				builder.WriteString(fmt.Sprintf("  ✗ %s: %v\n", fileErr.FilePath, fileErr.Error))
 			}
 
-			b.WriteString("\n")
+			builder.WriteString("\n")
 		}
 	}
 
-	b.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
-	b.WriteString("\n")
-	b.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+	builder.WriteString(shared.RenderSubtitle("Press Enter or Ctrl+C to exit"))
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
 
-	return shared.RenderBox(b.String())
+	return shared.RenderBox(builder.String())
 }
 
-func (s SummaryScreen) renderReadWriteSpeeds(b *strings.Builder) {
+func (s SummaryScreen) renderReadWriteSpeeds(builder *strings.Builder) {
 	if !s.status.AdaptiveMode || s.status.TotalReadTime == 0 || s.status.TotalWriteTime == 0 {
 		return
 	}
@@ -409,23 +409,23 @@ func (s SummaryScreen) renderReadWriteSpeeds(b *strings.Builder) {
 	readSpeed := float64(s.status.TransferredBytes) / s.status.TotalReadTime.Seconds()
 	writeSpeed := float64(s.status.TransferredBytes) / s.status.TotalWriteTime.Seconds()
 
-	fmt.Fprintf(b, "Read speed: %s/s • Write speed: %s/s\n",
+	fmt.Fprintf(builder, "Read speed: %s/s • Write speed: %s/s\n",
 		shared.FormatBytes(int64(readSpeed)),
 		shared.FormatBytes(int64(writeSpeed)))
 }
 
-func (s SummaryScreen) renderRecentlyCompleted(b *strings.Builder) {
+func (s SummaryScreen) renderRecentlyCompleted(builder *strings.Builder) {
 	if len(s.status.RecentlyCompleted) == 0 {
 		return
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderLabel("Recently Completed:"))
-	b.WriteString("\n")
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Recently Completed:"))
+	builder.WriteString("\n")
 
 	maxWidth := s.getMaxPathWidth()
 	for _, file := range s.status.RecentlyCompleted {
-		fmt.Fprintf(b, "  ✓ %s\n", s.truncatePath(file, maxWidth))
+		fmt.Fprintf(builder, "  ✓ %s\n", s.truncatePath(file, maxWidth))
 	}
 }
 

@@ -8,7 +8,8 @@
       "Bash(go build:*)",
       "Bash(mage lint:*)",
       "Bash(go test:*)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(mage check:lint:*)"
     ]
   },
   "sandbox": {

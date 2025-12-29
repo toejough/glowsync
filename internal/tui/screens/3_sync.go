@@ -33,9 +33,9 @@ type SyncScreen struct {
 
 // NewSyncScreen creates a new sync screen
 func NewSyncScreen(engine *syncengine.Engine) *SyncScreen {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
+	spin := spinner.New()
+	spin.Spinner = spinner.Dot
+	spin.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
 
 	overallProg := progress.New(
 		progress.WithDefaultGradient(),
@@ -47,7 +47,7 @@ func NewSyncScreen(engine *syncengine.Engine) *SyncScreen {
 
 	return &SyncScreen{
 		engine:          engine,
-		spinner:         s,
+		spinner:         spin,
 		overallProgress: overallProg,
 		fileProgress:    fileProg,
 		lastUpdate:      time.Now(),
@@ -220,13 +220,13 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	return s, nil
 }
 
-func (s SyncScreen) renderCurrentlyCopying(b *strings.Builder, maxFilesToShow int) {
+func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToShow int) {
 	// Count how many files are actually copying and display them
 	totalCopying := 0
 	filesDisplayed := 0
 
-	b.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Copying (%d):", len(s.status.CurrentFiles))))
-	b.WriteString("\n")
+	builder.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Copying (%d):", len(s.status.CurrentFiles))))
+	builder.WriteString("\n")
 
 	// Display up to maxFilesToShow files
 	for _, file := range s.status.FilesToSync {
@@ -234,7 +234,7 @@ func (s SyncScreen) renderCurrentlyCopying(b *strings.Builder, maxFilesToShow in
 			totalCopying++
 
 			if filesDisplayed < maxFilesToShow {
-				fmt.Fprintf(b, "%s %s\n", s.spinner.View(), shared.FileItemCopyingStyle().Render(file.RelativePath))
+				fmt.Fprintf(builder, "%s %s\n", s.spinner.View(), shared.FileItemCopyingStyle().Render(file.RelativePath))
 
 				// Show progress bar for this file
 				var filePercent float64
@@ -242,9 +242,9 @@ func (s SyncScreen) renderCurrentlyCopying(b *strings.Builder, maxFilesToShow in
 					filePercent = float64(file.Transferred) / float64(file.Size)
 				}
 
-				b.WriteString("  ")
-				b.WriteString(s.fileProgress.ViewAs(filePercent))
-				b.WriteString("\n")
+				builder.WriteString("  ")
+				builder.WriteString(s.fileProgress.ViewAs(filePercent))
+				builder.WriteString("\n")
 
 				filesDisplayed++
 			}
@@ -253,25 +253,25 @@ func (s SyncScreen) renderCurrentlyCopying(b *strings.Builder, maxFilesToShow in
 
 	// Show how many more files are being copied but not displayed
 	if totalCopying > filesDisplayed {
-		b.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", totalCopying-filesDisplayed)))
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", totalCopying-filesDisplayed)))
 	}
 }
 
-func (s SyncScreen) renderFileList(b *strings.Builder) {
+func (s SyncScreen) renderFileList(builder *strings.Builder) {
 	maxFilesToShow := s.calculateMaxFilesToShow()
 
 	// Currently copying files with progress bars
 	if len(s.status.CurrentFiles) > 0 {
-		s.renderCurrentlyCopying(b, maxFilesToShow)
+		s.renderCurrentlyCopying(builder, maxFilesToShow)
 	} else {
-		s.renderRecentFiles(b, maxFilesToShow)
+		s.renderRecentFiles(builder, maxFilesToShow)
 	}
 }
 
-func (s SyncScreen) renderOverallProgress(b *strings.Builder) {
+func (s SyncScreen) renderOverallProgress(builder *strings.Builder) {
 	// Overall progress (all files including already synced)
-	b.WriteString(shared.RenderLabel("Overall Progress (All Files):"))
-	b.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Overall Progress (All Files):"))
+	builder.WriteString("\n")
 
 	var totalOverallPercent float64
 
@@ -281,11 +281,11 @@ func (s SyncScreen) renderOverallProgress(b *strings.Builder) {
 		totalOverallPercent = float64(totalProcessedBytes) / float64(s.status.TotalBytesInSource)
 	}
 
-	b.WriteString(s.overallProgress.ViewAs(totalOverallPercent))
-	b.WriteString("\n")
+	builder.WriteString(s.overallProgress.ViewAs(totalOverallPercent))
+	builder.WriteString("\n")
 
 	totalProcessedFiles := s.status.AlreadySyncedFiles + s.status.ProcessedFiles
-	fmt.Fprintf(b, "%d / %d files (%.1f%%) • %s / %s\n\n",
+	fmt.Fprintf(builder, "%d / %d files (%.1f%%) • %s / %s\n\n",
 		totalProcessedFiles,
 		s.status.TotalFilesInSource,
 		totalOverallPercent*shared.ProgressPercentageScale,
@@ -293,10 +293,10 @@ func (s SyncScreen) renderOverallProgress(b *strings.Builder) {
 		shared.FormatBytes(s.status.TotalBytesInSource))
 }
 
-func (s SyncScreen) renderRecentFiles(b *strings.Builder, maxFilesToShow int) {
+func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow int) {
 	// Show recent files when nothing is currently copying
-	b.WriteString(shared.RenderLabel("Recent Files:"))
-	b.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Recent Files:"))
+	builder.WriteString("\n")
 
 	maxFiles := min(maxRecentFilesToShow, maxFilesToShow)
 	startIdx := max(len(s.status.FilesToSync)-maxFiles, 0)
@@ -324,23 +324,23 @@ func (s SyncScreen) renderRecentFiles(b *strings.Builder, maxFilesToShow int) {
 			icon = "○"
 		}
 
-		fmt.Fprintf(b, "%s %s\n", icon, style.Render(file.RelativePath))
+		fmt.Fprintf(builder, "%s %s\n", icon, style.Render(file.RelativePath))
 	}
 }
 
-func (s SyncScreen) renderSessionProgress(b *strings.Builder) {
+func (s SyncScreen) renderSessionProgress(builder *strings.Builder) {
 	// Session progress (only files being copied this session)
-	b.WriteString(shared.RenderLabel("This Session:"))
-	b.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("This Session:"))
+	builder.WriteString("\n")
 
 	var sessionPercent float64
 	if s.status.TotalBytes > 0 {
 		sessionPercent = float64(s.status.TransferredBytes) / float64(s.status.TotalBytes)
 	}
 
-	b.WriteString(s.fileProgress.ViewAs(sessionPercent))
-	b.WriteString("\n")
-	fmt.Fprintf(b, "%d / %d files (%.1f%%) • %s / %s",
+	builder.WriteString(s.fileProgress.ViewAs(sessionPercent))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "%d / %d files (%.1f%%) • %s / %s",
 		s.status.ProcessedFiles,
 		s.status.TotalFiles,
 		sessionPercent*shared.ProgressPercentageScale,
@@ -348,13 +348,13 @@ func (s SyncScreen) renderSessionProgress(b *strings.Builder) {
 		shared.FormatBytes(s.status.TotalBytes))
 
 	if s.status.FailedFiles > 0 {
-		fmt.Fprintf(b, " (%d failed)", s.status.FailedFiles)
+		fmt.Fprintf(builder, " (%d failed)", s.status.FailedFiles)
 	}
 
-	b.WriteString("\n\n")
+	builder.WriteString("\n\n")
 }
 
-func (s SyncScreen) renderStatistics(b *strings.Builder) {
+func (s SyncScreen) renderStatistics(builder *strings.Builder) {
 	// Calculate transfer rate
 	elapsed := time.Since(s.status.StartTime)
 
@@ -373,28 +373,28 @@ func (s SyncScreen) renderStatistics(b *strings.Builder) {
 
 	// Worker count with bottleneck info
 	bottleneckInfo := s.getBottleneckInfo()
-	fmt.Fprintf(b, "Workers: %d%s • Rate: %s • Elapsed: %s",
+	fmt.Fprintf(builder, "Workers: %d%s • Rate: %s • Elapsed: %s",
 		s.status.ActiveWorkers,
 		bottleneckInfo,
 		shared.FormatRate(rate),
 		shared.FormatDuration(elapsed))
 
 	if eta > 0 && s.status.ProcessedFiles < s.status.TotalFiles {
-		fmt.Fprintf(b, " • ETA: %s", shared.FormatDuration(eta))
+		fmt.Fprintf(builder, " • ETA: %s", shared.FormatDuration(eta))
 	}
 
-	b.WriteString("\n\n")
+	builder.WriteString("\n\n")
 }
 
-func (s SyncScreen) renderSyncingErrors(b *strings.Builder) {
+func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 	// Show errors if any
 	if len(s.status.Errors) == 0 {
 		return
 	}
 
-	b.WriteString("\n")
-	b.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors (%d):", len(s.status.Errors))))
-	b.WriteString("\n")
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors (%d):", len(s.status.Errors))))
+	builder.WriteString("\n")
 
 	// Show up to 5 most recent errors
 	maxErrors := 5
@@ -407,18 +407,18 @@ func (s SyncScreen) renderSyncingErrors(b *strings.Builder) {
 	maxWidth := s.getMaxPathWidth()
 	for i := startIdx; i < len(s.status.Errors); i++ {
 		fileErr := s.status.Errors[i]
-		fmt.Fprintf(b, "  ✗ %s\n", s.truncatePath(fileErr.FilePath, maxWidth))
+		fmt.Fprintf(builder, "  ✗ %s\n", s.truncatePath(fileErr.FilePath, maxWidth))
 		// Truncate error message if too long
 		errMsg := fileErr.Error.Error()
 		if len(errMsg) > maxWidth {
 			errMsg = errMsg[:maxWidth-3] + "..."
 		}
 
-		fmt.Fprintf(b, "    %s\n", errMsg)
+		fmt.Fprintf(builder, "    %s\n", errMsg)
 	}
 
 	if len(s.status.Errors) > maxErrors {
-		fmt.Fprintf(b, "  ... and %d more (see completion screen)\n", len(s.status.Errors)-maxErrors)
+		fmt.Fprintf(builder, "  ... and %d more (see completion screen)\n", len(s.status.Errors)-maxErrors)
 	}
 }
 
@@ -427,53 +427,53 @@ func (s SyncScreen) renderSyncingErrors(b *strings.Builder) {
 // ============================================================================
 
 func (s SyncScreen) renderSyncingView() string {
-	var b strings.Builder
+	var builder strings.Builder
 
 	// Show different title based on finalization phase
 	if s.status != nil && s.status.FinalizationPhase == "updating_cache" {
-		b.WriteString(shared.RenderTitle("📦 Finalizing..."))
-		b.WriteString("\n\n")
-		b.WriteString(shared.RenderLabel("Updating destination cache..."))
-		b.WriteString("\n")
-		b.WriteString(shared.RenderDim("(This helps the next sync run faster)"))
-		b.WriteString("\n\n")
+		builder.WriteString(shared.RenderTitle("📦 Finalizing..."))
+		builder.WriteString("\n\n")
+		builder.WriteString(shared.RenderLabel("Updating destination cache..."))
+		builder.WriteString("\n")
+		builder.WriteString(shared.RenderDim("(This helps the next sync run faster)"))
+		builder.WriteString("\n\n")
 	} else {
-		b.WriteString(shared.RenderTitle("📦 Syncing Files"))
-		b.WriteString("\n\n")
+		builder.WriteString(shared.RenderTitle("📦 Syncing Files"))
+		builder.WriteString("\n\n")
 	}
 
 	if s.status == nil {
-		b.WriteString(s.spinner.View())
-		b.WriteString(" Starting sync...\n\n")
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" Starting sync...\n\n")
 
-		return shared.RenderBox(b.String())
+		return shared.RenderBox(builder.String())
 	}
 
 	// Overall progress
-	s.renderOverallProgress(&b)
+	s.renderOverallProgress(&builder)
 
 	// Session progress
-	s.renderSessionProgress(&b)
+	s.renderSessionProgress(&builder)
 
 	// Statistics
-	s.renderStatistics(&b)
+	s.renderStatistics(&builder)
 
 	// File list
-	s.renderFileList(&b)
+	s.renderFileList(&builder)
 
 	// Errors
-	s.renderSyncingErrors(&b)
+	s.renderSyncingErrors(&builder)
 
 	// Help text
-	b.WriteString("\n")
+	builder.WriteString("\n")
 
 	if s.cancelled {
-		b.WriteString(shared.RenderDim("Cancelling... waiting for workers to finish"))
+		builder.WriteString(shared.RenderDim("Cancelling... waiting for workers to finish"))
 	} else {
-		b.WriteString(shared.RenderDim("Press Ctrl+C or q to cancel"))
+		builder.WriteString(shared.RenderDim("Press Ctrl+C or q to cancel"))
 	}
 
-	return shared.RenderBox(b.String())
+	return shared.RenderBox(builder.String())
 }
 
 // ============================================================================

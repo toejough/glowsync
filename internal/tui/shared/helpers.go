@@ -27,21 +27,21 @@ func FormatBytes(bytes int64) string {
 }
 
 // FormatDuration formats duration into human-readable format (e.g., "2m 30s")
-func FormatDuration(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := d / time.Hour
-	d %= time.Hour
-	m := d / time.Minute
-	d %= time.Minute
-	s := d / time.Second
+func FormatDuration(duration time.Duration) string {
+	duration = duration.Round(time.Second)
+	hours := duration / time.Hour
+	duration %= time.Hour
+	minutes := duration / time.Minute
+	duration %= time.Minute
+	seconds := duration / time.Second
 
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
-	} else if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
 	}
 
-	return fmt.Sprintf("%ds", s)
+	return fmt.Sprintf("%ds", seconds)
 }
 
 // FormatRate formats transfer rate into human-readable format (e.g., "5.2 MB/s")

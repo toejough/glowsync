@@ -72,13 +72,16 @@ func TestAppModelTransitionToAnalysis(t *testing.T) {
 	}
 
 	updatedModel, _ := model.Update(msg)
-	appModel := updatedModel.(tui.AppModel)
+
+	g := NewWithT(t)
+
+	appModel, ok := updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel")
+
 	model = &appModel
 
 	// Verify we transitioned to AnalysisScreen
 	_, isAnalysisScreen := model.CurrentScreen().(*screens.AnalysisScreen)
-
-	g := NewWithT(t)
 	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen after TransitionToAnalysisMsg")
 }
 
@@ -100,13 +103,16 @@ func TestAppModelTransitionToSync(t *testing.T) {
 	}
 
 	updatedModel, _ := model.Update(msg)
-	appModel := updatedModel.(tui.AppModel)
+
+	g := NewWithT(t)
+
+	appModel, ok := updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel")
+
 	model = &appModel
 
 	// Verify we transitioned to SyncScreen
 	_, isSyncScreen := model.CurrentScreen().(*screens.SyncScreen)
-
-	g := NewWithT(t)
 	g.Expect(isSyncScreen).Should(BeTrue(), "Expected SyncScreen after TransitionToSyncMsg")
 }
 
@@ -128,7 +134,12 @@ func TestAppModelTransitionToSummary(t *testing.T) {
 	}
 
 	updatedModel, _ := model.Update(syncMsg)
-	appModel := updatedModel.(tui.AppModel)
+
+	g := NewWithT(t)
+
+	appModel, ok := updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel after sync transition")
+
 	model = &appModel
 
 	// Send TransitionToSummaryMsg to trigger transition
@@ -138,12 +149,13 @@ func TestAppModelTransitionToSummary(t *testing.T) {
 	}
 
 	updatedModel, _ = model.Update(summaryMsg)
-	appModel = updatedModel.(tui.AppModel)
+
+	appModel, ok = updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel after summary transition")
+
 	model = &appModel
 
 	// Verify we transitioned to SummaryScreen
 	_, isSummaryScreen := model.CurrentScreen().(*screens.SummaryScreen)
-
-	g := NewWithT(t)
 	g.Expect(isSummaryScreen).Should(BeTrue(), "Expected SummaryScreen after TransitionToSummaryMsg")
 }

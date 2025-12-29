@@ -27,9 +27,9 @@ type AnalysisScreen struct {
 
 // NewAnalysisScreen creates a new analysis screen
 func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
+	spin := spinner.New()
+	spin.Spinner = spinner.Dot
+	spin.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
 
 	overallProg := progress.New(
 		progress.WithDefaultGradient(),
@@ -37,7 +37,7 @@ func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
 
 	return &AnalysisScreen{
 		config:          cfg,
-		spinner:         s,
+		spinner:         spin,
 		overallProgress: overallProg,
 		state:           "initializing",
 		lastUpdate:      time.Now(),
@@ -205,13 +205,13 @@ func (s AnalysisScreen) initializeEngine() tea.Cmd {
 	}
 }
 
-func (s AnalysisScreen) renderAnalysisLog(b *strings.Builder) {
+func (s AnalysisScreen) renderAnalysisLog(builder *strings.Builder) {
 	if len(s.status.AnalysisLog) == 0 {
 		return
 	}
 
-	b.WriteString(shared.RenderLabel("Activity Log:"))
-	b.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Activity Log:"))
+	builder.WriteString("\n")
 
 	// Show last 10 log entries
 	startIdx := 0
@@ -220,73 +220,73 @@ func (s AnalysisScreen) renderAnalysisLog(b *strings.Builder) {
 	}
 
 	for i := startIdx; i < len(s.status.AnalysisLog); i++ {
-		fmt.Fprintf(b, "  %s\n", s.status.AnalysisLog[i])
+		fmt.Fprintf(builder, "  %s\n", s.status.AnalysisLog[i])
 	}
 }
 
-func (s AnalysisScreen) renderAnalysisProgress(b *strings.Builder) {
+func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 	switch s.status.AnalysisPhase {
 	case "counting_source", "counting_dest":
 		// Counting phase - show count so far
 		if s.status.ScannedFiles > 0 {
-			fmt.Fprintf(b, "Found: %d items so far...\n\n", s.status.ScannedFiles)
+			fmt.Fprintf(builder, "Found: %d items so far...\n\n", s.status.ScannedFiles)
 		}
 	case "scanning_source", "scanning_dest", "comparing", "deleting":
 		if s.status.TotalFilesToScan > 0 {
 			// Show progress bar
 			scanPercent := float64(s.status.ScannedFiles) / float64(s.status.TotalFilesToScan)
-			b.WriteString(s.overallProgress.ViewAs(scanPercent))
-			b.WriteString("\n")
-			fmt.Fprintf(b, "%d / %d items (%.1f%%)\n\n",
+			builder.WriteString(s.overallProgress.ViewAs(scanPercent))
+			builder.WriteString("\n")
+			fmt.Fprintf(builder, "%d / %d items (%.1f%%)\n\n",
 				s.status.ScannedFiles,
 				s.status.TotalFilesToScan,
 				scanPercent*shared.ProgressPercentageScale)
 		} else if s.status.ScannedFiles > 0 {
 			// Fallback: show count without progress bar
-			fmt.Fprintf(b, "Processed: %d items\n\n", s.status.ScannedFiles)
+			fmt.Fprintf(builder, "Processed: %d items\n\n", s.status.ScannedFiles)
 		}
 	}
 }
 
 func (s AnalysisScreen) renderAnalyzingView() string {
-	var b strings.Builder
+	var builder strings.Builder
 
-	b.WriteString(shared.RenderTitle("🔍 Analyzing Files"))
-	b.WriteString("\n\n")
+	builder.WriteString(shared.RenderTitle("🔍 Analyzing Files"))
+	builder.WriteString("\n\n")
 
 	if s.status == nil {
-		b.WriteString(s.spinner.View())
-		b.WriteString(" Scanning directories and comparing files...\n\n")
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" Scanning directories and comparing files...\n\n")
 
-		return shared.RenderBox(b.String())
+		return shared.RenderBox(builder.String())
 	}
 
 	// Show current phase
 	phaseText := s.getAnalysisPhaseText()
-	b.WriteString(s.spinner.View())
-	b.WriteString(" ")
-	b.WriteString(shared.RenderLabel(phaseText))
-	b.WriteString("\n\n")
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" ")
+	builder.WriteString(shared.RenderLabel(phaseText))
+	builder.WriteString("\n\n")
 
 	// Show scan progress with progress bar or count
-	s.renderAnalysisProgress(&b)
+	s.renderAnalysisProgress(&builder)
 
 	// Show current path being scanned
 	if s.status.CurrentPath != "" {
-		b.WriteString(fmt.Sprintf("Current: %s\n", s.status.CurrentPath))
-		b.WriteString("\n")
+		builder.WriteString(fmt.Sprintf("Current: %s\n", s.status.CurrentPath))
+		builder.WriteString("\n")
 	}
 
 	// Show errors if any
 	if len(s.status.Errors) > 0 {
-		b.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors: %d", len(s.status.Errors))))
-		b.WriteString("\n\n")
+		builder.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors: %d", len(s.status.Errors))))
+		builder.WriteString("\n\n")
 	}
 
 	// Show analysis log
-	s.renderAnalysisLog(&b)
+	s.renderAnalysisLog(&builder)
 
-	return shared.RenderBox(b.String())
+	return shared.RenderBox(builder.String())
 }
 
 // ============================================================================
@@ -294,20 +294,20 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 // ============================================================================
 
 func (s AnalysisScreen) renderInitializingView() string {
-	var b strings.Builder
+	var builder strings.Builder
 
-	b.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
-	b.WriteString("\n\n")
+	builder.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
+	builder.WriteString("\n\n")
 
-	b.WriteString(s.spinner.View())
-	b.WriteString(" ")
-	b.WriteString(shared.RenderLabel("Initializing..."))
-	b.WriteString("\n\n")
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" ")
+	builder.WriteString(shared.RenderLabel("Initializing..."))
+	builder.WriteString("\n\n")
 
-	b.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
-	b.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
+	builder.WriteString("\n")
 
-	return shared.RenderBox(b.String())
+	return shared.RenderBox(builder.String())
 }
 
 // ============================================================================
