@@ -467,7 +467,9 @@ func (s InputScreen) renderInputView() string {
 	}
 
 	content += "\n" +
-		shared.RenderSubtitle("Tab/Shift+Tab to cycle • → to accept & continue • ↑↓ to switch fields • Enter to continue • Esc to clear field • Ctrl+C to exit") //nolint:lll // Help text with keyboard shortcuts
+		shared.RenderDim("Navigation: Tab/Shift+Tab to cycle • ↑↓ to switch fields") + "\n" +
+		shared.RenderDim("Actions: → to accept & continue • Enter to continue") + "\n" +
+		shared.RenderDim("Other: Esc to clear field • Ctrl+C to exit")
 
 	return shared.RenderBox(content)
 }
