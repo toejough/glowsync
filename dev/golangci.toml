@@ -59,6 +59,12 @@ fix = true
 path = "_test\\.go"
 linters = ['err113', 'goconst']
 
+[[linters.exclusions.rules]]
+# Package name 'shared' is acceptable for common TUI components
+path = "internal/tui/shared/"
+text = "var-naming.*avoid meaningless package names"
+linters = ['revive']
+
 [formatters]
 enable = ['gofmt', 'gofumpt', 'goimports']
 
