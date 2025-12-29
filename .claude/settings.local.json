@@ -9,7 +9,9 @@
       "Bash(mage lint:*)",
       "Bash(go test:*)",
       "Bash(gofmt:*)",
-      "Bash(mage check:lint:*)"
+      "Bash(mage check:lint:*)",
+      "Bash(git add:*)",
+      "Bash(git restore:*)"
     ]
   },
   "sandbox": {

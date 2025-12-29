@@ -126,9 +126,7 @@ func (s SyncScreen) getBottleneckInfo() string {
 }
 
 func (s SyncScreen) getMaxPathWidth() int {
-	maxWidth := max(s.width-shared.ProgressLogThreshold, shared.ProgressBarWidth)
-
-	return maxWidth
+	return shared.CalculateMaxPathWidth(s.width)
 }
 
 func (s SyncScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
@@ -495,11 +493,5 @@ func (s SyncScreen) startSync() tea.Cmd {
 }
 
 func (s SyncScreen) truncatePath(path string, maxWidth int) string {
-	if len(path) <= maxWidth {
-		return path
-	}
-	// Truncate from the middle
-	halfWidth := (maxWidth - shared.ProgressEllipsisLength) / shared.ProgressHalfDivisor
-
-	return path[:halfWidth] + "..." + path[len(path)-halfWidth:]
+	return shared.TruncatePath(path, maxWidth)
 }

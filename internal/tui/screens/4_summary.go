@@ -71,9 +71,7 @@ func (s SummaryScreen) View() string {
 // ============================================================================
 
 func (s SummaryScreen) getMaxPathWidth() int {
-	maxWidth := max(s.width-shared.ProgressLogThreshold, shared.ProgressBarWidth)
-
-	return maxWidth
+	return shared.CalculateMaxPathWidth(s.width)
 }
 
 func (s SummaryScreen) renderAdaptiveStats(builder *strings.Builder) {
@@ -430,11 +428,5 @@ func (s SummaryScreen) renderRecentlyCompleted(builder *strings.Builder) {
 }
 
 func (s SummaryScreen) truncatePath(path string, maxWidth int) string {
-	if len(path) <= maxWidth {
-		return path
-	}
-	// Truncate from the middle
-	halfWidth := (maxWidth - shared.ProgressEllipsisLength) / shared.ProgressHalfDivisor
-
-	return path[:halfWidth] + "..." + path[len(path)-halfWidth:]
+	return shared.TruncatePath(path, maxWidth)
 }

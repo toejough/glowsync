@@ -50,3 +50,24 @@ func FormatRate(bytesPerSec float64) string {
 
 	return fmt.Sprintf("%.1f %cB/s", bytesPerSec/div, "KMGTPE"[exp])
 }
+
+// ============================================================================
+// Path Display Utilities
+// These functions help format paths for display in constrained terminal widths
+// ============================================================================
+
+// TruncatePath truncates a path from the middle if it exceeds maxWidth
+func TruncatePath(path string, maxWidth int) string {
+	if len(path) <= maxWidth {
+		return path
+	}
+	// Truncate from the middle
+	halfWidth := (maxWidth - ProgressEllipsisLength) / ProgressHalfDivisor
+
+	return path[:halfWidth] + "..." + path[len(path)-halfWidth:]
+}
+
+// CalculateMaxPathWidth returns max path display width based on terminal width
+func CalculateMaxPathWidth(terminalWidth int) int {
+	return max(terminalWidth-ProgressLogThreshold, ProgressBarWidth)
+}
