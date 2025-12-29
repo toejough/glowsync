@@ -68,6 +68,7 @@ type AdaptiveScalingState struct {
 type Engine struct {
 	SourcePath      string
 	DestPath        string
+	FilePattern     string // Optional file pattern filter (e.g., "*.mov")
 	Status          *Status
 	Workers         int               // Number of concurrent workers (default: 4, 0 = adaptive)
 	AdaptiveMode    bool              // Enable adaptive concurrency scaling
@@ -1288,9 +1289,29 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 		return nil, fmt.Errorf("failed to scan source: %w", err)
 	}
 
+	// Apply file pattern filter if specified
+	if e.FilePattern != "" {
+		sourceFiles = e.applyFileFilter(sourceFiles)
+		e.logAnalysis(fmt.Sprintf("After filtering by pattern '%s': %d items remain", e.FilePattern, len(sourceFiles)))
+	}
+
 	e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found", len(sourceFiles)))
 
 	return sourceFiles, nil
+}
+
+// applyFileFilter applies the file pattern filter to the given files
+func (e *Engine) applyFileFilter(files map[string]*fileops.FileInfo) map[string]*fileops.FileInfo {
+	filter := NewGlobFilter(e.FilePattern)
+	filtered := make(map[string]*fileops.FileInfo)
+
+	for relativePath, info := range files {
+		if filter.ShouldInclude(relativePath) {
+			filtered[relativePath] = info
+		}
+	}
+
+	return filtered
 }
 
 // startAdaptiveScaling starts a goroutine that monitors performance and adjusts worker count

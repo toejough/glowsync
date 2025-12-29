@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/alexflint/go-arg"
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 // Exported constants.
@@ -71,6 +72,7 @@ var (
 	ErrDestPathNotExist       = errors.New("destination path does not exist")
 	ErrDestPathRequired       = errors.New("destination path is required")
 	ErrInvalidChangeType      = errors.New("invalid change type")
+	ErrInvalidFilePattern     = errors.New("invalid file pattern")
 	ErrSourcePathNotDirectory = errors.New("source path is not a directory")
 	ErrSourcePathNotExist     = errors.New("source path does not exist")
 	ErrSourcePathRequired     = errors.New("source path is required")
@@ -80,11 +82,12 @@ var (
 type Config struct {
 	SourcePath       string     `arg:"-s,--source"             help:"Source directory path"`
 	DestPath         string     `arg:"-d,--dest"               help:"Destination directory path"`
+	FilePattern      string     `arg:"--filter"                help:"File pattern filter (glob syntax, e.g., *.mov, **/*.{mov,mp4})"` //nolint:lll
 	InteractiveMode  bool       `arg:"-i,--interactive"        help:"Run in interactive mode"`
 	SkipConfirmation bool       `arg:"--yes,-y"                help:"Skip confirmation screen and proceed directly to sync"`                                                                                                                                                                //nolint:lll
-	AdaptiveMode     bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll
-	Workers          int        `arg:"-w,--workers"            default:"4"                       help:"Number of workers (0 = adaptive)"`                                                                                                                                                   //nolint:lll
-	TypeOfChange     ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll // Struct tag with comprehensive help text
+	AdaptiveMode     bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll,tagalign
+	Workers          int        `arg:"-w,--workers"            default:"4"                       help:"Number of workers (0 = adaptive)"`                                                                                                                                                   //nolint:lll,tagalign
+	TypeOfChange     ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll,tagalign // Struct tag with comprehensive help text
 }
 
 // Description returns the program description for go-arg
@@ -190,4 +193,23 @@ func PostProcessConfig(cfg *Config) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// ValidateFilePattern validates a file pattern for glob syntax correctness
+// Empty pattern is valid (matches all files)
+// Returns ErrInvalidFilePattern if the pattern has invalid syntax
+func ValidateFilePattern(pattern string) error {
+	// Empty pattern is valid (no filtering)
+	if pattern == "" {
+		return nil
+	}
+
+	// Validate by attempting to match against a test path
+	// doublestar will return an error if the pattern syntax is invalid
+	_, err := doublestar.Match(strings.ToLower(pattern), "test")
+	if err != nil {
+		return fmt.Errorf("%w: %s (%w)", ErrInvalidFilePattern, pattern, err)
+	}
+
+	return nil
 }
