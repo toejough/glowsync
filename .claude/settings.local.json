@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mage check:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(mage ReorderDecls:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(mage lint:*)",
+      "Bash(go test:*)",
+      "Bash(gofmt:*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  }
+}
