@@ -9,6 +9,36 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+func TestMakePathClickable(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{
+			name:     "absolute path",
+			path:     "/tmp/copy-files-debug.log",
+			expected: "\033]8;;file:///tmp/copy-files-debug.log\033\\/tmp/copy-files-debug.log\033]8;;\033\\",
+		},
+		{
+			name:     "path with spaces",
+			path:     "/tmp/my files/debug.log",
+			expected: "\033]8;;file:///tmp/my files/debug.log\033\\/tmp/my files/debug.log\033]8;;\033\\",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewWithT(t)
+			result := shared.MakePathClickable(tc.path)
+			g.Expect(result).Should(Equal(tc.expected))
+		})
+	}
+}
+
 func TestRenderFunctions(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -66,34 +96,4 @@ func TestSymbolFunctions(t *testing.T) {
 	g.Expect(shared.PromptArrow()).ShouldNot(BeEmpty())
 	g.Expect(shared.RightArrow()).ShouldNot(BeEmpty())
 	g.Expect(shared.SuccessSymbol()).ShouldNot(BeEmpty())
-}
-
-func TestMakePathClickable(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name     string
-		path     string
-		expected string
-	}{
-		{
-			name:     "absolute path",
-			path:     "/tmp/copy-files-debug.log",
-			expected: "\033]8;;file:///tmp/copy-files-debug.log\033\\/tmp/copy-files-debug.log\033]8;;\033\\",
-		},
-		{
-			name:     "path with spaces",
-			path:     "/tmp/my files/debug.log",
-			expected: "\033]8;;file:///tmp/my files/debug.log\033\\/tmp/my files/debug.log\033]8;;\033\\",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			g := NewWithT(t)
-			result := shared.MakePathClickable(tc.path)
-			g.Expect(result).Should(Equal(tc.expected))
-		})
-	}
 }
