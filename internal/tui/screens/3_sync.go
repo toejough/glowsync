@@ -437,11 +437,67 @@ func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 // Rendering
 // ============================================================================
 
+func (s SyncScreen) renderCancellationProgress() string {
+	var builder strings.Builder
+
+	// Header with spinner
+	builder.WriteString(shared.RenderTitle("🚫 Cancelling Sync"))
+	builder.WriteString("\n\n")
+
+	// Spinner with status message
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" Waiting for workers to finish...\n\n")
+
+	// Show active worker count
+	activeWorkers := 0
+	if s.status != nil {
+		activeWorkers = s.status.ActiveWorkers
+	}
+
+	fmt.Fprintf(&builder, "Active workers: %d\n\n", activeWorkers)
+
+	// Show files being finalized
+	builder.WriteString(shared.RenderLabel("Files being finalized:"))
+	builder.WriteString("\n")
+
+	if s.status != nil && len(s.status.CurrentFiles) > 0 {
+		// Show up to 3 files
+		maxFiles := 3
+		filesToShow := min(len(s.status.CurrentFiles), maxFiles)
+
+		for i := range filesToShow {
+			builder.WriteString("  • ")
+			builder.WriteString(s.status.CurrentFiles[i])
+			builder.WriteString("\n")
+		}
+
+		// Show overflow message if there are more files
+		if len(s.status.CurrentFiles) > maxFiles {
+			builder.WriteString(shared.RenderDim(fmt.Sprintf("  ... and %d more files\n", len(s.status.CurrentFiles)-maxFiles)))
+		}
+	} else {
+		builder.WriteString(shared.RenderDim("  (none)\n"))
+	}
+
+	builder.WriteString("\n")
+
+	// Force-quit hint
+	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
+	builder.WriteString("\n")
+
+	return shared.RenderBox(builder.String())
+}
+
 func (s SyncScreen) renderSyncingView() string {
+	// If cancelled, show cancellation progress view
+	if s.cancelled {
+		return s.renderCancellationProgress()
+	}
+
 	var builder strings.Builder
 
 	// Show different title based on finalization phase
-	if s.status != nil && s.status.FinalizationPhase == "updating_cache" {
+	if s.status != nil && s.status.FinalizationPhase == "complete" {
 		builder.WriteString(shared.RenderTitle("📦 Finalizing..."))
 		builder.WriteString("\n\n")
 		builder.WriteString(shared.RenderLabel("Updating destination cache..."))
@@ -477,12 +533,7 @@ func (s SyncScreen) renderSyncingView() string {
 
 	// Help text
 	builder.WriteString("\n")
-
-	if s.cancelled {
-		builder.WriteString(shared.RenderDim("Cancelling... waiting for workers to finish"))
-	} else {
-		builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
-	}
+	builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
 
 	return shared.RenderBox(builder.String())
 }

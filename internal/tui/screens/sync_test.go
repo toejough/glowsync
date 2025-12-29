@@ -252,3 +252,191 @@ func TestSyncScreenCtrlCQuitsApp(t *testing.T) {
 	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
 		"Ctrl+C should send tea.QuitMsg")
 }
+
+func TestSyncScreenRenderCancellationProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Cancel the sync
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := screen.Update(escMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Now render the view - should show cancellation progress
+	view := syncScreen.View()
+	g.Expect(view).Should(ContainSubstring("Cancelling Sync"))
+}
+
+func TestSyncScreenRenderCancellationProgressWithSpinner(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Initialize the screen to start spinner
+	_ = screen.Init()
+
+	// Cancel the sync
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := screen.Update(escMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Update spinner to ensure it has a value
+	spinnerTick := spinner.TickMsg{Time: time.Now(), ID: 1}
+	updatedModel2, _ := syncScreen.Update(spinnerTick)
+
+	syncScreen2, ok := updatedModel2.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// View should show waiting for workers message
+	view := syncScreen2.View()
+	g.Expect(view).Should(ContainSubstring("Waiting for workers to finish"),
+		"Should show message about waiting for workers")
+}
+
+func TestSyncScreenRenderCancellationProgressShowsWorkerCount(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Cancel the sync
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := screen.Update(escMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// View should show active workers count (even if 0)
+	view := syncScreen.View()
+	g.Expect(view).Should(MatchRegexp(`Active workers:\s+\d+`),
+		"Should display active workers count")
+}
+
+func TestSyncScreenRenderCancellationProgressShowsCurrentFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Cancel the sync
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := screen.Update(escMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// View should show "Files being finalized:" section
+	view := syncScreen.View()
+	g.Expect(view).Should(ContainSubstring("Files being finalized:"),
+		"Should show files being finalized section")
+}
+
+func TestSyncScreenRenderCancellationProgressShowsForceQuitHint(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Cancel the sync
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := screen.Update(escMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// View should show force-quit hint
+	view := syncScreen.View()
+	g.Expect(view).Should(ContainSubstring("Ctrl+C to force quit"),
+		"Should show force-quit hint")
+}
+
+func TestSyncScreenViewSwitchesFromNormalToCancellationView(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Initialize and set window size
+	_ = screen.Init()
+	sizeMsg := tea.WindowSizeMsg{Width: 100, Height: 50}
+	updatedModel, _ := screen.Update(sizeMsg)
+
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Normal view should show "Syncing Files"
+	normalView := syncScreen.View()
+	g.Expect(normalView).Should(ContainSubstring("Syncing Files"))
+	g.Expect(normalView).ShouldNot(ContainSubstring("Cancelling Sync"))
+
+	// Cancel the sync
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel2, _ := syncScreen.Update(escMsg)
+
+	syncScreen2, ok := updatedModel2.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// After cancellation, view should switch to cancellation view
+	cancelledView := syncScreen2.View()
+	g.Expect(cancelledView).Should(ContainSubstring("Cancelling Sync"))
+	g.Expect(cancelledView).ShouldNot(ContainSubstring("Syncing Files"))
+	g.Expect(cancelledView).Should(ContainSubstring("Files being finalized"))
+}
+
+func TestSyncScreenRenderCancellationProgressEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("with nil status", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		engine := syncengine.NewEngine("/source", "/dest")
+		screen := screens.NewSyncScreen(engine)
+
+		// Cancel without any status
+		escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+		updatedModel, _ := screen.Update(escMsg)
+
+		syncScreen, ok := updatedModel.(screens.SyncScreen)
+		g.Expect(ok).Should(BeTrue())
+
+		// Should render without crashing
+		view := syncScreen.View()
+		g.Expect(view).Should(ContainSubstring("Cancelling Sync"))
+		g.Expect(view).Should(ContainSubstring("Active workers: 0"))
+		g.Expect(view).Should(ContainSubstring("(none)"))
+	})
+
+	t.Run("handles empty current files list", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		engine := syncengine.NewEngine("/source", "/dest")
+		screen := screens.NewSyncScreen(engine)
+
+		// Cancel the sync
+		escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+		updatedModel, _ := screen.Update(escMsg)
+
+		syncScreen, ok := updatedModel.(screens.SyncScreen)
+		g.Expect(ok).Should(BeTrue())
+
+		// Even with no current files, should show "(none)"
+		view := syncScreen.View()
+		g.Expect(view).Should(ContainSubstring("Files being finalized:"))
+		g.Expect(view).Should(ContainSubstring("(none)"))
+	})
+}
