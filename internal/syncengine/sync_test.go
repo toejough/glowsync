@@ -1,3 +1,4 @@
+//nolint:varnamelen // Test files use idiomatic short variable names (t, tt, g, c, etc.)
 package syncengine_test
 
 import (
@@ -55,6 +56,7 @@ func TestAdaptiveScalingWithMockedTime(t *testing.T) {
 	g.Expect(engine.Status.ProcessedFiles).Should(Equal(20))
 }
 
+//nolint:lll // Function signature with inline nolint comment
 func TestEngineAdaptiveScaling(t *testing.T) { //nolint:paralleltest // Don't run in parallel - we need to control timing
 	// Create temp directories
 	sourceDir := t.TempDir()
@@ -333,53 +335,6 @@ func TestEngineGetStatus(t *testing.T) {
 	}
 }
 
-func TestEngineParanoidMode(t *testing.T) {
-	t.Parallel()
-
-	sourceDir, destDir, destFile := setupSameSizeModtimeTest(t)
-
-	// Create engine with Paranoid mode
-	engine := syncengine.NewEngine(sourceDir, destDir)
-	engine.ChangeType = config.Paranoid
-	engine.FileOps = fileops.NewRealFileOps()
-
-	// Run Analyze - should detect byte-by-byte mismatch
-	err := engine.Analyze()
-
-	// Verify results
-	g := NewWithT(t)
-	g.Expect(err).ShouldNot(HaveOccurred())
-	g.Expect(engine.Status.TotalFiles).Should(Equal(1), "Should detect 1 file needs sync due to byte mismatch")
-
-	// Run Sync
-	err = engine.Sync()
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	// Verify file was synced with correct content
-	content, err := os.ReadFile(destFile)
-	g.Expect(err).ShouldNot(HaveOccurred())
-	g.Expect(string(content)).Should(Equal("test content"))
-}
-
-func TestEngineRegisterStatusCallback(t *testing.T) {
-	t.Parallel()
-
-	engine := syncengine.NewEngine("/source", "/dest")
-
-	callbackCalled := false
-	callback := func(_ *syncengine.Status) {
-		callbackCalled = true
-	}
-
-	engine.RegisterStatusCallback(callback)
-
-	// We can't easily test that the callback is called without running Analyze/Sync,
-	// but we can verify that RegisterStatusCallback doesn't panic
-	if callbackCalled {
-		t.Error("Callback should not be called immediately")
-	}
-}
-
 func TestEngineMarkFileCompleteWithoutCopy(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -449,6 +404,53 @@ func TestEngineMarkFileCompleteWithoutCopy(t *testing.T) {
 	dstInfo, err := os.Stat(dstFile)
 	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(dstInfo.ModTime().Unix()).Should(Equal(srcInfo.ModTime().Unix()))
+}
+
+func TestEngineParanoidMode(t *testing.T) {
+	t.Parallel()
+
+	sourceDir, destDir, destFile := setupSameSizeModtimeTest(t)
+
+	// Create engine with Paranoid mode
+	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine.ChangeType = config.Paranoid
+	engine.FileOps = fileops.NewRealFileOps()
+
+	// Run Analyze - should detect byte-by-byte mismatch
+	err := engine.Analyze()
+
+	// Verify results
+	g := NewWithT(t)
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(engine.Status.TotalFiles).Should(Equal(1), "Should detect 1 file needs sync due to byte mismatch")
+
+	// Run Sync
+	err = engine.Sync()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Verify file was synced with correct content
+	content, err := os.ReadFile(destFile)
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(string(content)).Should(Equal("test content"))
+}
+
+func TestEngineRegisterStatusCallback(t *testing.T) {
+	t.Parallel()
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	callbackCalled := false
+	callback := func(_ *syncengine.Status) {
+		callbackCalled = true
+	}
+
+	engine.RegisterStatusCallback(callback)
+
+	// We can't easily test that the callback is called without running Analyze/Sync,
+	// but we can verify that RegisterStatusCallback doesn't panic
+	if callbackCalled {
+		t.Error("Callback should not be called immediately")
+	}
 }
 
 func TestEngineSync(t *testing.T) {
@@ -621,6 +623,7 @@ func TestHandleCopyError(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect Open call for the source file with a timeout
+		//nolint:lll // Test mock method chain with inline error injection
 		fsImp.Within(5*time.Second).ExpectCallIs.Open().ExpectArgsAre(testFile).InjectResults(nil, errors.New("mock error: permission denied"))
 	}()
 

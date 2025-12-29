@@ -1,4 +1,4 @@
-package shared //nolint:revive // "shared" is meaningful for shared TUI components
+package shared
 
 import (
 	"github.com/joe/copy-files/internal/syncengine"

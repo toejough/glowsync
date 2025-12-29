@@ -84,17 +84,17 @@ func (s AnalysisScreen) View() string {
 
 func (s AnalysisScreen) getAnalysisPhaseText() string {
 	switch s.status.AnalysisPhase {
-	case "counting_source":
+	case shared.PhaseCountingSource:
 		return "Counting files in source..."
-	case "scanning_source":
+	case shared.PhaseScanningSource:
 		return "Scanning source directory..."
-	case "counting_dest":
+	case shared.PhaseCountingDest:
 		return "Counting files in destination..."
-	case "scanning_dest":
+	case shared.PhaseScanningDest:
 		return "Scanning destination directory..."
-	case "comparing":
+	case shared.PhaseComparing:
 		return "Comparing files to determine sync plan..."
-	case "deleting":
+	case shared.PhaseDeleting:
 		return "Checking for files to delete..."
 	case shared.StateComplete:
 		return "Analysis complete!"
@@ -186,6 +186,7 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 
 func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	// Set progress bar width
+	//nolint:lll // Complex width calculation with multiple constants
 	progressWidth := min(max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold), shared.MaxProgressBarWidth)
 
 	s.overallProgress.Width = progressWidth
@@ -226,12 +227,12 @@ func (s AnalysisScreen) renderAnalysisLog(builder *strings.Builder) {
 
 func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 	switch s.status.AnalysisPhase {
-	case "counting_source", "counting_dest":
+	case shared.PhaseCountingSource, shared.PhaseCountingDest:
 		// Counting phase - show count so far
 		if s.status.ScannedFiles > 0 {
 			fmt.Fprintf(builder, "Found: %d items so far...\n\n", s.status.ScannedFiles)
 		}
-	case "scanning_source", "scanning_dest", "comparing", "deleting":
+	case shared.PhaseScanningSource, shared.PhaseScanningDest, shared.PhaseComparing, shared.PhaseDeleting:
 		if s.status.TotalFilesToScan > 0 {
 			// Show progress bar
 			scanPercent := float64(s.status.ScannedFiles) / float64(s.status.TotalFilesToScan)

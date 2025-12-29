@@ -193,6 +193,8 @@ func (e *Engine) EnableFileLogging(logPath string) error {
 }
 
 // EvaluateAndScale evaluates current performance and decides whether to add workers
+//
+//nolint:lll // Long function signature with many parameters
 func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedFiles, currentWorkers int, currentBytes int64, maxWorkers int, workerControl chan bool) {
 	now := e.TimeProvider.Now()
 
@@ -205,8 +207,10 @@ func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedF
 			// Calculate per-worker throughput
 			bytesPerFile := float64(currentBytes) / float64(currentProcessedFiles)
 			filesPerSecond := float64(filesProcessed) / elapsed
+			//nolint:lll // Complex calculation with descriptive variable names
 			currentPerWorkerSpeed := (bytesPerFile * filesPerSecond) / float64(currentWorkers)
 
+			//nolint:lll // Log message with multiple formatted values
 			e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s)",
 				currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, state.LastPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte))
 
@@ -309,6 +313,8 @@ func (e *Engine) GetStatus() *Status {
 }
 
 // MakeScalingDecision decides whether to add workers based on per-worker speed comparison
+//
+//nolint:lll // Long function signature with many parameters
 func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed float64, currentWorkers, maxWorkers int, workerControl chan bool) {
 	// First measurement - add a worker to test
 	if lastPerWorkerSpeed == 0 {
@@ -538,6 +544,7 @@ func (e *Engine) countAndLogOrphanedItems(sourceFiles, destFiles map[string]*fil
 		return 0, 0
 	}
 
+	//nolint:lll // Log message with descriptive text
 	e.logAnalysis(fmt.Sprintf("Found %d files and %d directories in destination that don't exist in source", filesToDelete, dirsToDelete))
 	e.logOrphanedItemsSample(sourceFiles, destFiles)
 
@@ -661,6 +668,8 @@ func (e *Engine) deleteFile(relPath string, deletedCount int) error {
 }
 
 // deleteOrphanedDirectories deletes directories from destination that don't exist in source
+//
+//nolint:lll // Long function signature with map parameters
 func (e *Engine) deleteOrphanedDirectories(sourceFiles, destFiles map[string]*fileops.FileInfo, dirsToDelete int) error {
 	if dirsToDelete == 0 {
 		return nil
@@ -1104,6 +1113,8 @@ func (e *Engine) notifyStatusUpdate() {
 }
 
 // prepareAlreadySyncedLogMessage prepares a log message for files already synced.
+//
+//nolint:lll // Long function signature with multiple parameters
 func (e *Engine) prepareAlreadySyncedLogMessage(alreadySyncedCount int, relPath string, srcFile *fileops.FileInfo) string {
 	if alreadySyncedCount > LogSampleLimit {
 		return ""
@@ -1114,6 +1125,8 @@ func (e *Engine) prepareAlreadySyncedLogMessage(alreadySyncedCount int, relPath 
 }
 
 // prepareComparisonLogMessage prepares a log message for file comparison results
+//
+//nolint:lll // Long function signature with multiple parameters
 func (e *Engine) prepareComparisonLogMessage(needsSync bool, needSyncCount, alreadySyncedCount int, relPath string, srcFile, dstFile *fileops.FileInfo) string {
 	if needsSync {
 		return e.prepareNeedSyncLogMessage(needSyncCount, relPath, srcFile, dstFile)
@@ -1123,6 +1136,8 @@ func (e *Engine) prepareComparisonLogMessage(needsSync bool, needSyncCount, alre
 }
 
 // prepareNeedSyncLogMessage prepares a log message for files that need sync.
+//
+//nolint:lll // Long function signature with multiple parameters
 func (e *Engine) prepareNeedSyncLogMessage(needSyncCount int, relPath string, srcFile, dstFile *fileops.FileInfo) string {
 	if needSyncCount > LogSampleLimit {
 		return ""
@@ -1152,6 +1167,8 @@ func (e *Engine) processFileDeletion(relPath string, deletedCount int) (deleted 
 }
 
 // processOrphanedFile processes a single file for deletion if it's orphaned.
+//
+//nolint:lll // Long function signature with map parameter and multiple return values
 func (e *Engine) processOrphanedFile(relPath string, sourceFiles map[string]*fileops.FileInfo, deletedCount, deleteErrorCount int) (newDeletedCount, newDeleteErrorCount int, err error) {
 	if _, exists := sourceFiles[relPath]; !exists {
 		// Delete this file from destination
@@ -1242,6 +1259,7 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 	e.Status.mu.Unlock()
 
 	// Scan source directory with progress
+	//nolint:lll // Anonymous function with parameters as part of method call
 	sourceFiles, err := e.FileOps.ScanDirectoryWithProgress(e.SourcePath, func(path string, scannedCount int, totalCount int) {
 		e.Status.mu.Lock()
 		e.Status.CurrentPath = path
@@ -1324,7 +1342,7 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 }
 
 func (e *Engine) startFixedWorkers(numWorkers int, jobs chan *FileToSync, errors chan error) *sync.WaitGroup {
-	var wg sync.WaitGroup
+	var wg sync.WaitGroup //nolint:varnamelen // wg is idiomatic for WaitGroup
 	for range numWorkers {
 		wg.Go(func() {
 			for fileToSync := range jobs {
@@ -1351,6 +1369,8 @@ func (e *Engine) startFixedWorkers(numWorkers int, jobs chan *FileToSync, errors
 }
 
 // startWorkerControl starts a goroutine that manages adding workers dynamically
+//
+//nolint:lll,varnamelen // Long function signature with channel parameters; wg is idiomatic for WaitGroup
 func (e *Engine) startWorkerControl(wg *sync.WaitGroup, jobs <-chan *FileToSync, errors chan<- error, workerControl chan bool) {
 	go func() {
 		for add := range workerControl {
@@ -1401,7 +1421,7 @@ func (e *Engine) syncAdaptive() error {
 	}
 
 	// Worker management
-	var wg sync.WaitGroup
+	var wg sync.WaitGroup //nolint:varnamelen // wg is idiomatic for WaitGroup
 
 	workerControl := make(chan bool, WorkerChannelBufferSize) // true = add worker, false = remove worker
 	activeWorkers := 0
@@ -1531,7 +1551,7 @@ func (e *Engine) syncFixed() error {
 	e.Status.mu.Unlock()
 
 	// Start worker pool
-	wg := e.startFixedWorkers(numWorkers, jobs, errors)
+	wg := e.startFixedWorkers(numWorkers, jobs, errors) //nolint:varnamelen // wg is idiomatic for WaitGroup
 
 	// Send all files to the job queue
 	e.enqueueFilesForSync(jobs)
@@ -1852,6 +1872,7 @@ type Status struct {
 	AlreadySyncedBytes int64 // Bytes that were already up-to-date
 
 	// Analysis progress
+	//nolint:lll // Inline comment listing all possible phase values
 	AnalysisPhase    string   // "counting_source", "scanning_source", "counting_dest", "scanning_dest", "comparing", "deleting", "complete"
 	ScannedFiles     int      // Number of files scanned/compared so far
 	TotalFilesToScan int      // Total files to scan/compare (0 if unknown/counting)

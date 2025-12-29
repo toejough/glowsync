@@ -26,11 +26,6 @@ func NewFileOps(fs filesystem.FileSystem) *FileOps {
 	return &FileOps{FS: fs}
 }
 
-// NewRealFileOps creates a new FileOps instance using the real filesystem.
-func NewRealFileOps() *FileOps {
-	return &FileOps{FS: filesystem.NewRealFileSystem()}
-}
-
 // Chtimes changes the access and modification times of a file
 func (fo *FileOps) Chtimes(path string, atime, mtime time.Time) error {
 	err := fo.FS.Chtimes(path, atime, mtime)
@@ -158,6 +153,8 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 
 // CopyFileWithStats copies a file and returns detailed timing statistics.
 // If cancelChan is provided and closed, the copy will be aborted.
+//
+//nolint:lll // Long function signature with channel parameter
 func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}) (*CopyStats, error) {
 	stats := &CopyStats{}
 
@@ -273,6 +270,8 @@ func (fo *FileOps) ScanDirectory(rootPath string) (map[string]*FileInfo, error) 
 
 // ScanDirectoryWithProgress recursively scans a directory with progress reporting.
 // This now scans only once, collecting files and reporting progress as we go.
+//
+//nolint:lll // Long function signature with callback parameter
 func (fo *FileOps) ScanDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
 	files := make(map[string]*FileInfo)
 	fileCount := 0
@@ -323,6 +322,7 @@ func (fo *FileOps) compareFileContents(file1, file2 filesystem.File) (bool, erro
 	buf2 := make([]byte, BufferSize)
 
 	for {
+		//nolint:varnamelen // n1/n2 are idiomatic for bytes read
 		n1, err1 := file1.Read(buf1)
 		n2, err2 := file2.Read(buf2)
 
@@ -349,13 +349,15 @@ func (fo *FileOps) compareFileContents(file1, file2 filesystem.File) (bool, erro
 }
 
 // copyLoop performs the actual file copy with progress tracking and timing.
+//
+//nolint:lll // Long function signature with many parameters including channel
 func (fo *FileOps) copyLoop(sourceFile filesystem.File, destFile filesystem.File, stats *CopyStats, sourceSize int64, srcPath string, progress ProgressCallback, cancelChan <-chan struct{}) (int64, error) {
 	var written int64
 
 	buf := make([]byte, BufferSize) // 32KB buffer
 
 	var (
-		nr, nw int
+		nr, nw int //nolint:varnamelen // nr/nw are idiomatic for bytes read/written
 		err    error
 	)
 
@@ -401,15 +403,17 @@ func (fo *FileOps) copyLoop(sourceFile filesystem.File, destFile filesystem.File
 
 // CopyFile copies a file from src to dst with progress reporting.
 // simpleCopyLoop performs a basic file copy with progress tracking.
+//
+//nolint:lll // Long function signature with many parameters
 func (fo *FileOps) simpleCopyLoop(sourceFile filesystem.File, destFile filesystem.File, sourceSize int64, srcPath string, progress ProgressCallback) (int64, error) {
 	var written int64
 
 	buf := make([]byte, BufferSize) // 32KB buffer
 
 	for {
-		nr, err := sourceFile.Read(buf)
+		nr, err := sourceFile.Read(buf) //nolint:varnamelen // nr is idiomatic for bytes read
 		if nr > 0 {
-			nw, err := destFile.Write(buf[0:nr])
+			nw, err := destFile.Write(buf[0:nr]) //nolint:varnamelen // nw is idiomatic for bytes written
 			if err != nil {
 				return written, fmt.Errorf("failed to write to destination: %w", err)
 			}
@@ -435,6 +439,11 @@ func (fo *FileOps) simpleCopyLoop(sourceFile filesystem.File, destFile filesyste
 	}
 
 	return written, nil
+}
+
+// NewRealFileOps creates a new FileOps instance using the real filesystem.
+func NewRealFileOps() *FileOps {
+	return &FileOps{FS: filesystem.NewRealFileSystem()}
 }
 
 // compareByteBuffers compares two byte buffers up to n bytes.

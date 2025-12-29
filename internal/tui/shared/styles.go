@@ -1,68 +1,69 @@
+//nolint:revive // "shared" package name is meaningful for shared TUI utilities
 package shared
 
 import "github.com/charmbracelet/lipgloss"
 
-// Exported constants organized by category for clarity.
+// Exported constants.
 const (
-	// ============================================================================
-	// UI Layout & Display
-	// ============================================================================
-
 	// DefaultPadding is the default padding for UI elements
 	DefaultPadding = 2
-	// ProgressBarWidth is the default width of progress bars
-	ProgressBarWidth = 40
-	// MaxProgressBarWidth is the maximum width for progress bars
-	MaxProgressBarWidth = 100
-	// ProgressLogThreshold is the margin for path display calculations
-	ProgressLogThreshold = 20
-
-	// ============================================================================
-	// Time Intervals
-	// ============================================================================
-
-	// TickIntervalMs is the interval for tick messages in milliseconds
-	TickIntervalMs = 100
-	// StatusUpdateThrottleMs is the minimum interval between status updates in milliseconds
-	StatusUpdateThrottleMs = 200
-	// ProgressUpdateInterval is how often to update progress (every N files)
-	ProgressUpdateInterval = 10
-
-	// ============================================================================
-	// Display Limits & Formatting
-	// ============================================================================
-
-	// ProgressEllipsisLength is the length of ellipsis for truncated paths
-	ProgressEllipsisLength = 3
-	// ProgressPercentageScale is the scale for percentage calculations (100 for percentages)
-	ProgressPercentageScale = 100
-
-	// ============================================================================
-	// Mathematical Constants
-	// ============================================================================
-
-	// ProgressHalfDivisor is the divisor for calculating half values
-	ProgressHalfDivisor = 2
-
 	// ============================================================================
 	// Keys & Symbols
 	// ============================================================================
 
 	// KeyCtrlC is the key binding for cancellation
 	KeyCtrlC = "ctrl+c"
+	// MaxProgressBarWidth is the maximum width for progress bars
+	MaxProgressBarWidth = 100
+	// PhaseComparing indicates files are being compared
+	PhaseComparing      = "comparing"
+	PhaseCountingDest   = "counting_dest"   // PhaseCountingDest indicates destination files are being counted
+	PhaseCountingSource = "counting_source" // PhaseCountingSource indicates source files are being counted
+	PhaseDeleting       = "deleting"        // PhaseDeleting indicates files are being deleted
+	PhaseScanningDest   = "scanning_dest"   // PhaseScanningDest indicates destination directory is being scanned
+	PhaseScanningSource = "scanning_source" // PhaseScanningSource indicates source directory is being scanned
+	// ProgressBarWidth is the default width of progress bars
+	ProgressBarWidth = 40
+	// ============================================================================
+	// Display Limits & Formatting
+	// ============================================================================
+
+	// ProgressEllipsisLength is the length of ellipsis for truncated paths
+	ProgressEllipsisLength = 3
+	// ============================================================================
+	// Mathematical Constants
+	// ============================================================================
+
+	// ProgressHalfDivisor is the divisor for calculating half values
+	ProgressHalfDivisor = 2
+	// ProgressLogThreshold is the margin for path display calculations
+	ProgressLogThreshold = 20
+	// ProgressPercentageScale is the scale for percentage calculations (100 for percentages)
+	ProgressPercentageScale = 100
+	// ProgressUpdateInterval is how often to update progress (every N files)
+	ProgressUpdateInterval = 10
 	// PromptArrow is the arrow character used in prompts
 	PromptArrow = "▶ "
-
 	// ============================================================================
 	// State Constants
 	// ============================================================================
 
-	StateBalanced    = "balanced"
+	// StateBalanced indicates balanced load between source and destination
+	StateBalanced = "balanced"
+	// StateCancelled indicates the operation was cancelled
 	StateCancelled   = "cancelled"
-	StateComplete    = "complete"
-	StateDestination = "destination"
-	StateError       = "error"
-	StateSource      = "source"
+	StateComplete    = "complete"    // StateComplete indicates successful completion
+	StateDestination = "destination" // StateDestination indicates destination is the bottleneck
+	StateError       = "error"       // StateError indicates an error occurred
+	StateSource      = "source"      // StateSource indicates source is the bottleneck
+	// StatusUpdateThrottleMs is the minimum interval between status updates in milliseconds
+	StatusUpdateThrottleMs = 200
+	// ============================================================================
+	// Time Intervals
+	// ============================================================================
+
+	// TickIntervalMs is the interval for tick messages in milliseconds
+	TickIntervalMs = 100
 )
 
 func AccentColor() lipgloss.Color { return lipgloss.Color(accentColorCode) }

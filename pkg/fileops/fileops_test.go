@@ -1,3 +1,4 @@
+//nolint:varnamelen // Test files use idiomatic short variable names (t, etc.)
 package fileops_test
 
 import (

@@ -1,7 +1,8 @@
+//nolint:varnamelen // Test files use idiomatic short variable names (t, g, etc.)
 package screens
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -66,21 +67,43 @@ func TestGetMaxPathWidth(t *testing.T) {
 	g.Expect(width).Should(BeNumerically(">", 0))
 }
 
-func TestTruncatePath(t *testing.T) {
+func TestRenderCurrentlyCopying(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	screen := &SyncScreen{}
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			CurrentFiles: []string{"file1.txt"},
+			FilesToSync: []*syncengine.FileToSync{
+				{RelativePath: "file1.txt", Status: "copying", Size: 1024, Transferred: 512},
+			},
+		},
+	}
 
-	// Test short path (no truncation)
-	result := screen.truncatePath("/short/path.txt", 100)
-	g.Expect(result).Should(Equal("/short/path.txt"))
+	var builder strings.Builder
+	screen.renderCurrentlyCopying(&builder, 5)
+	result := builder.String()
+	g.Expect(result).Should(ContainSubstring("Currently Copying"))
+}
 
-	// Test long path (truncation)
-	longPath := "/very/long/path/to/some/file/that/needs/truncation/file.txt"
-	result = screen.truncatePath(longPath, 20)
-	g.Expect(result).Should(ContainSubstring("..."))
-	g.Expect(len(result)).Should(BeNumerically("<=", 20))
+func TestRenderFileList(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			CurrentFiles: []string{"file1.txt", "file2.txt"},
+			FilesToSync: []*syncengine.FileToSync{
+				{RelativePath: "file1.txt", Status: "copying", Size: 1024, Transferred: 512},
+			},
+		},
+		height: 50,
+	}
+
+	var builder strings.Builder
+	screen.renderFileList(&builder)
+	result := builder.String()
+	g.Expect(result).ShouldNot(BeEmpty())
 }
 
 func TestRenderOverallProgress(t *testing.T) {
@@ -102,6 +125,25 @@ func TestRenderOverallProgress(t *testing.T) {
 	screen.renderOverallProgress(&builder)
 	result := builder.String()
 	g.Expect(result).Should(ContainSubstring("Overall Progress"))
+}
+
+func TestRenderRecentFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			FilesToSync: []*syncengine.FileToSync{
+				{RelativePath: "file1.txt", Status: "complete"},
+				{RelativePath: "file2.txt", Status: "complete"},
+			},
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderRecentFiles(&builder, 5)
+	result := builder.String()
+	g.Expect(result).Should(ContainSubstring("Recent Files"))
 }
 
 func TestRenderSessionProgress(t *testing.T) {
@@ -147,69 +189,11 @@ func TestRenderStatistics(t *testing.T) {
 	g.Expect(result).Should(ContainSubstring("Rate"))
 }
 
-func TestRenderFileList(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			CurrentFiles: []string{"file1.txt", "file2.txt"},
-			FilesToSync: []*syncengine.FileToSync{
-				{RelativePath: "file1.txt", Status: "copying", Size: 1024, Transferred: 512},
-			},
-		},
-		height: 50,
-	}
-
-	var builder strings.Builder
-	screen.renderFileList(&builder)
-	result := builder.String()
-	g.Expect(result).ShouldNot(BeEmpty())
-}
-
-func TestRenderCurrentlyCopying(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			CurrentFiles: []string{"file1.txt"},
-			FilesToSync: []*syncengine.FileToSync{
-				{RelativePath: "file1.txt", Status: "copying", Size: 1024, Transferred: 512},
-			},
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderCurrentlyCopying(&builder, 5)
-	result := builder.String()
-	g.Expect(result).Should(ContainSubstring("Currently Copying"))
-}
-
-func TestRenderRecentFiles(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			FilesToSync: []*syncengine.FileToSync{
-				{RelativePath: "file1.txt", Status: "complete"},
-				{RelativePath: "file2.txt", Status: "complete"},
-			},
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderRecentFiles(&builder, 5)
-	result := builder.String()
-	g.Expect(result).Should(ContainSubstring("Recent Files"))
-}
-
 func TestRenderSyncingErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	testErr := fmt.Errorf("test error")
+	testErr := errors.New("test error")
 
 	screen := &SyncScreen{
 		status: &syncengine.Status{
@@ -232,4 +216,21 @@ func TestRenderSyncingErrors(t *testing.T) {
 	screen.renderSyncingErrors(&builder)
 	result = builder.String()
 	g.Expect(result).Should(BeEmpty())
+}
+
+func TestTruncatePath(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{}
+
+	// Test short path (no truncation)
+	result := screen.truncatePath("/short/path.txt", 100)
+	g.Expect(result).Should(Equal("/short/path.txt"))
+
+	// Test long path (truncation)
+	longPath := "/very/long/path/to/some/file/that/needs/truncation/file.txt"
+	result = screen.truncatePath(longPath, 20)
+	g.Expect(result).Should(ContainSubstring("..."))
+	g.Expect(len(result)).Should(BeNumerically("<=", 20))
 }

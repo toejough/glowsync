@@ -7,6 +7,11 @@ import (
 	"github.com/joe/copy-files/pkg/formatters"
 )
 
+// CalculateMaxPathWidth returns max path display width based on terminal width
+func CalculateMaxPathWidth(terminalWidth int) int {
+	return max(terminalWidth-ProgressLogThreshold, ProgressBarWidth)
+}
+
 // ============================================================================
 // Formatting Functions
 // These are used by multiple screens for consistent display
@@ -65,9 +70,4 @@ func TruncatePath(path string, maxWidth int) string {
 	halfWidth := (maxWidth - ProgressEllipsisLength) / ProgressHalfDivisor
 
 	return path[:halfWidth] + "..." + path[len(path)-halfWidth:]
-}
-
-// CalculateMaxPathWidth returns max path display width based on terminal width
-func CalculateMaxPathWidth(terminalWidth int) int {
-	return max(terminalWidth-ProgressLogThreshold, ProgressBarWidth)
 }

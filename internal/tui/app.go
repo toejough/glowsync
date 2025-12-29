@@ -32,6 +32,11 @@ func NewAppModel(cfg *config.Config) *AppModel {
 	}
 }
 
+// CurrentScreen returns the current screen (for testing)
+func (a AppModel) CurrentScreen() tea.Model {
+	return a.currentScreen
+}
+
 // Init implements tea.Model
 func (a AppModel) Init() tea.Cmd {
 	return a.currentScreen.Init()
@@ -60,11 +65,6 @@ func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View implements tea.Model
 func (a AppModel) View() string {
 	return a.currentScreen.View()
-}
-
-// CurrentScreen returns the current screen (for testing)
-func (a AppModel) CurrentScreen() tea.Model {
-	return a.currentScreen
 }
 
 // ============================================================================

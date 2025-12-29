@@ -364,7 +364,7 @@ func (s InputScreen) renderInputView() string {
 	}
 
 	content += "\n" +
-		shared.RenderSubtitle("Tab/Shift+Tab to cycle • → to accept & continue • ↑↓ to switch fields • Enter to continue • Ctrl+C to quit")
+		shared.RenderSubtitle("Tab/Shift+Tab to cycle • → to accept & continue • ↑↓ to switch fields • Enter to continue • Ctrl+C to quit") //nolint:lll // Help text with keyboard shortcuts
 
 	return shared.RenderBox(content)
 }

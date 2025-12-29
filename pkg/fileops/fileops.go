@@ -401,8 +401,8 @@ func compareOSFileContents(file1, file2 *os.File) (bool, error) {
 	buf2 := make([]byte, BufferSize)
 
 	for {
-		n1, err1 := file1.Read(buf1)
-		n2, err2 := file2.Read(buf2)
+		n1, err1 := file1.Read(buf1) //nolint:varnamelen // n1/n2 are idiomatic for bytes read
+		n2, err2 := file2.Read(buf2) //nolint:varnamelen // n1/n2 are idiomatic for bytes read
 
 		// Check for read errors
 		err := checkReadErrors(err1, err2)
@@ -432,13 +432,15 @@ func compareOSFileContents(file1, file2 *os.File) (bool, error) {
 }
 
 // osCopyLoopWithStats performs the actual file copy with progress tracking and timing for os.File.
+//
+//nolint:lll // Long function signature with many parameters
 func osCopyLoopWithStats(sourceFile, destFile *os.File, stats *CopyStats, sourceSize int64, srcPath string, progress ProgressCallback, cancelChan <-chan struct{}) (int64, error) {
 	var written int64
 
 	buf := make([]byte, BufferSize)
 
 	var (
-		nr, nw int
+		nr, nw int //nolint:varnamelen // nr/nw are idiomatic for bytes read/written
 		err    error
 	)
 
@@ -487,15 +489,17 @@ func osCopyLoopWithStats(sourceFile, destFile *os.File, stats *CopyStats, source
 }
 
 // osSimpleCopyLoop performs a basic file copy with progress tracking for os.File.
+//
+//nolint:lll // Long function signature with many parameters
 func osSimpleCopyLoop(sourceFile, destFile *os.File, sourceSize int64, srcPath string, progress ProgressCallback) (int64, error) {
 	var written int64
 
 	buf := make([]byte, BufferSize)
 
 	for {
-		nr, err := sourceFile.Read(buf)
+		nr, err := sourceFile.Read(buf) //nolint:varnamelen // nr is idiomatic for bytes read
 		if nr > 0 {
-			nw, err := destFile.Write(buf[0:nr])
+			nw, err := destFile.Write(buf[0:nr]) //nolint:varnamelen // nw is idiomatic for bytes written
 			if err != nil {
 				return written, fmt.Errorf("failed to write to destination: %w", err)
 			}

@@ -1,3 +1,4 @@
+//nolint:varnamelen // Test files use idiomatic short variable names (t, g, etc.)
 package screens_test
 
 import (
@@ -5,102 +6,36 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
+	"github.com/charmbracelet/bubbles/spinner" //nolint:depguard // Needed for TUI testing
+	tea "github.com/charmbracelet/bubbletea"   //nolint:depguard // Needed for TUI testing
+	. "github.com/onsi/gomega"                 //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/screens"
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-func TestSyncScreenNew(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSyncScreen(engine)
-
-	g.Expect(screen).ShouldNot(BeNil())
-
-	// Call Init to ensure coverage
-	cmd := screen.Init()
-	g.Expect(cmd).ShouldNot(BeNil())
-}
-
-func TestSyncScreenView(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSyncScreen(engine)
-
-	// Test View rendering
-	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Syncing Files"))
-}
-
-func TestSyncScreenUpdate(t *testing.T) {
+func TestSyncScreenCancelled(t *testing.T) {
 	t.Parallel()
 
 	engine := syncengine.NewEngine("/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
-	// Test with nil message
-	updatedModel, _ := screen.Update(nil)
-
-	g := NewWithT(t)
-	g.Expect(updatedModel).ShouldNot(BeNil())
-}
-
-func TestSyncScreenWindowSize(t *testing.T) {
-	t.Parallel()
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSyncScreen(engine)
-
-	// Send WindowSizeMsg
-	msg := tea.WindowSizeMsg{
-		Width:  100,
-		Height: 50,
-	}
-
-	updatedModel, _ := screen.Update(msg)
-	g := NewWithT(t)
-	g.Expect(updatedModel).ShouldNot(BeNil())
-}
-
-func TestSyncScreenKeyMsg(t *testing.T) {
-	t.Parallel()
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSyncScreen(engine)
-
-	// Test Ctrl+C
+	// Cancel the sync
 	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
 	updatedModel, _ := screen.Update(ctrlCMsg)
 
 	g := NewWithT(t)
-	g.Expect(updatedModel).ShouldNot(BeNil())
 
-	// Test 'q' key
-	qMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
-	updatedModel, _ = screen.Update(qMsg)
-	g.Expect(updatedModel).ShouldNot(BeNil())
-}
+	syncScreen, ok := updatedModel.(screens.SyncScreen)
+	g.Expect(ok).Should(BeTrue())
 
-func TestSyncScreenSyncComplete(t *testing.T) {
-	t.Parallel()
+	screen = &syncScreen
 
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSyncScreen(engine)
+	// Then complete it
+	completeMsg := shared.SyncCompleteMsg{}
+	updatedModel, cmd := screen.Update(completeMsg)
 
-	// Send SyncCompleteMsg
-	msg := shared.SyncCompleteMsg{}
-
-	updatedModel, cmd := screen.Update(msg)
-
-	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
 	g.Expect(cmd).ShouldNot(BeNil())
 }
@@ -123,6 +58,39 @@ func TestSyncScreenError(t *testing.T) {
 	g.Expect(cmd).ShouldNot(BeNil())
 }
 
+func TestSyncScreenKeyMsg(t *testing.T) {
+	t.Parallel()
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Test Ctrl+C
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	updatedModel, _ := screen.Update(ctrlCMsg)
+
+	g := NewWithT(t)
+	g.Expect(updatedModel).ShouldNot(BeNil())
+
+	// Test 'q' key
+	qMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	updatedModel, _ = screen.Update(qMsg)
+	g.Expect(updatedModel).ShouldNot(BeNil())
+}
+
+func TestSyncScreenNew(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	g.Expect(screen).ShouldNot(BeNil())
+
+	// Call Init to ensure coverage
+	cmd := screen.Init()
+	g.Expect(cmd).ShouldNot(BeNil())
+}
+
 func TestSyncScreenSpinnerTick(t *testing.T) {
 	t.Parallel()
 
@@ -139,6 +107,47 @@ func TestSyncScreenSpinnerTick(t *testing.T) {
 
 	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
+}
+
+func TestSyncScreenSyncComplete(t *testing.T) {
+	t.Parallel()
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Send SyncCompleteMsg
+	msg := shared.SyncCompleteMsg{}
+
+	updatedModel, cmd := screen.Update(msg)
+
+	g := NewWithT(t)
+	g.Expect(updatedModel).ShouldNot(BeNil())
+	g.Expect(cmd).ShouldNot(BeNil())
+}
+
+func TestSyncScreenUpdate(t *testing.T) {
+	t.Parallel()
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Test with nil message
+	updatedModel, _ := screen.Update(nil)
+
+	g := NewWithT(t)
+	g.Expect(updatedModel).ShouldNot(BeNil())
+}
+
+func TestSyncScreenView(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSyncScreen(engine)
+
+	// Test View rendering
+	view := screen.View()
+	g.Expect(view).Should(ContainSubstring("Syncing Files"))
 }
 
 func TestSyncScreenViewWithStatus(t *testing.T) {
@@ -166,27 +175,19 @@ func TestSyncScreenViewWithStatus(t *testing.T) {
 	g.Expect(view).ShouldNot(BeEmpty())
 }
 
-func TestSyncScreenCancelled(t *testing.T) {
+func TestSyncScreenWindowSize(t *testing.T) {
 	t.Parallel()
 
 	engine := syncengine.NewEngine("/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
-	// Cancel the sync
-	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
-	updatedModel, _ := screen.Update(ctrlCMsg)
+	// Send WindowSizeMsg
+	msg := tea.WindowSizeMsg{
+		Width:  100,
+		Height: 50,
+	}
 
+	updatedModel, _ := screen.Update(msg)
 	g := NewWithT(t)
-
-	syncScreen, ok := updatedModel.(screens.SyncScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	screen = &syncScreen
-
-	// Then complete it
-	completeMsg := shared.SyncCompleteMsg{}
-	updatedModel, cmd := screen.Update(completeMsg)
-
 	g.Expect(updatedModel).ShouldNot(BeNil())
-	g.Expect(cmd).ShouldNot(BeNil())
 }

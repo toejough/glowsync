@@ -1,3 +1,4 @@
+//nolint:varnamelen // Test files use idiomatic short variable names (t, g, etc.)
 package fileops_test
 
 //go:generate impgen filesystem.FileSystem

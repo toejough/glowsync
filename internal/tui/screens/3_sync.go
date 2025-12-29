@@ -13,11 +13,6 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-const (
-	// maxRecentFilesToShow is the maximum number of recent files to display
-	maxRecentFilesToShow = 5
-)
-
 // SyncScreen handles the file synchronization process
 type SyncScreen struct {
 	engine          *syncengine.Engine
@@ -114,11 +109,11 @@ func (s SyncScreen) getBottleneckInfo() string {
 	}
 
 	switch s.status.Bottleneck {
-	case "source":
+	case shared.StateSource:
 		return " 🔴 source-limited"
-	case "destination":
+	case shared.StateDestination:
 		return " 🟡 dest-limited"
-	case "balanced":
+	case shared.StateBalanced:
 		return " 🟢 balanced"
 	default:
 		return ""
@@ -138,7 +133,7 @@ func (s SyncScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 	// Transition to summary screen with error
 	return s, func() tea.Msg {
 		return shared.TransitionToSummaryMsg{
-			FinalState: "error",
+			FinalState: shared.StateError,
 			Err:        msg.Err,
 		}
 	}
@@ -174,9 +169,9 @@ func (s SyncScreen) handleSyncComplete() (tea.Model, tea.Cmd) {
 	}
 
 	// Determine final state
-	finalState := "complete"
+	finalState := shared.StateComplete
 	if s.cancelled {
-		finalState = "cancelled"
+		finalState = shared.StateCancelled
 	}
 
 	// Transition to summary screen
@@ -495,3 +490,9 @@ func (s SyncScreen) startSync() tea.Cmd {
 func (s SyncScreen) truncatePath(path string, maxWidth int) string {
 	return shared.TruncatePath(path, maxWidth)
 }
+
+// unexported constants.
+const (
+	// maxRecentFilesToShow is the maximum number of recent files to display
+	maxRecentFilesToShow = 5
+)
