@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/tui/shared"
+	"github.com/joe/copy-files/pkg/errors"
 )
 
 // InputScreen handles path input from the user
@@ -22,7 +23,7 @@ type InputScreen struct {
 	completions     []string
 	completionIndex int
 	showCompletions bool
-	validationError string
+	validationError error
 }
 
 // NewInputScreen creates a new input screen
@@ -203,7 +204,7 @@ func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 
 		err := s.config.ValidatePaths()
 		if err != nil {
-			s.validationError = err.Error()
+			s.validationError = err
 			return s, nil
 		}
 
@@ -236,7 +237,7 @@ func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.destInput.SetValue("")
 		}
 		s.showCompletions = false
-		s.validationError = ""
+		s.validationError = nil
 		return s, nil
 	case tea.KeyDown:
 		return s.moveToNextField()
@@ -260,7 +261,7 @@ func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return s.moveToPreviousField()
 	default:
 		s.showCompletions = false
-		s.validationError = "" // Clear error when user types
+		s.validationError = nil // Clear error when user types
 	}
 
 	// Update the focused input
@@ -388,7 +389,7 @@ func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
 	}
 
 	s.showCompletions = false
-	s.validationError = "" // Clear error when navigating
+	s.validationError = nil // Clear error when navigating
 
 	return s, nil
 }
@@ -410,7 +411,7 @@ func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
 	}
 
 	s.showCompletions = false
-	s.validationError = "" // Clear error when navigating
+	s.validationError = nil // Clear error when navigating
 
 	return s, nil
 }
@@ -444,8 +445,25 @@ func (s InputScreen) renderInputView() string {
 		s.patternInput.View() + "\n"
 
 	// Show validation error if present
-	if s.validationError != "" {
-		content += "\n" + shared.RenderError("Error: "+s.validationError) + "\n"
+	if s.validationError != nil {
+		enricher := errors.NewEnricher()
+
+		// Determine the path to use for enrichment context
+		var affectedPath string
+		if s.focusIndex == 0 {
+			affectedPath = s.sourceInput.Value()
+		} else {
+			affectedPath = s.destInput.Value()
+		}
+
+		enrichedErr := enricher.Enrich(s.validationError, affectedPath)
+		content += "\n" + shared.RenderError("Error: "+enrichedErr.Error()) + "\n"
+
+		// Show suggestions if available
+		suggestions := errors.FormatSuggestions(enrichedErr)
+		if suggestions != "" {
+			content += suggestions + "\n"
+		}
 	}
 
 	content += "\n" +

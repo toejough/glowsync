@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/shared"
+	"github.com/joe/copy-files/pkg/errors"
 )
 
 // SyncScreen handles the file synchronization process
@@ -229,6 +230,61 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	return s, nil
 }
 
+// ============================================================================
+// Rendering
+// ============================================================================
+
+func (s SyncScreen) renderCancellationProgress() string {
+	var builder strings.Builder
+
+	// Header with spinner
+	builder.WriteString(shared.RenderTitle("🚫 Cancelling Sync"))
+	builder.WriteString("\n\n")
+
+	// Spinner with status message
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" Waiting for workers to finish...\n\n")
+
+	// Show active worker count
+	activeWorkers := 0
+	if s.status != nil {
+		activeWorkers = s.status.ActiveWorkers
+	}
+
+	fmt.Fprintf(&builder, "Active workers: %d\n\n", activeWorkers)
+
+	// Show files being finalized
+	builder.WriteString(shared.RenderLabel("Files being finalized:"))
+	builder.WriteString("\n")
+
+	if s.status != nil && len(s.status.CurrentFiles) > 0 {
+		// Show up to 3 files
+		maxFiles := 3
+		filesToShow := min(len(s.status.CurrentFiles), maxFiles)
+
+		for i := range filesToShow {
+			builder.WriteString("  • ")
+			builder.WriteString(s.status.CurrentFiles[i])
+			builder.WriteString("\n")
+		}
+
+		// Show overflow message if there are more files
+		if len(s.status.CurrentFiles) > maxFiles {
+			builder.WriteString(shared.RenderDim(fmt.Sprintf("  ... and %d more files\n", len(s.status.CurrentFiles)-maxFiles)))
+		}
+	} else {
+		builder.WriteString(shared.RenderDim("  (none)\n"))
+	}
+
+	builder.WriteString("\n")
+
+	// Force-quit hint
+	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
+	builder.WriteString("\n")
+
+	return shared.RenderBox(builder.String())
+}
+
 func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToShow int) {
 	// Count how many files are actually copying and display them
 	totalCopying := 0
@@ -413,79 +469,39 @@ func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 		startIdx = len(s.status.Errors) - maxErrors
 	}
 
+	// Create enricher for actionable error messages
+	enricher := errors.NewEnricher()
+
 	maxWidth := s.getMaxPathWidth()
 	for i := startIdx; i < len(s.status.Errors); i++ {
 		fileErr := s.status.Errors[i]
 		fmt.Fprintf(builder, "  %s %s\n",
 			shared.ErrorSymbol(),
 			shared.FileItemErrorStyle().Render(s.truncatePath(fileErr.FilePath, maxWidth)))
+
+		// Enrich the error with actionable suggestions
+		enrichedErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
+
 		// Truncate error message if too long
-		errMsg := fileErr.Error.Error()
+		errMsg := enrichedErr.Error()
 		if len(errMsg) > maxWidth {
 			errMsg = errMsg[:maxWidth-3] + "..."
 		}
 
 		fmt.Fprintf(builder, "    %s\n", errMsg)
+
+		// Show suggestions if available
+		suggestions := errors.FormatSuggestions(enrichedErr)
+		if suggestions != "" {
+			// Indent suggestions to align with error message
+			indentedSuggestions := "    " + strings.ReplaceAll(suggestions, "\n", "\n    ")
+			fmt.Fprintf(builder, "%s\n", indentedSuggestions)
+		}
 	}
 
 	if len(s.status.Errors) > maxErrors {
 		fmt.Fprintf(builder, "  ... and %d more (see completion screen)\n", len(s.status.Errors)-maxErrors)
 	}
-}
-
-// ============================================================================
-// Rendering
-// ============================================================================
-
-func (s SyncScreen) renderCancellationProgress() string {
-	var builder strings.Builder
-
-	// Header with spinner
-	builder.WriteString(shared.RenderTitle("🚫 Cancelling Sync"))
-	builder.WriteString("\n\n")
-
-	// Spinner with status message
-	builder.WriteString(s.spinner.View())
-	builder.WriteString(" Waiting for workers to finish...\n\n")
-
-	// Show active worker count
-	activeWorkers := 0
-	if s.status != nil {
-		activeWorkers = s.status.ActiveWorkers
-	}
-
-	fmt.Fprintf(&builder, "Active workers: %d\n\n", activeWorkers)
-
-	// Show files being finalized
-	builder.WriteString(shared.RenderLabel("Files being finalized:"))
-	builder.WriteString("\n")
-
-	if s.status != nil && len(s.status.CurrentFiles) > 0 {
-		// Show up to 3 files
-		maxFiles := 3
-		filesToShow := min(len(s.status.CurrentFiles), maxFiles)
-
-		for i := range filesToShow {
-			builder.WriteString("  • ")
-			builder.WriteString(s.status.CurrentFiles[i])
-			builder.WriteString("\n")
-		}
-
-		// Show overflow message if there are more files
-		if len(s.status.CurrentFiles) > maxFiles {
-			builder.WriteString(shared.RenderDim(fmt.Sprintf("  ... and %d more files\n", len(s.status.CurrentFiles)-maxFiles)))
-		}
-	} else {
-		builder.WriteString(shared.RenderDim("  (none)\n"))
-	}
-
-	builder.WriteString("\n")
-
-	// Force-quit hint
-	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
-	builder.WriteString("\n")
-
-	return shared.RenderBox(builder.String())
 }
 
 func (s SyncScreen) renderSyncingView() string {

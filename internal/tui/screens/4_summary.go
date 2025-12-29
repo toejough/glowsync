@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/shared"
+	"github.com/joe/copy-files/pkg/errors"
 )
 
 // SummaryScreen displays the final results
@@ -132,6 +133,9 @@ func (s SummaryScreen) renderCancelledErrors(builder *strings.Builder) {
 	builder.WriteString(shared.RenderError("Errors:"))
 	builder.WriteString("\n")
 
+	// Create enricher for actionable error messages
+	enricher := errors.NewEnricher()
+
 	// Show up to 5 errors
 	maxErrors := 5
 	for i, fileErr := range s.status.Errors {
@@ -142,10 +146,21 @@ func (s SummaryScreen) renderCancelledErrors(builder *strings.Builder) {
 			break
 		}
 
+		// Enrich each error
+		enrichedErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
+
 		fmt.Fprintf(builder, "  %s %s: %v\n",
 			shared.ErrorSymbol(),
 			shared.FileItemErrorStyle().Render(fileErr.FilePath),
-			fileErr.Error)
+			enrichedErr)
+
+		// Show suggestions for this error
+		suggestions := errors.FormatSuggestions(enrichedErr)
+		if suggestions != "" {
+			// Indent suggestions to align with error
+			indentedSuggestions := "    " + strings.ReplaceAll(suggestions, "\n", "\n    ")
+			fmt.Fprintf(builder, "%s\n", indentedSuggestions)
+		}
 	}
 }
 
@@ -248,6 +263,9 @@ func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
 	builder.WriteString(shared.RenderError("Errors:"))
 	builder.WriteString("\n")
 
+	// Create enricher for actionable error messages
+	enricher := errors.NewEnricher()
+
 	// Show up to 10 errors
 	maxErrors := 10
 	for i, fileErr := range s.status.Errors {
@@ -258,10 +276,21 @@ func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
 			break
 		}
 
+		// Enrich each error
+		enrichedErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
+
 		fmt.Fprintf(builder, "  %s %s: %v\n",
 			shared.ErrorSymbol(),
 			shared.FileItemErrorStyle().Render(fileErr.FilePath),
-			fileErr.Error)
+			enrichedErr)
+
+		// Show suggestions for this error
+		suggestions := errors.FormatSuggestions(enrichedErr)
+		if suggestions != "" {
+			// Indent suggestions to align with error
+			indentedSuggestions := "    " + strings.ReplaceAll(suggestions, "\n", "\n    ")
+			fmt.Fprintf(builder, "%s\n", indentedSuggestions)
+		}
 	}
 }
 
@@ -373,10 +402,25 @@ func (s SummaryScreen) renderErrorView() string {
 	builder.WriteString(shared.RenderError(shared.ErrorSymbol() + " Sync Failed"))
 	builder.WriteString("\n\n")
 
+	// Create enricher for actionable error messages
+	enricher := errors.NewEnricher()
+
 	if s.err != nil {
 		builder.WriteString(shared.RenderLabel("Error:"))
 		builder.WriteString("\n")
-		builder.WriteString(fmt.Sprintf("%v\n", s.err))
+
+		// Enrich the main error
+		enrichedErr := enricher.Enrich(s.err, "")
+
+		builder.WriteString(fmt.Sprintf("%v\n", enrichedErr))
+
+		// Show suggestions if available
+		suggestions := errors.FormatSuggestions(enrichedErr)
+		if suggestions != "" {
+			builder.WriteString(suggestions)
+			builder.WriteString("\n")
+		}
+
 		builder.WriteString("\n")
 	}
 
@@ -405,10 +449,21 @@ func (s SummaryScreen) renderErrorView() string {
 					break
 				}
 
+				// Enrich each additional error
+				enrichedFileErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
+
 				fmt.Fprintf(&builder, "  %s %s: %v\n",
 					shared.ErrorSymbol(),
 					shared.FileItemErrorStyle().Render(fileErr.FilePath),
-					fileErr.Error)
+					enrichedFileErr)
+
+				// Show suggestions for this error
+				fileSuggestions := errors.FormatSuggestions(enrichedFileErr)
+				if fileSuggestions != "" {
+					// Indent suggestions to align with error
+					indentedSuggestions := "    " + strings.ReplaceAll(fileSuggestions, "\n", "\n    ")
+					fmt.Fprintf(&builder, "%s\n", indentedSuggestions)
+				}
 			}
 
 			builder.WriteString("\n")
