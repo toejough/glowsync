@@ -47,6 +47,9 @@ type TransitionToAnalysisMsg struct {
 	DestPath   string
 }
 
+// TransitionToInputMsg is sent by AnalysisScreen when user presses Esc to go back
+type TransitionToInputMsg struct{}
+
 // TransitionToSummaryMsg is sent by SyncScreen or AnalysisScreen when done
 type TransitionToSummaryMsg struct {
 	FinalState string // "complete", "cancelled", "error"

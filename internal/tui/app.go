@@ -38,14 +38,14 @@ func (a AppModel) CurrentScreen() tea.Model {
 	return a.currentScreen
 }
 
-// LogPath returns the debug log path (for testing)
-func (a AppModel) LogPath() string {
-	return a.logPath
-}
-
 // Init implements tea.Model
 func (a AppModel) Init() tea.Cmd {
 	return a.currentScreen.Init()
+}
+
+// LogPath returns the debug log path (for testing)
+func (a AppModel) LogPath() string {
+	return a.logPath
 }
 
 // Update implements tea.Model
@@ -54,6 +54,8 @@ func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case shared.TransitionToAnalysisMsg:
 		return a.transitionToAnalysis(msg)
+	case shared.TransitionToInputMsg:
+		return a.transitionToInput()
 	case shared.TransitionToSyncMsg:
 		return a.transitionToSync(msg)
 	case shared.TransitionToSummaryMsg:
@@ -84,6 +86,13 @@ func (a AppModel) transitionToAnalysis(msg shared.TransitionToAnalysisMsg) (tea.
 
 	// Create analysis screen
 	a.currentScreen = screens.NewAnalysisScreen(a.config)
+
+	return a, a.currentScreen.Init()
+}
+
+func (a AppModel) transitionToInput() (tea.Model, tea.Cmd) {
+	// Create input screen with current config (preserves existing paths)
+	a.currentScreen = screens.NewInputScreen(a.config)
 
 	return a, a.currentScreen.Init()
 }

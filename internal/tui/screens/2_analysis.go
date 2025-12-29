@@ -61,6 +61,8 @@ func (s AnalysisScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		return s.handleWindowSize(msg)
+	case tea.KeyMsg:
+		return s.handleKeyMsg(msg)
 	case shared.EngineInitializedMsg:
 		return s.handleEngineInitialized(msg)
 	case shared.AnalysisCompleteMsg:
@@ -166,6 +168,22 @@ func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 			Err:        msg.Err,
 		}
 	}
+}
+
+func (s AnalysisScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" {
+		// Cancel analysis if running
+		if s.engine != nil {
+			s.engine.Cancel()
+		}
+
+		// Transition back to input screen
+		return s, func() tea.Msg {
+			return shared.TransitionToInputMsg{}
+		}
+	}
+
+	return s, nil
 }
 
 func (s AnalysisScreen) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
@@ -296,6 +314,10 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	// Show analysis log
 	s.renderAnalysisLog(&builder)
 
+	// Show help text
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Press Esc to change paths"))
+
 	return shared.RenderBox(builder.String())
 }
 
@@ -315,7 +337,9 @@ func (s AnalysisScreen) renderInitializingView() string {
 	builder.WriteString("\n\n")
 
 	builder.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
-	builder.WriteString("\n")
+	builder.WriteString("\n\n")
+
+	builder.WriteString(shared.RenderDim("Press Esc to change paths"))
 
 	return shared.RenderBox(builder.String())
 }

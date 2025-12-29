@@ -88,6 +88,29 @@ func TestAnalysisScreenError(t *testing.T) {
 	g.Expect(cmd).ShouldNot(BeNil())
 }
 
+func TestAnalysisScreenEscKeyReturnsToInput(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/source",
+		DestPath:   "/dest",
+	}
+	screen := screens.NewAnalysisScreen(cfg)
+
+	// Press Esc key
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	_, cmd := screen.Update(escMsg)
+
+	// Should return a command that sends TransitionToInputMsg
+	g.Expect(cmd).ShouldNot(BeNil(), "Esc key should return a transition command")
+
+	// Execute the command to get the message
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(shared.TransitionToInputMsg{}),
+		"Esc key should send TransitionToInputMsg")
+}
+
 func TestAnalysisScreenNew(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)

@@ -13,6 +13,34 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+func TestAppModelStoresLogPath(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		InteractiveMode: true,
+	}
+
+	model := tui.NewAppModel(cfg)
+
+	// Create an engine for the transition
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Send TransitionToSyncMsg with log path
+	msg := shared.TransitionToSyncMsg{
+		Engine:  engine,
+		LogPath: "/tmp/test-debug.log",
+	}
+
+	updatedModel, _ := model.Update(msg)
+
+	appModel, ok := updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel")
+
+	// Verify the log path was stored (we'll need a getter method)
+	g.Expect(appModel.LogPath()).Should(Equal("/tmp/test-debug.log"))
+}
+
 func TestAppModelTransitionToAnalysis(t *testing.T) {
 	t.Parallel()
 
@@ -40,6 +68,47 @@ func TestAppModelTransitionToAnalysis(t *testing.T) {
 	// Verify we transitioned to AnalysisScreen
 	_, isAnalysisScreen := model.CurrentScreen().(*screens.AnalysisScreen)
 	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen after TransitionToAnalysisMsg")
+}
+
+func TestAppModelTransitionToInput(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Start with config
+	cfg := &config.Config{
+		InteractiveMode: true,
+		SourcePath:      "/source",
+		DestPath:        "/dest",
+	}
+
+	model := tui.NewAppModel(cfg)
+
+	// Transition to analysis first
+	analysisMsg := shared.TransitionToAnalysisMsg{
+		SourcePath: "/source",
+		DestPath:   "/dest",
+	}
+	updatedModel, _ := model.Update(analysisMsg)
+	appModel, ok := updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel after analysis transition")
+
+	model = &appModel
+
+	// Verify we're on analysis screen
+	_, isAnalysisScreen := model.CurrentScreen().(*screens.AnalysisScreen)
+	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen after TransitionToAnalysisMsg")
+
+	// Now transition back to input with Esc
+	inputMsg := shared.TransitionToInputMsg{}
+	updatedModel, _ = model.Update(inputMsg)
+	appModel, ok = updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel after input transition")
+
+	model = &appModel
+
+	// Verify we're back on input screen
+	_, isInputScreen := model.CurrentScreen().(*screens.InputScreen)
+	g.Expect(isInputScreen).Should(BeTrue(), "Expected InputScreen after TransitionToInputMsg")
 }
 
 func TestAppModelTransitionToSummary(t *testing.T) {
@@ -115,34 +184,6 @@ func TestAppModelTransitionToSync(t *testing.T) {
 	// Verify we transitioned to SyncScreen
 	_, isSyncScreen := model.CurrentScreen().(*screens.SyncScreen)
 	g.Expect(isSyncScreen).Should(BeTrue(), "Expected SyncScreen after TransitionToSyncMsg")
-}
-
-func TestAppModelStoresLogPath(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{
-		InteractiveMode: true,
-	}
-
-	model := tui.NewAppModel(cfg)
-
-	// Create an engine for the transition
-	engine := syncengine.NewEngine("/source", "/dest")
-
-	// Send TransitionToSyncMsg with log path
-	msg := shared.TransitionToSyncMsg{
-		Engine:  engine,
-		LogPath: "/tmp/test-debug.log",
-	}
-
-	updatedModel, _ := model.Update(msg)
-
-	appModel, ok := updatedModel.(tui.AppModel)
-	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel")
-
-	// Verify the log path was stored (we'll need a getter method)
-	g.Expect(appModel.LogPath()).Should(Equal("/tmp/test-debug.log"))
 }
 
 func TestNewAppModelInteractiveMode(t *testing.T) {
