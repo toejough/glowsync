@@ -230,3 +230,64 @@ func TestValidatePaths(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateFilePattern(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+	}{
+		{
+			name:    "empty pattern is valid",
+			pattern: "",
+			wantErr: false,
+		},
+		{
+			name:    "simple wildcard",
+			pattern: "*.mov",
+			wantErr: false,
+		},
+		{
+			name:    "double star",
+			pattern: "**/*.mov",
+			wantErr: false,
+		},
+		{
+			name:    "brace expansion",
+			pattern: "*.{mov,mp4}",
+			wantErr: false,
+		},
+		{
+			name:    "complex pattern",
+			pattern: "videos/**/*.{mov,mp4,avi}",
+			wantErr: false,
+		},
+		{
+			name:    "invalid pattern - unclosed bracket",
+			pattern: "[invalid",
+			wantErr: true,
+		},
+		{
+			name:    "invalid pattern - unclosed brace",
+			pattern: "*.{mov",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := config.ValidateFilePattern(tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateFilePattern(%q) error = %v, wantErr %v", tt.pattern, err, tt.wantErr)
+			}
+
+			if err != nil && !tt.wantErr {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
