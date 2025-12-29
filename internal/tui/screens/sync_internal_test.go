@@ -218,6 +218,66 @@ func TestRenderSyncingErrors(t *testing.T) {
 	g.Expect(result).Should(BeEmpty())
 }
 
+func TestRenderSyncingErrors_WithEnrichedErrors(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	permissionErr := errors.New("permission denied: /path/to/file1.txt")
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			Errors: []syncengine.FileError{
+				{FilePath: "/path/to/file1.txt", Error: permissionErr},
+			},
+		},
+		width: 100,
+	}
+
+	var builder strings.Builder
+	screen.renderSyncingErrors(&builder)
+	result := builder.String()
+
+	// Should show error message
+	g.Expect(result).Should(ContainSubstring("Errors"))
+	g.Expect(result).Should(ContainSubstring("permission denied"))
+
+	// Should show actionable suggestions
+	g.Expect(result).Should(ContainSubstring("ls -la"))
+
+	// Should show category or other enrichment
+	// (The exact format depends on implementation, but we expect more than just the raw error)
+}
+
+func TestRenderSyncingErrors_WithMultipleEnrichedErrors(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	permissionErr := errors.New("permission denied")
+	diskErr := errors.New("no space left on device")
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			Errors: []syncengine.FileError{
+				{FilePath: "/path/to/file1.txt", Error: permissionErr},
+				{FilePath: "/path/to/file2.txt", Error: diskErr},
+			},
+		},
+		width: 100,
+	}
+
+	var builder strings.Builder
+	screen.renderSyncingErrors(&builder)
+	result := builder.String()
+
+	// Should show both errors
+	g.Expect(result).Should(ContainSubstring("permission denied"))
+	g.Expect(result).Should(ContainSubstring("no space left"))
+
+	// Should show suggestions for both error types
+	g.Expect(result).Should(ContainSubstring("ls -la")) // permission suggestion
+	g.Expect(result).Should(ContainSubstring("df"))     // disk space suggestion
+}
+
 func TestTruncatePath(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)

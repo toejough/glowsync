@@ -3,6 +3,7 @@ package screens_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,100 @@ import (
 	"github.com/joe/copy-files/internal/tui/screens"
 	"github.com/joe/copy-files/internal/tui/shared"
 )
+
+func TestSummaryScreenCtrlCQuitsApp(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
+
+	// Press Ctrl+C key
+	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := screen.Update(ctrlCMsg)
+
+	// Should return tea.Quit command
+	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
+
+	// Execute the command to verify it's tea.Quit
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
+		"Ctrl+C should send tea.QuitMsg")
+}
+
+func TestSummaryScreenDisplaysActionableDiskSpaceError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Create disk space error that should be enriched
+	diskErr := errors.New("write /dest/file.txt: no space left on device")
+	screen := screens.NewSummaryScreen(engine, shared.StateError, diskErr, "")
+
+	view := screen.View()
+
+	// Should display original error
+	g.Expect(view).Should(ContainSubstring("no space left on device"))
+
+	// Should display actionable suggestions with bullets
+	g.Expect(view).Should(ContainSubstring("•"))
+	g.Expect(view).Should(Or(
+		ContainSubstring("df -h"),
+		ContainSubstring("Free up space"),
+		ContainSubstring("disk usage"),
+	))
+}
+
+func TestSummaryScreenDisplaysActionablePathError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Create path error that should be enriched
+	pathErr := errors.New("stat /missing/path: no such file or directory")
+	screen := screens.NewSummaryScreen(engine, shared.StateError, pathErr, "")
+
+	view := screen.View()
+
+	// Should display original error
+	g.Expect(view).Should(ContainSubstring("no such file or directory"))
+
+	// Should display actionable suggestions with bullets
+	g.Expect(view).Should(ContainSubstring("•"))
+	g.Expect(view).Should(Or(
+		ContainSubstring("Verify the path"),
+		ContainSubstring("exists"),
+		ContainSubstring("parent directories"),
+	))
+}
+
+// Integration Tests for Actionable Error Enrichment
+
+func TestSummaryScreenDisplaysActionablePermissionError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Create permission error that should be enriched
+	permErr := errors.New("open /home/user/file.txt: permission denied")
+	screen := screens.NewSummaryScreen(engine, shared.StateError, permErr, "")
+
+	view := screen.View()
+
+	// Should display original error
+	g.Expect(view).Should(ContainSubstring("permission denied"))
+
+	// Should display actionable suggestions with bullets
+	g.Expect(view).Should(ContainSubstring("•"))
+	g.Expect(view).Should(Or(
+		ContainSubstring("permissions"),
+		ContainSubstring("ls -la"),
+		ContainSubstring("privileged user"),
+	))
+}
 
 func TestSummaryScreenDisplaysLogPath(t *testing.T) {
 	t.Parallel()
@@ -27,6 +122,46 @@ func TestSummaryScreenDisplaysLogPath(t *testing.T) {
 	// Should display the actual log path, not the hardcoded one
 	g.Expect(view).Should(ContainSubstring(logPath))
 	g.Expect(view).ShouldNot(ContainSubstring("copy-files-debug.log"))
+}
+
+func TestSummaryScreenDisplaysMultipleSuggestionsFormatted(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Create error that generates multiple suggestions
+	err := errors.New("permission denied")
+	screen := screens.NewSummaryScreen(engine, shared.StateError, err, "")
+
+	view := screen.View()
+
+	// Should have bullet-formatted suggestions
+	g.Expect(view).Should(ContainSubstring("•"))
+
+	// Should have multiple suggestions by counting bullet occurrences
+	suggestionCount := strings.Count(view, "•")
+	g.Expect(suggestionCount).Should(BeNumerically(">=", 2),
+		"Should display multiple suggestions")
+}
+
+func TestSummaryScreenEscReturnsToInput(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
+
+	// Press Esc key - should return to InputScreen
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	_, cmd := screen.Update(escMsg)
+
+	g.Expect(cmd).ShouldNot(BeNil(), "Esc should return a transition command")
+
+	// Execute the command to get the message
+	msg := cmd()
+	g.Expect(msg).Should(BeAssignableToTypeOf(shared.TransitionToInputMsg{}),
+		"Esc should send TransitionToInputMsg to start new session")
 }
 
 func TestSummaryScreenNewCancelled(t *testing.T) {
@@ -304,43 +439,4 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
-}
-
-func TestSummaryScreenEscReturnsToInput(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
-
-	// Press Esc key - should return to InputScreen
-	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
-	_, cmd := screen.Update(escMsg)
-
-	g.Expect(cmd).ShouldNot(BeNil(), "Esc should return a transition command")
-
-	// Execute the command to get the message
-	msg := cmd()
-	g.Expect(msg).Should(BeAssignableToTypeOf(shared.TransitionToInputMsg{}),
-		"Esc should send TransitionToInputMsg to start new session")
-}
-
-func TestSummaryScreenCtrlCQuitsApp(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	engine := syncengine.NewEngine("/source", "/dest")
-	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
-
-	// Press Ctrl+C key
-	ctrlCMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
-	_, cmd := screen.Update(ctrlCMsg)
-
-	// Should return tea.Quit command
-	g.Expect(cmd).ShouldNot(BeNil(), "Ctrl+C should return a quit command")
-
-	// Execute the command to verify it's tea.Quit
-	msg := cmd()
-	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
-		"Ctrl+C should send tea.QuitMsg")
 }
