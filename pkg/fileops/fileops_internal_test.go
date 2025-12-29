@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 )
 
 // TestOsCopyLoopWithStats tests the internal osCopyLoopWithStats helper function.
@@ -18,18 +18,22 @@ func TestOsCopyLoopWithStats(t *testing.T) {
 	dstPath := tmpDir + "/dest.txt"
 
 	content := []byte("test content for copy loop")
-	if err := os.WriteFile(srcPath, content, 0o600); err != nil {
+
+	err := os.WriteFile(srcPath, content, 0o600)
+	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
 	// Open source file
 	sourceFile, err := os.Open(srcPath)
 	g.Expect(err).ShouldNot(HaveOccurred())
+
 	defer sourceFile.Close()
 
 	// Create destination file
 	destFile, err := os.Create(dstPath)
 	g.Expect(err).ShouldNot(HaveOccurred())
+
 	defer destFile.Close()
 
 	// Create stats
@@ -45,7 +49,9 @@ func TestOsCopyLoopWithStats(t *testing.T) {
 	g.Expect(stats.WriteTime).Should(Not(BeZero()))
 
 	// Verify file was copied correctly
-	destFile.Close()
+	err = destFile.Close()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
 	copiedContent, err := os.ReadFile(dstPath)
 	g.Expect(err).ShouldNot(HaveOccurred())
 	g.Expect(copiedContent).Should(Equal(content))
@@ -63,18 +69,22 @@ func TestOsCopyLoopWithStatsCancel(t *testing.T) {
 
 	// Create a larger file to ensure we can cancel mid-copy
 	content := make([]byte, 1024*1024) // 1MB
-	if err := os.WriteFile(srcPath, content, 0o600); err != nil {
+
+	err := os.WriteFile(srcPath, content, 0o600)
+	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
 	// Open source file
 	sourceFile, err := os.Open(srcPath)
 	g.Expect(err).ShouldNot(HaveOccurred())
+
 	defer sourceFile.Close()
 
 	// Create destination file
 	destFile, err := os.Create(dstPath)
 	g.Expect(err).ShouldNot(HaveOccurred())
+
 	defer destFile.Close()
 
 	// Create stats
@@ -91,4 +101,3 @@ func TestOsCopyLoopWithStatsCancel(t *testing.T) {
 	g.Expect(err).Should(HaveOccurred())
 	g.Expect(err.Error()).Should(ContainSubstring("copy cancelled"))
 }
-

@@ -143,6 +143,7 @@ func (m *TimeProviderImpMock) NewTicker(d time.Duration) syncengine.Ticker {
 	call := &TimeProviderImpNewTickerCall{
 		responseChan: responseChan,
 		d:            d,
+		t:            m.imp.T,
 	}
 
 	callEvent := &TimeProviderImpCall{
@@ -167,6 +168,7 @@ func (m *TimeProviderImpMock) Now() time.Time {
 
 	call := &TimeProviderImpNowCall{
 		responseChan: responseChan,
+		t:            m.imp.T,
 	}
 
 	callEvent := &TimeProviderImpCall{
@@ -267,6 +269,7 @@ type TimeProviderImpNewTickerCall struct {
 	responseChan chan TimeProviderImpNewTickerCallResponse
 	done         bool
 	d            time.Duration
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -332,6 +335,7 @@ func (bldr *TimeProviderImpNowBuilder) InjectResult(result time.Time) *TimeProvi
 type TimeProviderImpNowCall struct {
 	responseChan chan TimeProviderImpNowCallResponse
 	done         bool
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.

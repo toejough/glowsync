@@ -21,8 +21,6 @@ type AnalysisScreen struct {
 	status          *syncengine.Status
 	spinner         spinner.Model
 	overallProgress progress.Model
-	width           int
-	height          int
 	state           string // "initializing" or "analyzing"
 	lastUpdate      time.Time
 }
@@ -31,7 +29,7 @@ type AnalysisScreen struct {
 func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor)
+	s.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
 
 	overallProg := progress.New(
 		progress.WithDefaultGradient(),
@@ -80,26 +78,38 @@ func (s AnalysisScreen) View() string {
 	if s.state == "initializing" {
 		return s.renderInitializingView()
 	}
+
 	return s.renderAnalyzingView()
 }
 
-// ============================================================================
-// Message Handlers
-// ============================================================================
+func (s AnalysisScreen) getAnalysisPhaseText() string {
+	switch s.status.AnalysisPhase {
+	case "counting_source":
+		return "Counting files in source..."
+	case "scanning_source":
+		return "Scanning source directory..."
+	case "counting_dest":
+		return "Counting files in destination..."
+	case "scanning_dest":
+		return "Scanning destination directory..."
+	case "comparing":
+		return "Comparing files to determine sync plan..."
+	case "deleting":
+		return "Checking for files to delete..."
+	case shared.StateComplete:
+		return "Analysis complete!"
+	default:
+		return "Initializing..."
+	}
+}
 
-func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
-	s.width = msg.Width
-	s.height = msg.Height
-	// Set progress bar width
-	progressWidth := msg.Width - 10
-	if progressWidth < 20 {
-		progressWidth = 20
+func (s AnalysisScreen) handleAnalysisComplete() (tea.Model, tea.Cmd) {
+	// Transition to sync screen
+	return s, func() tea.Msg {
+		return shared.TransitionToSyncMsg{
+			Engine: s.engine,
+		}
 	}
-	if progressWidth > 100 {
-		progressWidth = 100
-	}
-	s.overallProgress.Width = progressWidth
-	return s, nil
 }
 
 func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg) (tea.Model, tea.Cmd) {
@@ -119,29 +129,24 @@ func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg)
 
 	// Start analysis
 	s.state = "analyzing"
+
 	return s, tea.Batch(
 		func() tea.Msg {
 			// Enable file logging for debugging (non-fatal if it fails)
 			logPath := "copy-files-debug.log"
 			_ = engine.EnableFileLogging(logPath)
+
 			return nil
 		},
 		func() tea.Msg {
-			if err := engine.Analyze(); err != nil {
+			err := engine.Analyze()
+			if err != nil {
 				return shared.ErrorMsg{Err: err}
 			}
+
 			return shared.AnalysisCompleteMsg{}
 		},
 	)
-}
-
-func (s AnalysisScreen) handleAnalysisComplete() (tea.Model, tea.Cmd) {
-	// Transition to sync screen
-	return s, func() tea.Msg {
-		return shared.TransitionToSyncMsg{
-			Engine: s.engine,
-		}
-	}
 }
 
 func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
@@ -156,7 +161,9 @@ func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 
 func (s AnalysisScreen) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
 	s.spinner, cmd = s.spinner.Update(msg)
+
 	return s, cmd
 }
 
@@ -169,7 +176,21 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 			s.lastUpdate = now
 		}
 	}
+
 	return s, tickCmd()
+}
+
+// ============================================================================
+// Message Handlers
+// ============================================================================
+
+func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	// Set progress bar width
+	progressWidth := min(max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold), shared.ProgressDetailedLogInterval)
+
+	s.overallProgress.Width = progressWidth
+
+	return s, nil
 }
 
 // ============================================================================
@@ -184,25 +205,47 @@ func (s AnalysisScreen) initializeEngine() tea.Cmd {
 	}
 }
 
-// ============================================================================
-// Rendering
-// ============================================================================
+func (s AnalysisScreen) renderAnalysisLog(b *strings.Builder) {
+	if len(s.status.AnalysisLog) == 0 {
+		return
+	}
 
-func (s AnalysisScreen) renderInitializingView() string {
-	var b strings.Builder
-
-	b.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
-	b.WriteString("\n\n")
-
-	b.WriteString(s.spinner.View())
-	b.WriteString(" ")
-	b.WriteString(shared.RenderLabel("Initializing..."))
-	b.WriteString("\n\n")
-
-	b.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
+	b.WriteString(shared.RenderLabel("Activity Log:"))
 	b.WriteString("\n")
 
-	return shared.RenderBox(b.String())
+	// Show last 10 log entries
+	startIdx := 0
+	if len(s.status.AnalysisLog) > shared.ProgressUpdateInterval {
+		startIdx = len(s.status.AnalysisLog) - shared.ProgressUpdateInterval
+	}
+
+	for i := startIdx; i < len(s.status.AnalysisLog); i++ {
+		fmt.Fprintf(b, "  %s\n", s.status.AnalysisLog[i])
+	}
+}
+
+func (s AnalysisScreen) renderAnalysisProgress(b *strings.Builder) {
+	switch s.status.AnalysisPhase {
+	case "counting_source", "counting_dest":
+		// Counting phase - show count so far
+		if s.status.ScannedFiles > 0 {
+			fmt.Fprintf(b, "Found: %d items so far...\n\n", s.status.ScannedFiles)
+		}
+	case "scanning_source", "scanning_dest", "comparing", "deleting":
+		if s.status.TotalFilesToScan > 0 {
+			// Show progress bar
+			scanPercent := float64(s.status.ScannedFiles) / float64(s.status.TotalFilesToScan)
+			b.WriteString(s.overallProgress.ViewAs(scanPercent))
+			b.WriteString("\n")
+			fmt.Fprintf(b, "%d / %d items (%.1f%%)\n\n",
+				s.status.ScannedFiles,
+				s.status.TotalFilesToScan,
+				scanPercent*shared.ProgressPercentageScale)
+		} else if s.status.ScannedFiles > 0 {
+			// Fallback: show count without progress bar
+			fmt.Fprintf(b, "Processed: %d items\n\n", s.status.ScannedFiles)
+		}
+	}
 }
 
 func (s AnalysisScreen) renderAnalyzingView() string {
@@ -214,6 +257,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	if s.status == nil {
 		b.WriteString(s.spinner.View())
 		b.WriteString(" Scanning directories and comparing files...\n\n")
+
 		return shared.RenderBox(b.String())
 	}
 
@@ -245,68 +289,25 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	return shared.RenderBox(b.String())
 }
 
-func (s AnalysisScreen) getAnalysisPhaseText() string {
-	switch s.status.AnalysisPhase {
-	case "counting_source":
-		return "Counting files in source..."
-	case "scanning_source":
-		return "Scanning source directory..."
-	case "counting_dest":
-		return "Counting files in destination..."
-	case "scanning_dest":
-		return "Scanning destination directory..."
-	case "comparing":
-		return "Comparing files to determine sync plan..."
-	case "deleting":
-		return "Checking for files to delete..."
-	case "complete":
-		return "Analysis complete!"
-	default:
-		return "Initializing..."
-	}
-}
+// ============================================================================
+// Rendering
+// ============================================================================
 
-func (s AnalysisScreen) renderAnalysisProgress(b *strings.Builder) {
-	switch s.status.AnalysisPhase {
-	case "counting_source", "counting_dest":
-		// Counting phase - show count so far
-		if s.status.ScannedFiles > 0 {
-			b.WriteString(fmt.Sprintf("Found: %d items so far...\n\n", s.status.ScannedFiles))
-		}
-	case "scanning_source", "scanning_dest", "comparing", "deleting":
-		if s.status.TotalFilesToScan > 0 {
-			// Show progress bar
-			scanPercent := float64(s.status.ScannedFiles) / float64(s.status.TotalFilesToScan)
-			b.WriteString(s.overallProgress.ViewAs(scanPercent))
-			b.WriteString("\n")
-			b.WriteString(fmt.Sprintf("%d / %d items (%.1f%%)\n\n",
-				s.status.ScannedFiles,
-				s.status.TotalFilesToScan,
-				scanPercent*100))
-		} else if s.status.ScannedFiles > 0 {
-			// Fallback: show count without progress bar
-			b.WriteString(fmt.Sprintf("Processed: %d items\n\n", s.status.ScannedFiles))
-		}
-	}
-}
+func (s AnalysisScreen) renderInitializingView() string {
+	var b strings.Builder
 
-func (s AnalysisScreen) renderAnalysisLog(b *strings.Builder) {
-	if len(s.status.AnalysisLog) == 0 {
-		return
-	}
+	b.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
+	b.WriteString("\n\n")
 
-	b.WriteString(shared.RenderLabel("Activity Log:"))
+	b.WriteString(s.spinner.View())
+	b.WriteString(" ")
+	b.WriteString(shared.RenderLabel("Initializing..."))
+	b.WriteString("\n\n")
+
+	b.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
 	b.WriteString("\n")
 
-	// Show last 10 log entries
-	startIdx := 0
-	if len(s.status.AnalysisLog) > 10 {
-		startIdx = len(s.status.AnalysisLog) - 10
-	}
-
-	for i := startIdx; i < len(s.status.AnalysisLog); i++ {
-		b.WriteString(fmt.Sprintf("  %s\n", s.status.AnalysisLog[i]))
-	}
+	return shared.RenderBox(b.String())
 }
 
 // ============================================================================
@@ -316,8 +317,7 @@ func (s AnalysisScreen) renderAnalysisLog(b *strings.Builder) {
 type tickMsg time.Time
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+	return tea.Tick(shared.ProgressDetailedLogInterval*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
-

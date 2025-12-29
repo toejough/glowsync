@@ -2,111 +2,150 @@ package shared
 
 import "github.com/charmbracelet/lipgloss"
 
-// ============================================================================
-// Color Palette
-// ============================================================================
-
-var (
-	// Primary colors
-	PrimaryColor = lipgloss.Color("205") // Pink/purple
-	AccentColor  = lipgloss.Color("62")  // Blue
-
-	// Status colors
-	SuccessColor = lipgloss.Color("42")  // Green
-	ErrorColor   = lipgloss.Color("196") // Red
-	WarningColor = lipgloss.Color("226") // Yellow
-
-	// Text colors
-	DimColor    = lipgloss.Color("240") // Dark gray
-	NormalColor = lipgloss.Color("252") // Light gray
-	SubtleColor = lipgloss.Color("241") // Medium gray
-	HighlightColor = lipgloss.Color("86") // Cyan
+// Exported constants.
+const (
+	// DefaultPadding is the default padding for UI elements
+	DefaultPadding = 2
+	// KeyCtrlC is the key binding for cancellation
+	KeyCtrlC                    = "ctrl+c"
+	ProgressBarWidth            = 40  // Width of progress bars
+	ProgressDetailedLogInterval = 100 // Log detailed progress every N files
+	ProgressEllipsisLength      = 3   // Length of ellipsis for truncated paths
+	ProgressHalfDivisor         = 2   // Divisor for calculating half values
+	ProgressLogThreshold        = 20  // Log progress when N or more files processed
+	ProgressPercentageScale     = 100 // Scale for percentage calculations
+	// ProgressUpdateInterval is how often to update progress (every N files)
+	ProgressUpdateInterval = 10
+	// PromptArrow is the arrow character used in prompts
+	PromptArrow    = "▶ "
+	StateBalanced  = "balanced"
+	StateCancelled = "cancelled"
+	// StateComplete indicates the operation is complete
+	StateComplete    = "complete"
+	StateDestination = "destination"
+	StateError       = "error"
+	StateSource      = "source"
 )
 
-// ============================================================================
-// Text Styles
-// ============================================================================
-
-var (
-	// Title styles
-	TitleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(PrimaryColor).
-			MarginBottom(1)
-
-	SubtitleStyle = lipgloss.NewStyle().
-			Foreground(SubtleColor).
-			MarginBottom(1)
-
-	// Label and content styles
-	LabelStyle = lipgloss.NewStyle().
-			Foreground(HighlightColor).
-			Bold(true)
-
-	DimStyle = lipgloss.NewStyle().
-			Foreground(DimColor)
-
-	// Status styles
-	ErrorStyle = lipgloss.NewStyle().
-			Foreground(ErrorColor).
-			Bold(true)
-
-	SuccessStyle = lipgloss.NewStyle().
-			Foreground(SuccessColor).
-			Bold(true)
-
-	WarningStyle = lipgloss.NewStyle().
-			Foreground(WarningColor).
-			Bold(true)
-)
+func AccentColor() lipgloss.Color { return lipgloss.Color(accentColorCode) }
 
 // ============================================================================
 // Box and Container Styles
 // ============================================================================
 
-var (
-	// Box with border
-	BoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(AccentColor).
-			Padding(1, 2)
+// BoxStyle returns the style for boxes with padding
+func BoxStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(AccentColor()).
+		Padding(1, DefaultPadding)
+}
 
-	// Inline box (no padding)
-	InlineBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(AccentColor)
-)
-
-// ============================================================================
-// File Item Styles (for file lists)
-// ============================================================================
-
-var (
-	FileItemStyle = lipgloss.NewStyle().
-			Foreground(NormalColor)
-
-	FileItemCompleteStyle = lipgloss.NewStyle().
-				Foreground(SuccessColor)
-
-	FileItemCopyingStyle = lipgloss.NewStyle().
-				Foreground(WarningColor)
-
-	FileItemErrorStyle = lipgloss.NewStyle().
-				Foreground(ErrorColor)
-)
+// CompletionSelectedStyle returns the style for selected completion items
+func CompletionSelectedStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(HighlightColor()).
+		Bold(true)
+}
 
 // ============================================================================
 // Completion Styles (for path completion)
 // ============================================================================
 
-var (
-	CompletionStyle = lipgloss.NewStyle().
-			Foreground(NormalColor)
+// CompletionStyle returns the style for completion items
+func CompletionStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(NormalColor())
+}
 
-	CompletionSelectedStyle = lipgloss.NewStyle().
-				Foreground(HighlightColor).
-				Bold(true)
-)
+func DimColor() lipgloss.Color { return lipgloss.Color(dimColorCode) }
+
+// DimStyle returns the style for dimmed text
+func DimStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(DimColor())
+}
+
+func ErrorColor() lipgloss.Color { return lipgloss.Color(errorColorCode) }
+
+// ErrorStyle returns the style for error messages
+func ErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(ErrorColor()).
+		Bold(true)
+}
+
+// FileItemCompleteStyle returns the style for completed file items
+func FileItemCompleteStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(SuccessColor())
+}
+
+// FileItemCopyingStyle returns the style for copying file items
+func FileItemCopyingStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(WarningColor())
+}
+
+// FileItemErrorStyle returns the style for error file items
+func FileItemErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(ErrorColor())
+}
+
+// ============================================================================
+// File Item Styles (for file lists)
+// ============================================================================
+
+// FileItemStyle returns the style for normal file items
+func FileItemStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(NormalColor())
+}
+
+func HighlightColor() lipgloss.Color { return lipgloss.Color(highlightColorCode) }
+
+// LabelStyle returns the style for labels
+func LabelStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(HighlightColor()).
+		Bold(true)
+}
+
+func NormalColor() lipgloss.Color { return lipgloss.Color(normalColorCode) }
+
+// PrimaryColor returns the primary color for the UI
+func PrimaryColor() lipgloss.Color { return lipgloss.Color(primaryColorCode) }
+
+// RenderBox renders content in a box with consistent styling
+func RenderBox(content string) string {
+	return BoxStyle().Render(content)
+}
+
+// RenderDim renders dimmed text with consistent styling
+func RenderDim(text string) string {
+	return DimStyle().Render(text)
+}
+
+// RenderError renders an error message with consistent styling
+func RenderError(text string) string {
+	return ErrorStyle().Render(text)
+}
+
+// RenderLabel renders a label with consistent styling
+func RenderLabel(text string) string {
+	return LabelStyle().Render(text)
+}
+
+// RenderSubtitle renders a subtitle with consistent styling
+func RenderSubtitle(text string) string {
+	return SubtitleStyle().Render(text)
+}
+
+// RenderSuccess renders a success message with consistent styling
+func RenderSuccess(text string) string {
+	return SuccessStyle().Render(text)
+}
 
 // ============================================================================
 // Helper Functions
@@ -114,40 +153,63 @@ var (
 
 // RenderTitle renders a title with consistent styling
 func RenderTitle(text string) string {
-	return TitleStyle.Render(text)
-}
-
-// RenderSubtitle renders a subtitle with consistent styling
-func RenderSubtitle(text string) string {
-	return SubtitleStyle.Render(text)
-}
-
-// RenderLabel renders a label with consistent styling
-func RenderLabel(text string) string {
-	return LabelStyle.Render(text)
-}
-
-// RenderError renders an error message with consistent styling
-func RenderError(text string) string {
-	return ErrorStyle.Render(text)
-}
-
-// RenderSuccess renders a success message with consistent styling
-func RenderSuccess(text string) string {
-	return SuccessStyle.Render(text)
+	return TitleStyle().Render(text)
 }
 
 // RenderWarning renders a warning message with consistent styling
 func RenderWarning(text string) string {
-	return WarningStyle.Render(text)
+	return WarningStyle().Render(text)
 }
 
-// RenderDim renders dimmed text with consistent styling
-func RenderDim(text string) string {
-	return DimStyle.Render(text)
+// SubtitleStyle returns the style for subtitles
+func SubtitleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(SubtleColor()).
+		MarginBottom(1)
 }
 
-// RenderBox renders content in a box with consistent styling
-func RenderBox(content string) string {
-	return BoxStyle.Render(content)
+func SubtleColor() lipgloss.Color { return lipgloss.Color(subtleColorCode) }
+
+func SuccessColor() lipgloss.Color { return lipgloss.Color(successColorCode) }
+
+// SuccessStyle returns the style for success messages
+func SuccessStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(SuccessColor()).
+		Bold(true)
 }
+
+// ============================================================================
+// Text Styles
+// ============================================================================
+
+// TitleStyle returns the style for titles
+func TitleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(PrimaryColor()).
+		MarginBottom(1)
+}
+
+func WarningColor() lipgloss.Color { return lipgloss.Color(warningColorCode) }
+
+// WarningStyle returns the style for warning messages
+func WarningStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(WarningColor()).
+		Bold(true)
+}
+
+// unexported constants.
+const (
+	accentColorCode    = "62"  // Blue
+	dimColorCode       = "240" // Dark gray
+	errorColorCode     = "196" // Red
+	highlightColorCode = "86"  // Cyan
+	normalColorCode    = "252" // Light gray
+	// Primary colors
+	primaryColorCode = "205" // Pink/purple
+	subtleColorCode  = "241" // Medium gray
+	successColorCode = "42"  // Green
+	warningColorCode = "226"
+)

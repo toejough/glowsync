@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -14,13 +15,9 @@ type realFileScanner struct {
 	scanned bool
 }
 
-// newRealFileScanner creates a new scanner for the given directory.
-func newRealFileScanner(root string) *realFileScanner {
-	return &realFileScanner{
-		root:  root,
-		files: make([]FileInfo, 0),
-		index: -1,
-	}
+// Err returns any error that occurred during scanning.
+func (s *realFileScanner) Err() error {
+	return s.err
 }
 
 // Next advances to the next file and returns its info.
@@ -45,11 +42,6 @@ func (s *realFileScanner) Next() (FileInfo, bool) {
 	return s.files[s.index], true
 }
 
-// Err returns any error that occurred during scanning.
-func (s *realFileScanner) Err() error {
-	return s.err
-}
-
 // scan walks the directory tree and collects all files.
 func (s *realFileScanner) scan() {
 	s.err = filepath.Walk(s.root, func(path string, info os.FileInfo, err error) error {
@@ -60,7 +52,7 @@ func (s *realFileScanner) scan() {
 		// Get relative path
 		relPath, err := filepath.Rel(s.root, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
 		}
 
 		// Skip the root directory itself
@@ -78,4 +70,13 @@ func (s *realFileScanner) scan() {
 
 		return nil
 	})
+}
+
+// newRealFileScanner creates a new scanner for the given directory.
+func newRealFileScanner(root string) *realFileScanner {
+	return &realFileScanner{
+		root:  root,
+		files: make([]FileInfo, 0),
+		index: -1,
+	}
 }

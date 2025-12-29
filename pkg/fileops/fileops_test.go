@@ -8,95 +8,57 @@ import (
 	"time"
 
 	"github.com/joe/copy-files/pkg/fileops"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 )
 
-//go:generate impgen fileops.ScanDirectory
-//go:generate impgen fileops.ComputeFileHash
-//go:generate impgen fileops.CopyFile
-//go:generate impgen fileops.FilesNeedSync
-//go:generate impgen fileops.CountFiles
-//go:generate impgen fileops.CountFilesWithProgress
-//go:generate impgen fileops.CompareFilesBytes
-
-func TestCountFilesStandalone(t *testing.T) {
+func TestCompareFilesBytes(t *testing.T) {
 	t.Parallel()
 
-	// Create temp directory with test files
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("test"), 0o600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("test"), 0o600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-
-	wrapper := NewCountFilesImp(t, fileops.CountFiles)
-	wrapper.Start(dir)
-	wrapper.ExpectReturnedValuesShould(Equal(2), BeNil())
-}
-
-func TestCountFilesWithProgressStandalone(t *testing.T) {
-	t.Parallel()
-
-	// Create temp directory with 10 test files to trigger progress callback
-	dir := t.TempDir()
-	for i := range 10 {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file%d.txt", i)), []byte("test"), 0o600); err != nil {
-			t.Fatalf("Failed to create test file: %v", err)
-		}
-	}
-
-	callbackCalled := false
-	callback := func(path string, count int) {
-		callbackCalled = true
-	}
-
-	wrapper := NewCountFilesWithProgressImp(t, fileops.CountFilesWithProgress)
-	wrapper.Start(dir, callback)
-	wrapper.ExpectReturnedValuesShould(Equal(10), BeNil())
-
-	// Verify callback was called
-	g := NewWithT(t)
-	g.Expect(callbackCalled).Should(BeTrue())
-}
-
-func TestScanDirectory(t *testing.T) {
-	t.Parallel()
-
-	// Create a temporary directory structure
 	tmpDir := t.TempDir()
 
-	// Create some test files
-	testFiles := []string{
-		"file1.txt",
-		"subdir/file2.txt",
-		"subdir/file3.txt",
+	// Create two identical files
+	file1 := filepath.Join(tmpDir, "file1.txt")
+	file2 := filepath.Join(tmpDir, "file2.txt")
+
+	content := []byte("test content")
+
+	err := os.WriteFile(file1, content, 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	for _, file := range testFiles {
-		fullPath := filepath.Join(tmpDir, file)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
-			t.Fatalf("Failed to create directory: %v", err)
-		}
-		if err := os.WriteFile(fullPath, []byte("test content"), 0o600); err != nil {
-			t.Fatalf("Failed to write file: %v", err)
-		}
+	err = os.WriteFile(file2, content, 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Use imptest callable wrapper
-	scanImp := NewScanDirectoryImp(t, fileops.ScanDirectory).Start(tmpDir)
+	wrapper := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
+	wrapper.Start(file1, file2)
+	wrapper.ExpectReturnedValuesShould(Equal(true), BeNil())
+}
 
-	// Verify we found all files and check that relative paths are correct
-	scanImp.ExpectReturnedValuesShould(
-		And(
-			HaveLen(4), // 3 files + 1 directory
-			HaveKey("file1.txt"),
-			HaveKey("subdir/file2.txt"),
-			HaveKey("subdir/file3.txt"),
-		),
-		BeNil(), // no error
-	)
+func TestCompareFilesBytesDifferent(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	// Create two different files
+	file1 := filepath.Join(tmpDir, "file1.txt")
+	file2 := filepath.Join(tmpDir, "file2.txt")
+
+	err := os.WriteFile(file1, []byte("content1"), 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err = os.WriteFile(file2, []byte("content2"), 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	wrapper := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
+	wrapper.Start(file1, file2)
+	wrapper.ExpectReturnedValuesShould(Equal(false), BeNil())
 }
 
 func TestComputeFileHash(t *testing.T) {
@@ -106,7 +68,9 @@ func TestComputeFileHash(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	content := []byte("test content for hashing")
-	if err := os.WriteFile(testFile, content, 0o600); err != nil {
+
+	err := os.WriteFile(testFile, content, 0o600)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -123,9 +87,11 @@ func TestComputeFileHash(t *testing.T) {
 	hashImp2.ExpectReturnedValuesAre(hash1, nil)
 
 	// Different content should produce different hash
-	if err := os.WriteFile(testFile, []byte("different content"), 0o600); err != nil {
+	err = os.WriteFile(testFile, []byte("different content"), 0o600)
+	if err != nil {
 		t.Fatalf("Failed to write different content: %v", err)
 	}
+
 	hashImp3 := NewComputeFileHashImp(t, fileops.ComputeFileHash).Start(testFile)
 	hashImp3.ExpectReturnedValuesShould(
 		Not(Equal(hash1)), // different hash
@@ -141,13 +107,17 @@ func TestCopyFile(t *testing.T) {
 	dstFile := filepath.Join(tmpDir, "dest", "destination.txt")
 
 	content := []byte("test content to copy")
-	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
+
+	err := os.WriteFile(srcFile, content, 0o600)
+	if err != nil {
 		t.Fatalf("Failed to write source file: %v", err)
 	}
 
 	var progressCalls int
-	progressCallback := func(bytesTransferred, totalBytes int64, currentFile string) {
+
+	progressCallback := func(bytesTransferred, totalBytes int64, _ string) {
 		progressCalls++
+
 		if bytesTransferred > totalBytes {
 			t.Errorf("bytesTransferred (%d) > totalBytes (%d)", bytesTransferred, totalBytes)
 		}
@@ -165,6 +135,7 @@ func TestCopyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read destination file: %v", err)
 	}
+
 	if string(dstContent) != string(content) {
 		t.Errorf("Content mismatch: expected %q, got %q", content, dstContent)
 	}
@@ -174,13 +145,180 @@ func TestCopyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to stat source file: %v", err)
 	}
+
 	dstInfo, err := os.Stat(dstFile)
 	if err != nil {
 		t.Fatalf("Failed to stat destination file: %v", err)
 	}
+
 	if !srcInfo.ModTime().Equal(dstInfo.ModTime()) {
 		t.Error("Modification times don't match")
 	}
+}
+
+func TestCopyFileWithProgress(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "large.txt")
+	dstFile := filepath.Join(tmpDir, "large_copy.txt")
+
+	// Create a larger file to test progress reporting
+	content := make([]byte, 100*1024) // 100KB
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+
+	err := os.WriteFile(srcFile, content, 0o600)
+	if err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	var lastBytes int64
+
+	progressCallback := func(bytesTransferred, totalBytes int64, currentFile string) {
+		if bytesTransferred < lastBytes {
+			t.Errorf("bytesTransferred (%d) < lastBytes (%d)", bytesTransferred, lastBytes)
+		}
+
+		if totalBytes != int64(len(content)) {
+			t.Errorf("totalBytes (%d) != expected (%d)", totalBytes, len(content))
+		}
+
+		if currentFile != srcFile {
+			t.Errorf("currentFile (%s) != expected (%s)", currentFile, srcFile)
+		}
+
+		lastBytes = bytesTransferred
+	}
+
+	copyImp := NewCopyFileImp(t, fileops.CopyFile).Start(srcFile, dstFile, progressCallback)
+	copyImp.ExpectReturnedValuesAre(int64(len(content)), nil)
+
+	if lastBytes != int64(len(content)) {
+		t.Errorf("lastBytes (%d) != expected (%d)", lastBytes, len(content))
+	}
+}
+
+func TestCopyFileWithStats(t *testing.T) {
+	t.Parallel()
+
+	// Note: CopyFileWithStats uses os.Open and os.Create internally, which we can't easily mock
+	// without changing the function signature to accept a FileSystem interface.
+	// For now, we test that the function can be called through imptest wrapper.
+	// The actual file I/O logic is tested through integration tests or by testing
+	// the FileOps methods that use FileSystem interface.
+
+	// Use imptest wrapper to verify the function signature and basic behavior
+	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
+
+	// We can't actually test this without filesystem access, so we just verify
+	// that calling it with invalid paths returns an error
+	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, nil)
+
+	// Should return an error for nonexistent file
+	// Note: CopyFileWithStats returns a non-nil stats struct even on error
+	wrapper.ExpectReturnedValuesShould(
+		Not(BeNil()), // stats is always returned
+		Not(BeNil()), // error should not be nil
+	)
+}
+
+func TestCopyFileWithStatsCancel(t *testing.T) {
+	t.Parallel()
+
+	// Create cancel channel and close it immediately
+	cancelChan := make(chan struct{})
+	close(cancelChan)
+
+	// Use imptest wrapper
+	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
+	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, cancelChan)
+
+	// Should get an error (either cancellation or file not found)
+	// Note: CopyFileWithStats returns a non-nil stats struct even on error
+	wrapper.ExpectReturnedValuesShould(
+		Not(BeNil()), // stats is always returned
+		Not(BeNil()), // error should not be nil
+	)
+}
+
+func TestCopyFileWithStatsProgress(t *testing.T) {
+	t.Parallel()
+
+	// Note: CopyFileWithStats uses os.Open and os.Create internally.
+	// We test the progress callback mechanism by verifying the function signature.
+
+	// Track progress callbacks
+	progressCallback := func(_ int64, _ int64, _ string) {
+		// Progress callback for testing
+	}
+
+	// Use imptest wrapper
+	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
+	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", progressCallback, nil)
+
+	// Should return an error for nonexistent file
+	// Note: CopyFileWithStats returns a non-nil stats struct even on error
+	wrapper.ExpectReturnedValuesShould(
+		Not(BeNil()), // stats is always returned
+		Not(BeNil()), // error should not be nil
+	)
+}
+
+//go:generate impgen fileops.ScanDirectory
+//go:generate impgen fileops.ComputeFileHash
+//go:generate impgen fileops.CopyFile
+//go:generate impgen fileops.FilesNeedSync
+//go:generate impgen fileops.CountFiles
+//go:generate impgen fileops.CountFilesWithProgress
+//go:generate impgen fileops.CompareFilesBytes
+
+func TestCountFilesStandalone(t *testing.T) {
+	t.Parallel()
+
+	// Create temp directory with test files
+	dir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("test"), 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err = os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("test"), 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	wrapper := NewCountFilesImp(t, fileops.CountFiles)
+	wrapper.Start(dir)
+	wrapper.ExpectReturnedValuesShould(Equal(2), BeNil())
+}
+
+func TestCountFilesWithProgressStandalone(t *testing.T) {
+	t.Parallel()
+
+	// Create temp directory with 10 test files to trigger progress callback
+	dir := t.TempDir()
+	for i := range 10 {
+		err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file%d.txt", i)), []byte("test"), 0o600)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	callbackCalled := false
+	callback := func(_ string, _ int) {
+		callbackCalled = true
+	}
+
+	wrapper := NewCountFilesWithProgressImp(t, fileops.CountFilesWithProgress)
+	wrapper.Start(dir, callback)
+	wrapper.ExpectReturnedValuesShould(Equal(10), BeNil())
+
+	// Verify callback was called
+	g := NewWithT(t)
+	g.Expect(callbackCalled).Should(BeTrue())
 }
 
 func TestFilesNeedSync(t *testing.T) {
@@ -230,147 +368,44 @@ func TestFilesNeedSync(t *testing.T) {
 	}
 }
 
-func TestCopyFileWithProgress(t *testing.T) {
+func TestScanDirectory(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	srcFile := filepath.Join(tmpDir, "large.txt")
-	dstFile := filepath.Join(tmpDir, "large_copy.txt")
-
-	// Create a larger file to test progress reporting
-	content := make([]byte, 100*1024) // 100KB
-	for i := range content {
-		content[i] = byte(i % 256)
-	}
-	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
-
-	var lastBytes int64
-	progressCallback := func(bytesTransferred, totalBytes int64, currentFile string) {
-		if bytesTransferred < lastBytes {
-			t.Errorf("bytesTransferred (%d) < lastBytes (%d)", bytesTransferred, lastBytes)
-		}
-		if totalBytes != int64(len(content)) {
-			t.Errorf("totalBytes (%d) != expected (%d)", totalBytes, len(content))
-		}
-		if currentFile != srcFile {
-			t.Errorf("currentFile (%s) != expected (%s)", currentFile, srcFile)
-		}
-		lastBytes = bytesTransferred
-	}
-
-	copyImp := NewCopyFileImp(t, fileops.CopyFile).Start(srcFile, dstFile, progressCallback)
-	copyImp.ExpectReturnedValuesAre(int64(len(content)), nil)
-
-	if lastBytes != int64(len(content)) {
-		t.Errorf("lastBytes (%d) != expected (%d)", lastBytes, len(content))
-	}
-}
-
-func TestCopyFileWithStats(t *testing.T) {
-	t.Parallel()
-
-	// Note: CopyFileWithStats uses os.Open and os.Create internally, which we can't easily mock
-	// without changing the function signature to accept a FileSystem interface.
-	// For now, we test that the function can be called through imptest wrapper.
-	// The actual file I/O logic is tested through integration tests or by testing
-	// the FileOps methods that use FileSystem interface.
-
-	// Use imptest wrapper to verify the function signature and basic behavior
-	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
-
-	// We can't actually test this without filesystem access, so we just verify
-	// that calling it with invalid paths returns an error
-	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, nil)
-
-	// Should return an error for nonexistent file
-	// Note: CopyFileWithStats returns a non-nil stats struct even on error
-	wrapper.ExpectReturnedValuesShould(
-		Not(BeNil()), // stats is always returned
-		Not(BeNil()), // error should not be nil
-	)
-}
-
-func TestCopyFileWithStatsProgress(t *testing.T) {
-	t.Parallel()
-
-	// Note: CopyFileWithStats uses os.Open and os.Create internally.
-	// We test the progress callback mechanism by verifying the function signature.
-
-	// Track progress callbacks
-	progressCallback := func(bytesTransferred int64, totalBytes int64, currentFile string) {
-		// Progress callback for testing
-	}
-
-	// Use imptest wrapper
-	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
-	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", progressCallback, nil)
-
-	// Should return an error for nonexistent file
-	// Note: CopyFileWithStats returns a non-nil stats struct even on error
-	wrapper.ExpectReturnedValuesShould(
-		Not(BeNil()), // stats is always returned
-		Not(BeNil()), // error should not be nil
-	)
-}
-
-func TestCopyFileWithStatsCancel(t *testing.T) {
-	t.Parallel()
-
-	// Create cancel channel and close it immediately
-	cancelChan := make(chan struct{})
-	close(cancelChan)
-
-	// Use imptest wrapper
-	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
-	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, cancelChan)
-
-	// Should get an error (either cancellation or file not found)
-	// Note: CopyFileWithStats returns a non-nil stats struct even on error
-	wrapper.ExpectReturnedValuesShould(
-		Not(BeNil()), // stats is always returned
-		Not(BeNil()), // error should not be nil
-	)
-}
-
-func TestCompareFilesBytes(t *testing.T) {
-	t.Parallel()
-
+	// Create a temporary directory structure
 	tmpDir := t.TempDir()
 
-	// Create two identical files
-	file1 := filepath.Join(tmpDir, "file1.txt")
-	file2 := filepath.Join(tmpDir, "file2.txt")
-	content := []byte("test content")
-	if err := os.WriteFile(file1, content, 0o600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	if err := os.WriteFile(file2, content, 0o600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+	// Create some test files
+	testFiles := []string{
+		"file1.txt",
+		"subdir/file2.txt",
+		"subdir/file3.txt",
 	}
 
-	wrapper := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
-	wrapper.Start(file1, file2)
-	wrapper.ExpectReturnedValuesShould(Equal(true), BeNil())
-}
+	for _, file := range testFiles {
+		fullPath := filepath.Join(tmpDir, file)
 
-func TestCompareFilesBytesDifferent(t *testing.T) {
-	t.Parallel()
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o755)
+		if err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
 
-	tmpDir := t.TempDir()
-
-	// Create two different files
-	file1 := filepath.Join(tmpDir, "file1.txt")
-	file2 := filepath.Join(tmpDir, "file2.txt")
-	if err := os.WriteFile(file1, []byte("content1"), 0o600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	if err := os.WriteFile(file2, []byte("content2"), 0o600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+		err = os.WriteFile(fullPath, []byte("test content"), 0o600)
+		if err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
 	}
 
-	wrapper := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
-	wrapper.Start(file1, file2)
-	wrapper.ExpectReturnedValuesShould(Equal(false), BeNil())
+	// Use imptest callable wrapper
+	scanImp := NewScanDirectoryImp(t, fileops.ScanDirectory).Start(tmpDir)
+
+	// Verify we found all files and check that relative paths are correct
+	scanImp.ExpectReturnedValuesShould(
+		And(
+			HaveLen(4), // 3 files + 1 directory
+			HaveKey("file1.txt"),
+			HaveKey("subdir/file2.txt"),
+			HaveKey("subdir/file3.txt"),
+		),
+		BeNil(), // no error
+	)
 }

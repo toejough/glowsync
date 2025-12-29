@@ -12,7 +12,6 @@ import (
 type AppModel struct {
 	config        *config.Config
 	currentScreen tea.Model
-	screenName    string // "input", "analysis", "sync", "summary"
 	engine        *syncengine.Engine
 }
 
@@ -21,7 +20,6 @@ func NewAppModel(cfg *config.Config) *AppModel {
 	return &AppModel{
 		config:        cfg,
 		currentScreen: screens.NewInputScreen(cfg),
-		screenName:    "input",
 	}
 }
 
@@ -44,7 +42,9 @@ func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Otherwise, pass the message to the current screen
 	var cmd tea.Cmd
+
 	a.currentScreen, cmd = a.currentScreen.Update(msg)
+
 	return a, cmd
 }
 
@@ -64,7 +64,13 @@ func (a AppModel) transitionToAnalysis(msg shared.TransitionToAnalysisMsg) (tea.
 
 	// Create analysis screen
 	a.currentScreen = screens.NewAnalysisScreen(a.config)
-	a.screenName = "analysis"
+
+	return a, a.currentScreen.Init()
+}
+
+func (a AppModel) transitionToSummary(msg shared.TransitionToSummaryMsg) (tea.Model, tea.Cmd) {
+	// Create summary screen
+	a.currentScreen = screens.NewSummaryScreen(a.engine, msg.FinalState, msg.Err)
 
 	return a, a.currentScreen.Init()
 }
@@ -75,16 +81,6 @@ func (a AppModel) transitionToSync(msg shared.TransitionToSyncMsg) (tea.Model, t
 
 	// Create sync screen
 	a.currentScreen = screens.NewSyncScreen(a.engine)
-	a.screenName = "sync"
 
 	return a, a.currentScreen.Init()
 }
-
-func (a AppModel) transitionToSummary(msg shared.TransitionToSummaryMsg) (tea.Model, tea.Cmd) {
-	// Create summary screen
-	a.currentScreen = screens.NewSummaryScreen(a.engine, msg.FinalState, msg.Err)
-	a.screenName = "summary"
-
-	return a, a.currentScreen.Init()
-}
-

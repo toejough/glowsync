@@ -148,6 +148,7 @@ func (bldr *FileScannerImpErrBuilder) InjectResult(result error) *FileScannerImp
 type FileScannerImpErrCall struct {
 	responseChan chan FileScannerImpErrCallResponse
 	done         bool
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -205,6 +206,7 @@ func (m *FileScannerImpMock) Err() error {
 
 	call := &FileScannerImpErrCall{
 		responseChan: responseChan,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileScannerImpCall{
@@ -229,6 +231,7 @@ func (m *FileScannerImpMock) Next() (filesystem.FileInfo, bool) {
 
 	call := &FileScannerImpNextCall{
 		responseChan: responseChan,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileScannerImpCall{
@@ -286,6 +289,7 @@ func (bldr *FileScannerImpNextBuilder) InjectResults(r0 filesystem.FileInfo, r1 
 type FileScannerImpNextCall struct {
 	responseChan chan FileScannerImpNextCallResponse
 	done         bool
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.

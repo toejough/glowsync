@@ -275,6 +275,7 @@ type FileSystemImpChtimesCall struct {
 	path         string
 	atime        time.Time
 	mtime        time.Time
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -383,6 +384,7 @@ type FileSystemImpCreateCall struct {
 	responseChan chan FileSystemImpCreateCallResponse
 	done         bool
 	path         string
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -544,6 +546,7 @@ type FileSystemImpMkdirAllCall struct {
 	done         bool
 	path         string
 	perm         os.FileMode
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -586,6 +589,7 @@ func (m *FileSystemImpMock) Chtimes(path string, atime time.Time, mtime time.Tim
 		path:         path,
 		atime:        atime,
 		mtime:        mtime,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -611,6 +615,7 @@ func (m *FileSystemImpMock) Create(path string) (filesystem.File, error) {
 	call := &FileSystemImpCreateCall{
 		responseChan: responseChan,
 		path:         path,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -637,6 +642,7 @@ func (m *FileSystemImpMock) MkdirAll(path string, perm os.FileMode) error {
 		responseChan: responseChan,
 		path:         path,
 		perm:         perm,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -662,6 +668,7 @@ func (m *FileSystemImpMock) Open(path string) (filesystem.File, error) {
 	call := &FileSystemImpOpenCall{
 		responseChan: responseChan,
 		path:         path,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -687,6 +694,7 @@ func (m *FileSystemImpMock) Remove(path string) error {
 	call := &FileSystemImpRemoveCall{
 		responseChan: responseChan,
 		path:         path,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -712,6 +720,7 @@ func (m *FileSystemImpMock) Scan(path string) filesystem.FileScanner {
 	call := &FileSystemImpScanCall{
 		responseChan: responseChan,
 		path:         path,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -737,6 +746,7 @@ func (m *FileSystemImpMock) Stat(path string) (os.FileInfo, error) {
 	call := &FileSystemImpStatCall{
 		responseChan: responseChan,
 		path:         path,
+		t:            m.imp.T,
 	}
 
 	callEvent := &FileSystemImpCall{
@@ -837,6 +847,7 @@ type FileSystemImpOpenCall struct {
 	responseChan chan FileSystemImpOpenCallResponse
 	done         bool
 	path         string
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -947,6 +958,7 @@ type FileSystemImpRemoveCall struct {
 	responseChan chan FileSystemImpRemoveCallResponse
 	done         bool
 	path         string
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -1055,6 +1067,7 @@ type FileSystemImpScanCall struct {
 	responseChan chan FileSystemImpScanCallResponse
 	done         bool
 	path         string
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.
@@ -1163,6 +1176,7 @@ type FileSystemImpStatCall struct {
 	responseChan chan FileSystemImpStatCallResponse
 	done         bool
 	path         string
+	t            _imptest.Tester
 }
 
 // InjectPanic causes the mocked method to panic with the given value.

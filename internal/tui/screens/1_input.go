@@ -21,8 +21,6 @@ type InputScreen struct {
 	completions     []string
 	completionIndex int
 	showCompletions bool
-	width           int
-	height          int
 }
 
 // NewInputScreen creates a new input screen
@@ -30,7 +28,7 @@ func NewInputScreen(cfg *config.Config) *InputScreen {
 	sourceInput := textinput.New()
 	sourceInput.Placeholder = "/path/to/source"
 	sourceInput.Focus()
-	sourceInput.Prompt = "▶ "
+	sourceInput.Prompt = shared.PromptArrow
 
 	destInput := textinput.New()
 	destInput.Placeholder = "/path/to/destination"
@@ -74,26 +72,130 @@ func (s InputScreen) View() string {
 	return s.renderInputView()
 }
 
-// ============================================================================
-// Message Handlers
-// ============================================================================
-
-func (s InputScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
-	s.width = msg.Width
-	s.height = msg.Height
-	// Set input widths to use most of the available width (minus padding and borders)
-	inputWidth := msg.Width - 10
-	if inputWidth < 20 {
-		inputWidth = 20
+func (s InputScreen) applyCompletion(completion string) InputScreen {
+	if s.focusIndex == 0 {
+		s.sourceInput.SetValue(completion)
+		s.sourceInput.CursorEnd()
+	} else {
+		s.destInput.SetValue(completion)
+		s.destInput.CursorEnd()
 	}
-	s.sourceInput.Width = inputWidth
-	s.destInput.Width = inputWidth
+
+	return s
+}
+
+func (s InputScreen) calculateCompletionWindow(currentIndex, maxShow, totalCount int) (start, end int) {
+	start = max(currentIndex-maxShow/shared.ProgressHalfDivisor, 0)
+
+	end = start + maxShow
+	if end > totalCount {
+		end = totalCount
+		start = max(end-maxShow, 0)
+	}
+
+	return start, end
+}
+
+func (s InputScreen) formatAllCompletions(completions []string, currentIndex int) []string {
+	lines := []string{shared.CompletionStyle().Render("  " + strings.Repeat("─", shared.ProgressBarWidth))}
+
+	for i, comp := range completions {
+		base := getBaseName(comp)
+		if i == currentIndex {
+			lines = append(lines, shared.CompletionSelectedStyle().Render("  ▶ "+base))
+		} else {
+			lines = append(lines, shared.CompletionStyle().Render("    "+base))
+		}
+	}
+
+	return lines
+}
+
+func (s InputScreen) formatCompletionList(completions []string, currentIndex int) string {
+	if len(completions) == 0 {
+		return ""
+	}
+
+	maxShow := 8
+
+	var lines []string
+
+	switch {
+	case len(completions) == 1:
+		lines = s.formatSingleCompletion(completions[0])
+	case len(completions) <= maxShow:
+		lines = s.formatAllCompletions(completions, currentIndex)
+	default:
+		lines = s.formatWindowedCompletions(completions, currentIndex, maxShow)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (s InputScreen) formatSingleCompletion(completion string) []string {
+	base := getBaseName(completion)
+	return []string{shared.CompletionStyle().Render("  → " + base)}
+}
+
+func (s InputScreen) formatWindowedCompletions(completions []string, currentIndex, maxShow int) []string {
+	lines := []string{shared.CompletionStyle().Render("  " + strings.Repeat("─", shared.ProgressBarWidth))}
+
+	start, end := s.calculateCompletionWindow(currentIndex, maxShow, len(completions))
+
+	// Show ellipsis if not at start
+	if start > 0 {
+		lines = append(lines, shared.CompletionStyle().Render("    ..."))
+	}
+
+	// Show window
+	for i := start; i < end; i++ {
+		base := getBaseName(completions[i])
+		if i == currentIndex {
+			lines = append(lines, shared.CompletionSelectedStyle().Render("  ▶ "+base))
+		} else {
+			lines = append(lines, shared.CompletionStyle().Render("    "+base))
+		}
+	}
+
+	// Show ellipsis if not at end
+	if end < len(completions) {
+		lines = append(lines, shared.CompletionStyle().Render("    ..."))
+	}
+
+	return lines
+}
+
+func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
+	s.showCompletions = false
+	if s.focusIndex == 0 && s.sourceInput.Value() != "" {
+		// Move to destination input
+		return s.moveToNextField()
+	} else if s.focusIndex == 1 && s.destInput.Value() != "" {
+		// Validate paths
+		s.config.SourcePath = s.sourceInput.Value()
+		s.config.DestPath = s.destInput.Value()
+
+		err := s.config.ValidatePaths()
+		if err != nil {
+			// TODO: Show error inline instead of just staying on screen
+			return s, nil
+		}
+
+		// Paths are valid - trigger transition to analysis
+		return s, func() tea.Msg {
+			return shared.TransitionToAnalysisMsg{
+				SourcePath: s.config.SourcePath,
+				DestPath:   s.config.DestPath,
+			}
+		}
+	}
+
 	return s, nil
 }
 
 func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+c", "esc":
+	case shared.KeyCtrlC, "esc":
 		return s, tea.Quit
 	case "ctrl+n", "down":
 		return s.moveToNextField()
@@ -122,58 +224,42 @@ func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
-func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
-	s.showCompletions = false
-	if s.focusIndex == 0 && s.sourceInput.Value() != "" {
-		// Move to destination input
-		return s.moveToNextField()
-	} else if s.focusIndex == 1 && s.destInput.Value() != "" {
-		// Validate paths
-		s.config.SourcePath = s.sourceInput.Value()
-		s.config.DestPath = s.destInput.Value()
+func (s InputScreen) handleRightArrow() InputScreen {
+	// If showing completions, accept current and continue to next segment
+	if s.showCompletions && len(s.completions) > 0 {
+		currentCompletion := s.completions[s.completionIndex]
+		s = s.applyCompletion(currentCompletion)
 
-		if err := s.config.ValidatePaths(); err != nil {
-			// TODO: Show error inline instead of just staying on screen
-			return s, nil
+		// Reset completion state and get new completions for next segment
+		s.showCompletions = false
+
+		s.completions = getPathCompletions(currentCompletion)
+		if len(s.completions) > 0 {
+			s.completionIndex = 0
+			s.showCompletions = true
+			s = s.applyCompletion(s.completions[0])
 		}
 
-		// Paths are valid - trigger transition to analysis
-		return s, func() tea.Msg {
-			return shared.TransitionToAnalysisMsg{
-				SourcePath: s.config.SourcePath,
-				DestPath:   s.config.DestPath,
-			}
+		return s
+	}
+	// Otherwise, let the textinput handle it (move cursor right)
+	s.showCompletions = false
+
+	return s
+}
+
+func (s InputScreen) handleShiftTabCompletion() InputScreen {
+	if s.showCompletions && len(s.completions) > 0 {
+		// Cycle backward through completions
+		s.completionIndex--
+		if s.completionIndex < 0 {
+			s.completionIndex = len(s.completions) - 1
 		}
-	}
-	return s, nil
-}
 
-// ============================================================================
-// Field Navigation
-// ============================================================================
-
-func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
-	if s.focusIndex == 0 {
-		s.focusIndex = 1
-		s.sourceInput.Blur()
-		s.sourceInput.Prompt = "  "
-		s.destInput.Focus()
-		s.destInput.Prompt = "▶ "
+		s = s.applyCompletion(s.completions[s.completionIndex])
 	}
-	s.showCompletions = false
-	return s, nil
-}
 
-func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
-	if s.focusIndex == 1 {
-		s.focusIndex = 0
-		s.destInput.Blur()
-		s.destInput.Prompt = "  "
-		s.sourceInput.Focus()
-		s.sourceInput.Prompt = "▶ "
-	}
-	s.showCompletions = false
-	return s, nil
+	return s
 }
 
 // ============================================================================
@@ -196,134 +282,61 @@ func (s InputScreen) handleTabCompletion() InputScreen {
 
 		// If only one match, complete it immediately and hide list
 		if len(s.completions) == 1 {
-			s.applyCompletion(s.completions[0])
+			s = s.applyCompletion(s.completions[0])
 			s.showCompletions = false
 		}
 	} else if len(s.completions) > 0 {
 		// Already showing completions - cycle forward through them
 		s.completionIndex = (s.completionIndex + 1) % len(s.completions)
-		s.applyCompletion(s.completions[s.completionIndex])
+		s = s.applyCompletion(s.completions[s.completionIndex])
 	}
 
 	return s
 }
 
-func (s InputScreen) handleShiftTabCompletion() InputScreen {
-	if s.showCompletions && len(s.completions) > 0 {
-		// Cycle backward through completions
-		s.completionIndex--
-		if s.completionIndex < 0 {
-			s.completionIndex = len(s.completions) - 1
-		}
-		s.applyCompletion(s.completions[s.completionIndex])
-	}
-	return s
+// ============================================================================
+// Message Handlers
+// ============================================================================
+
+func (s InputScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	// Set input widths to use most of the available width (minus padding and borders)
+	inputWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
+	s.sourceInput.Width = inputWidth
+	s.destInput.Width = inputWidth
+
+	return s, nil
 }
 
-func (s InputScreen) handleRightArrow() InputScreen {
-	// If showing completions, accept current and continue to next segment
-	if s.showCompletions && len(s.completions) > 0 {
-		currentCompletion := s.completions[s.completionIndex]
-		s.applyCompletion(currentCompletion)
+// ============================================================================
+// Field Navigation
+// ============================================================================
 
-		// Reset completion state and get new completions for next segment
-		s.showCompletions = false
-		s.completions = getPathCompletions(currentCompletion)
-		if len(s.completions) > 0 {
-			s.completionIndex = 0
-			s.showCompletions = true
-			s.applyCompletion(s.completions[0])
-		}
-		return s
-	}
-	// Otherwise, let the textinput handle it (move cursor right)
-	s.showCompletions = false
-	return s
-}
-
-func (s *InputScreen) applyCompletion(completion string) {
+func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
 	if s.focusIndex == 0 {
-		s.sourceInput.SetValue(completion)
-		s.sourceInput.CursorEnd()
-	} else {
-		s.destInput.SetValue(completion)
-		s.destInput.CursorEnd()
+		s.focusIndex = 1
+		s.sourceInput.Blur()
+		s.sourceInput.Prompt = "  "
+		s.destInput.Focus()
+		s.destInput.Prompt = shared.PromptArrow
 	}
+
+	s.showCompletions = false
+
+	return s, nil
 }
 
-// ============================================================================
-// Path Completion Helpers
-// ============================================================================
-
-func getPathCompletions(input string) []string {
-	input = expandHomePath(input)
-	dir, prefix := parseCompletionPath(input)
-
-	// Read directory entries
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
+func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
+	if s.focusIndex == 1 {
+		s.focusIndex = 0
+		s.destInput.Blur()
+		s.destInput.Prompt = "  "
+		s.sourceInput.Focus()
+		s.sourceInput.Prompt = shared.PromptArrow
 	}
 
-	var completions []string
-	for _, entry := range entries {
-		name := entry.Name()
+	s.showCompletions = false
 
-		if !shouldIncludeEntry(name, prefix) {
-			continue
-		}
-
-		fullPath := filepath.Join(dir, name)
-
-		// Add trailing slash for directories
-		if entry.IsDir() {
-			fullPath += string(filepath.Separator)
-		}
-
-		completions = append(completions, fullPath)
-	}
-
-	sort.Strings(completions)
-	return completions
-}
-
-func expandHomePath(input string) string {
-	if input == "" {
-		return "."
-	}
-
-	// Expand ~ to home directory
-	if strings.HasPrefix(input, "~") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			return filepath.Join(home, input[1:])
-		}
-	}
-
-	return input
-}
-
-func parseCompletionPath(input string) (dir, prefix string) {
-	dir = filepath.Dir(input)
-	prefix = filepath.Base(input)
-
-	// If input ends with /, we're completing in that directory
-	if strings.HasSuffix(input, string(filepath.Separator)) {
-		dir = input
-		prefix = ""
-	}
-
-	return dir, prefix
-}
-
-func shouldIncludeEntry(name, prefix string) bool {
-	// Skip hidden files unless prefix starts with .
-	if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
-		return false
-	}
-
-	// Check if name matches prefix
-	return prefix == "" || strings.HasPrefix(name, prefix)
+	return s, nil
 }
 
 // ============================================================================
@@ -356,85 +369,20 @@ func (s InputScreen) renderInputView() string {
 	return shared.RenderBox(content)
 }
 
-func (s InputScreen) formatCompletionList(completions []string, currentIndex int) string {
-	if len(completions) == 0 {
-		return ""
+func expandHomePath(input string) string {
+	if input == "" {
+		return "."
 	}
 
-	maxShow := 8
-	var lines []string
-
-	if len(completions) == 1 {
-		lines = s.formatSingleCompletion(completions[0])
-	} else if len(completions) <= maxShow {
-		lines = s.formatAllCompletions(completions, currentIndex)
-	} else {
-		lines = s.formatWindowedCompletions(completions, currentIndex, maxShow)
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-func (s InputScreen) formatSingleCompletion(completion string) []string {
-	base := getBaseName(completion)
-	return []string{shared.CompletionStyle.Render("  → " + base)}
-}
-
-func (s InputScreen) formatAllCompletions(completions []string, currentIndex int) []string {
-	lines := []string{shared.CompletionStyle.Render("  " + strings.Repeat("─", 40))}
-	for i, comp := range completions {
-		base := getBaseName(comp)
-		if i == currentIndex {
-			lines = append(lines, shared.CompletionSelectedStyle.Render("  ▶ "+base))
-		} else {
-			lines = append(lines, shared.CompletionStyle.Render("    "+base))
-		}
-	}
-	return lines
-}
-
-func (s InputScreen) formatWindowedCompletions(completions []string, currentIndex, maxShow int) []string {
-	lines := []string{shared.CompletionStyle.Render("  " + strings.Repeat("─", 40))}
-
-	start, end := s.calculateCompletionWindow(currentIndex, maxShow, len(completions))
-
-	// Show ellipsis if not at start
-	if start > 0 {
-		lines = append(lines, shared.CompletionStyle.Render("    ..."))
-	}
-
-	// Show window
-	for i := start; i < end; i++ {
-		base := getBaseName(completions[i])
-		if i == currentIndex {
-			lines = append(lines, shared.CompletionSelectedStyle.Render("  ▶ "+base))
-		} else {
-			lines = append(lines, shared.CompletionStyle.Render("    "+base))
+	// Expand ~ to home directory
+	if strings.HasPrefix(input, "~") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, input[1:])
 		}
 	}
 
-	// Show ellipsis if not at end
-	if end < len(completions) {
-		lines = append(lines, shared.CompletionStyle.Render("    ..."))
-	}
-
-	return lines
-}
-
-func (s InputScreen) calculateCompletionWindow(currentIndex, maxShow, totalCount int) (start, end int) {
-	start = currentIndex - maxShow/2
-	if start < 0 {
-		start = 0
-	}
-	end = start + maxShow
-	if end > totalCount {
-		end = totalCount
-		start = end - maxShow
-		if start < 0 {
-			start = 0
-		}
-	}
-	return start, end
+	return input
 }
 
 func getBaseName(path string) string {
@@ -448,6 +396,7 @@ func getBaseName(path string) string {
 		if strings.HasSuffix(path, "/") {
 			return trimmed + "/"
 		}
+
 		return path
 	}
 
@@ -456,6 +405,66 @@ func getBaseName(path string) string {
 	if strings.HasSuffix(path, "/") {
 		return base + "/"
 	}
+
 	return base
 }
 
+// ============================================================================
+// Path Completion Helpers
+// ============================================================================
+
+func getPathCompletions(input string) []string {
+	input = expandHomePath(input)
+	dir, prefix := parseCompletionPath(input)
+
+	// Read directory entries
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	completions := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if !shouldIncludeEntry(name, prefix) {
+			continue
+		}
+
+		fullPath := filepath.Join(dir, name)
+
+		// Add trailing slash for directories
+		if entry.IsDir() {
+			fullPath += string(filepath.Separator)
+		}
+
+		completions = append(completions, fullPath)
+	}
+
+	sort.Strings(completions)
+
+	return completions
+}
+
+func parseCompletionPath(input string) (dir, prefix string) {
+	dir = filepath.Dir(input)
+	prefix = filepath.Base(input)
+
+	// If input ends with /, we're completing in that directory
+	if strings.HasSuffix(input, string(filepath.Separator)) {
+		dir = input
+		prefix = ""
+	}
+
+	return dir, prefix
+}
+
+func shouldIncludeEntry(name, prefix string) bool {
+	// Skip hidden files unless prefix starts with .
+	if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
+		return false
+	}
+
+	// Check if name matches prefix
+	return prefix == "" || strings.HasPrefix(name, prefix)
+}
