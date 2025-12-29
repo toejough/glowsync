@@ -63,14 +63,15 @@ type Model interface {
 
 **Owns:**
 - Sync execution
-- Progress bars (overall and per-file)
+- Unified progress bar (file count as primary metric)
+- Per-file progress bars in file list
 - File list display
-- Statistics display
+- Statistics display (rate, ETA, workers)
 - Cancellation handling
 
 **Transitions to:** SummaryScreen (via `TransitionToSummaryMsg`)
 
-**Key principle:** This is the most complex screen. It handles real-time updates, user cancellation, and detailed progress display. Keep the Update() method focused on message routing; extract complex rendering logic into helper methods.
+**Key principle:** This is the most complex screen. It handles real-time updates, user cancellation, and detailed progress display. The unified progress bar shows file count progress with bytes/rate/ETA as secondary metrics, maximizing vertical space for the file list. Keep the Update() method focused on message routing; extract complex rendering logic into helper methods.
 
 ---
 

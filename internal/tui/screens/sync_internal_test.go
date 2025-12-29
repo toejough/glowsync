@@ -24,6 +24,28 @@ func TestCalculateMaxFilesToShow(t *testing.T) {
 	g.Expect(maxFiles).Should(BeNumerically(">=", 1))
 }
 
+func TestCalculateMaxFilesToShow_WithUnifiedProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// With unified progress, we reclaim ~7 lines (4 from overall + 4 from session - 1 for unified)
+	// Old: 2 (title) + 4 (overall) + 4 (session) + 8 (stats) + 2 (header) + 5 (errors) + 2 (padding) = 27 lines
+	// New: 2 (title) + 5 (unified) + 8 (stats) + 2 (header) + 5 (errors) + 2 (padding) = 24 lines
+	// Reclaimed: 3 lines (1 line = 1/3 of a file entry, so ~1 more file can be shown)
+
+	oldScreen := &SyncScreen{height: 50}
+	// Simulate old calculation
+	oldLinesUsed := 2 + 4 + 4 + 8 + 2 + 5 + 2 // 27 lines
+	oldAvailable := oldScreen.height - oldLinesUsed
+	oldMaxFiles := oldAvailable / 3 // 23 / 3 = 7 files
+
+	newScreen := &SyncScreen{height: 50}
+	newMaxFiles := newScreen.calculateMaxFilesToShow()
+
+	// New implementation should allow more files to be shown
+	g.Expect(newMaxFiles).Should(BeNumerically(">", oldMaxFiles))
+}
+
 func TestGetBottleneckInfo(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -106,26 +128,6 @@ func TestRenderFileList(t *testing.T) {
 	g.Expect(result).ShouldNot(BeEmpty())
 }
 
-func TestRenderOverallProgress(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			TotalBytesInSource: 1024 * 1024,
-			AlreadySyncedBytes: 512 * 1024,
-			TransferredBytes:   256 * 1024,
-			TotalFilesInSource: 100,
-			AlreadySyncedFiles: 50,
-			ProcessedFiles:     25,
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderOverallProgress(&builder)
-	result := builder.String()
-	g.Expect(result).Should(ContainSubstring("Overall Progress"))
-}
 
 func TestRenderRecentFiles(t *testing.T) {
 	t.Parallel()
@@ -146,26 +148,6 @@ func TestRenderRecentFiles(t *testing.T) {
 	g.Expect(result).Should(ContainSubstring("Recent Files"))
 }
 
-func TestRenderSessionProgress(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			TotalBytes:       1024 * 1024,
-			TransferredBytes: 512 * 1024,
-			TotalFiles:       100,
-			ProcessedFiles:   50,
-			FailedFiles:      5,
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderSessionProgress(&builder)
-	result := builder.String()
-	g.Expect(result).Should(ContainSubstring("This Session"))
-	g.Expect(result).Should(ContainSubstring("failed"))
-}
 
 func TestRenderStatistics(t *testing.T) {
 	t.Parallel()
@@ -293,4 +275,180 @@ func TestTruncatePath(t *testing.T) {
 	result = screen.truncatePath(longPath, 20)
 	g.Expect(result).Should(ContainSubstring("..."))
 	g.Expect(len(result)).Should(BeNumerically("<=", 20))
+}
+
+func TestRenderUnifiedProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 100,
+			AlreadySyncedFiles: 30,
+			ProcessedFiles:     20,
+			TotalBytesInSource: 10 * 1024 * 1024, // 10 MB
+			AlreadySyncedBytes: 3 * 1024 * 1024,  // 3 MB
+			TransferredBytes:   2 * 1024 * 1024,  // 2 MB
+			TotalBytes:         7 * 1024 * 1024,  // 7 MB (files to sync this session)
+			FailedFiles:        2,
+			StartTime:          time.Now().Add(-10 * time.Second),
+			ActiveWorkers:      4,
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderUnifiedProgress(&builder)
+	result := builder.String()
+
+	// Should show file progress prominently
+	g.Expect(result).Should(ContainSubstring("50 / 100")) // Total processed files
+
+	// Should show bytes in subtitle
+	g.Expect(result).Should(ContainSubstring("MB"))
+
+	// Should show transfer rate
+	g.Expect(result).Should(ContainSubstring("/s"))
+
+	// Should show ETA when transfer is in progress
+	g.Expect(result).Should(ContainSubstring("ETA"))
+
+	// Should show failed files count
+	g.Expect(result).Should(ContainSubstring("2 failed"))
+}
+
+func TestRenderUnifiedProgress_ZeroTotalFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 0,
+			ProcessedFiles:     0,
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderUnifiedProgress(&builder)
+	result := builder.String()
+
+	// Should not crash with zero division
+	g.Expect(result).ShouldNot(BeEmpty())
+	g.Expect(result).Should(ContainSubstring("0 / 0"))
+}
+
+func TestRenderUnifiedProgress_NoFailedFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 50,
+			AlreadySyncedFiles: 20,
+			ProcessedFiles:     10,
+			TotalBytesInSource: 5 * 1024 * 1024,
+			AlreadySyncedBytes: 2 * 1024 * 1024,
+			TransferredBytes:   1 * 1024 * 1024,
+			FailedFiles:        0,
+			StartTime:          time.Now().Add(-5 * time.Second),
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderUnifiedProgress(&builder)
+	result := builder.String()
+
+	// Should not show failed files when there are none
+	g.Expect(result).ShouldNot(ContainSubstring("failed"))
+}
+
+func TestNewSyncScreen_InitializesProgressBars(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := NewSyncScreen(nil)
+
+	// Should initialize overallProgress for unified bar
+	g.Expect(screen.overallProgress).ShouldNot(BeNil())
+
+	// Should initialize fileProgress for per-file progress
+	g.Expect(screen.fileProgress).ShouldNot(BeNil())
+}
+
+func TestRenderSyncingView_UsesUnifiedProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 100,
+			AlreadySyncedFiles: 30,
+			ProcessedFiles:     20,
+			TotalBytesInSource: 10 * 1024 * 1024,
+			AlreadySyncedBytes: 3 * 1024 * 1024,
+			TransferredBytes:   2 * 1024 * 1024,
+			TotalBytes:         7 * 1024 * 1024,
+			FailedFiles:        2,
+			StartTime:          time.Now().Add(-10 * time.Second),
+			ActiveWorkers:      4,
+		},
+		height: 50,
+	}
+
+	result := screen.renderSyncingView()
+
+	// Should use unified progress (single "Progress:" label)
+	g.Expect(result).Should(ContainSubstring("Progress:"))
+
+	// Should NOT have separate "Overall Progress" and "This Session" sections
+	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))
+	g.Expect(result).ShouldNot(ContainSubstring("This Session:"))
+
+	// Should show file count in unified bar
+	g.Expect(result).Should(ContainSubstring("50 / 100 files"))
+}
+
+func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := NewSyncScreen(nil)
+	screen.status = &syncengine.Status{
+		TotalFilesInSource: 100,
+		AlreadySyncedFiles: 30,
+		ProcessedFiles:     20,
+		TotalBytesInSource: 10 * 1024 * 1024,
+		AlreadySyncedBytes: 3 * 1024 * 1024,
+		TransferredBytes:   2 * 1024 * 1024,
+		TotalBytes:         7 * 1024 * 1024,
+		FailedFiles:        2,
+		StartTime:          time.Now().Add(-10 * time.Second),
+		ActiveWorkers:      4,
+		FilesToSync: []*syncengine.FileToSync{
+			{RelativePath: "file1.txt", Status: "complete"},
+			{RelativePath: "file2.txt", Status: "complete"},
+		},
+	}
+	screen.height = 50
+	screen.width = 100
+
+	result := screen.View()
+
+	// Verify unified progress bar is present
+	g.Expect(result).Should(ContainSubstring("Progress:"))
+	g.Expect(result).Should(ContainSubstring("50 / 100 files (50.0%) • 2 failed"))
+	g.Expect(result).Should(ContainSubstring("5.0 MB / 10.0 MB"))
+
+	// Verify statistics are present
+	g.Expect(result).Should(ContainSubstring("Workers:"))
+	g.Expect(result).Should(ContainSubstring("Rate:"))
+
+	// Verify file list is present
+	g.Expect(result).Should(ContainSubstring("Recent Files:"))
+
+	// Verify no old progress bars
+	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))
+	g.Expect(result).ShouldNot(ContainSubstring("This Session:"))
+
+	// Verify help text
+	g.Expect(result).Should(ContainSubstring("Press Esc or q to cancel"))
 }
