@@ -17,6 +17,7 @@ type InputScreen struct {
 	config          *config.Config
 	sourceInput     textinput.Model
 	destInput       textinput.Model
+	patternInput    textinput.Model
 	focusIndex      int
 	completions     []string
 	completionIndex int
@@ -35,11 +36,16 @@ func NewInputScreen(cfg *config.Config) *InputScreen {
 	destInput.Placeholder = "/path/to/destination"
 	destInput.Prompt = "  "
 
+	patternInput := textinput.New()
+	patternInput.Placeholder = "*.mov"
+	patternInput.Prompt = "  "
+
 	return &InputScreen{
-		config:      cfg,
-		sourceInput: sourceInput,
-		destInput:   destInput,
-		focusIndex:  0,
+		config:       cfg,
+		sourceInput:  sourceInput,
+		destInput:    destInput,
+		patternInput: patternInput,
+		focusIndex:   0,
 	}
 }
 
@@ -59,10 +65,14 @@ func (s InputScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update the focused input
 	var cmd tea.Cmd
-	if s.focusIndex == 0 {
+
+	switch s.focusIndex {
+	case 0:
 		s.sourceInput, cmd = s.sourceInput.Update(msg)
-	} else {
+	case 1:
 		s.destInput, cmd = s.destInput.Update(msg)
+	case 2: //nolint:mnd // Field index for pattern input
+		s.patternInput, cmd = s.patternInput.Update(msg)
 	}
 
 	return s, cmd
@@ -74,12 +84,16 @@ func (s InputScreen) View() string {
 }
 
 func (s InputScreen) applyCompletion(completion string) InputScreen {
-	if s.focusIndex == 0 {
+	switch s.focusIndex {
+	case 0:
 		s.sourceInput.SetValue(completion)
 		s.sourceInput.CursorEnd()
-	} else {
+	case 1:
 		s.destInput.SetValue(completion)
 		s.destInput.CursorEnd()
+	case 2: //nolint:mnd // Field index for pattern input
+		s.patternInput.SetValue(completion)
+		s.patternInput.CursorEnd()
 	}
 
 	return s
@@ -168,13 +182,24 @@ func (s InputScreen) formatWindowedCompletions(completions []string, currentInde
 
 func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 	s.showCompletions = false
-	if s.focusIndex == 0 && s.sourceInput.Value() != "" {
-		// Move to destination input
-		return s.moveToNextField()
-	} else if s.focusIndex == 1 && s.destInput.Value() != "" {
+
+	switch s.focusIndex {
+	case 0:
+		if s.sourceInput.Value() != "" {
+			// Move to destination input
+			return s.moveToNextField()
+		}
+	case 1:
+		if s.destInput.Value() != "" {
+			// Move to pattern input
+			return s.moveToNextField()
+		}
+	case 2: //nolint:mnd // Field index for pattern input
+		// Pattern field is optional, so we can proceed even if empty
 		// Validate paths
 		s.config.SourcePath = s.sourceInput.Value()
 		s.config.DestPath = s.destInput.Value()
+		s.config.FilePattern = s.patternInput.Value()
 
 		err := s.config.ValidatePaths()
 		if err != nil {
@@ -194,6 +219,9 @@ func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 	return s, nil
 }
 
+// handleKeyMsg processes keyboard input for the input screen.
+//
+//nolint:cyclop // Key handlers naturally have high cyclomatic complexity
 func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle special keys using msg.Type (consistent with other screens)
 	switch msg.Type {
@@ -237,10 +265,14 @@ func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Update the focused input
 	var cmd tea.Cmd
-	if s.focusIndex == 0 {
+
+	switch s.focusIndex {
+	case 0:
 		s.sourceInput, cmd = s.sourceInput.Update(msg)
-	} else {
+	case 1:
 		s.destInput, cmd = s.destInput.Update(msg)
+	case 2: //nolint:mnd // Field index for pattern input
+		s.patternInput, cmd = s.patternInput.Update(msg)
 	}
 
 	return s, cmd
@@ -290,10 +322,15 @@ func (s InputScreen) handleShiftTabCompletion() InputScreen {
 
 func (s InputScreen) handleTabCompletion() InputScreen {
 	var currentValue string
-	if s.focusIndex == 0 {
+
+	switch s.focusIndex {
+	case 0:
 		currentValue = s.sourceInput.Value()
-	} else {
+	case 1:
 		currentValue = s.destInput.Value()
+	case 2: //nolint:mnd // Field index for pattern input
+		// Pattern field doesn't use path completion
+		return s
 	}
 
 	// Get completions if we don't have them or if this is first tab
@@ -325,6 +362,7 @@ func (s InputScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd
 	inputWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
 	s.sourceInput.Width = inputWidth
 	s.destInput.Width = inputWidth
+	s.patternInput.Width = inputWidth
 
 	return s, nil
 }
@@ -334,12 +372,19 @@ func (s InputScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd
 // ============================================================================
 
 func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
-	if s.focusIndex == 0 {
+	switch s.focusIndex {
+	case 0:
 		s.focusIndex = 1
 		s.sourceInput.Blur()
 		s.sourceInput.Prompt = "  "
 		s.destInput.Focus()
 		s.destInput.Prompt = shared.PromptArrow()
+	case 1:
+		s.focusIndex = 2
+		s.destInput.Blur()
+		s.destInput.Prompt = "  "
+		s.patternInput.Focus()
+		s.patternInput.Prompt = shared.PromptArrow()
 	}
 
 	s.showCompletions = false
@@ -349,12 +394,19 @@ func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
 }
 
 func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
-	if s.focusIndex == 1 {
+	switch s.focusIndex {
+	case 1:
 		s.focusIndex = 0
 		s.destInput.Blur()
 		s.destInput.Prompt = "  "
 		s.sourceInput.Focus()
 		s.sourceInput.Prompt = shared.PromptArrow()
+	case 2: //nolint:mnd // Field index for pattern input
+		s.focusIndex = 1
+		s.patternInput.Blur()
+		s.patternInput.Prompt = "  "
+		s.destInput.Focus()
+		s.destInput.Prompt = shared.PromptArrow()
 	}
 
 	s.showCompletions = false
@@ -386,6 +438,10 @@ func (s InputScreen) renderInputView() string {
 	if s.focusIndex == 1 && s.showCompletions && len(s.completions) > 0 {
 		content += s.formatCompletionList(s.completions, s.completionIndex) + "\n"
 	}
+
+	content += "\n" +
+		shared.RenderLabel("Filter Pattern (optional):") + "\n" +
+		s.patternInput.View() + "\n"
 
 	// Show validation error if present
 	if s.validationError != "" {

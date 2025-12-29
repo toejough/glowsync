@@ -1,10 +1,11 @@
+//nolint:varnamelen // Test files use idiomatic short variable names (t, g, etc.)
 package screens_test
 
 import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/screens"
@@ -110,4 +111,43 @@ func TestConfirmationScreen_Update_CtrlCKey(t *testing.T) {
 	msg := cmd()
 	g.Expect(msg).Should(BeAssignableToTypeOf(tea.QuitMsg{}),
 		"Ctrl+C should send tea.QuitMsg")
+}
+
+func TestConfirmationScreen_View_WithFilterPattern(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create a test engine with filter pattern
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine.FilePattern = "*.mov"
+	logPath := "/tmp/test-debug.log"
+
+	// Create confirmation screen
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	// Get the view output
+	output := screen.View()
+
+	// Verify output contains filter indicator
+	g.Expect(output).Should(ContainSubstring("Filtering by:"), "Expected filter label to be present")
+	g.Expect(output).Should(ContainSubstring("*.mov"), "Expected filter pattern to be displayed")
+}
+
+func TestConfirmationScreen_View_WithoutFilterPattern(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create a test engine without filter pattern
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine.FilePattern = ""
+	logPath := "/tmp/test-debug.log"
+
+	// Create confirmation screen
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	// Get the view output
+	output := screen.View()
+
+	// Verify output does NOT contain filter indicator
+	g.Expect(output).ShouldNot(ContainSubstring("Filtering by:"), "Expected no filter label when pattern is empty")
 }

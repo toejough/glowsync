@@ -1,7 +1,7 @@
 package screens
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,12 +51,20 @@ func (s ConfirmationScreen) View() string {
 
 	// Statistics
 	builder.WriteString(shared.RenderLabel("Files to sync: "))
-	builder.WriteString(fmt.Sprintf("%d", status.TotalFiles))
+	builder.WriteString(strconv.Itoa(status.TotalFiles))
 	builder.WriteString("\n")
 
 	builder.WriteString(shared.RenderLabel("Total size: "))
 	builder.WriteString(shared.FormatBytes(status.TotalBytes))
 	builder.WriteString("\n")
+
+	// Filter indicator (if pattern is set)
+	if s.engine.FilePattern != "" {
+		builder.WriteString("\n")
+		builder.WriteString(shared.RenderLabel("Filtering by: "))
+		builder.WriteString(s.engine.FilePattern)
+		builder.WriteString("\n")
+	}
 
 	// Help text
 	builder.WriteString("\n")
@@ -66,6 +74,7 @@ func (s ConfirmationScreen) View() string {
 }
 
 func (s ConfirmationScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	//nolint:exhaustive // Default case handles all other keys
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		// Emergency exit - quit immediately
