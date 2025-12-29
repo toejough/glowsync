@@ -192,7 +192,7 @@ func (s SyncScreen) handleTick() (tea.Model, tea.Cmd) {
 	// Update status from engine, but only every 200ms to reduce lock contention
 	if s.engine != nil {
 		now := time.Now()
-		if now.Sub(s.lastUpdate) >= 200*time.Millisecond {
+		if now.Sub(s.lastUpdate) >= shared.StatusUpdateThrottleMs*time.Millisecond {
 			s.status = s.engine.GetStatus()
 			s.lastUpdate = now
 		}
@@ -210,7 +210,7 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	s.height = msg.Height
 	// Set progress bar widths
 	progressWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
-	progressWidth = min(progressWidth, shared.ProgressDetailedLogInterval)
+	progressWidth = min(progressWidth, shared.MaxProgressBarWidth)
 
 	s.overallProgress.Width = progressWidth
 	s.fileProgress.Width = progressWidth

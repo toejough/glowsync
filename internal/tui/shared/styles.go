@@ -2,25 +2,63 @@ package shared
 
 import "github.com/charmbracelet/lipgloss"
 
-// Exported constants.
+// Exported constants organized by category for clarity.
 const (
+	// ============================================================================
+	// UI Layout & Display
+	// ============================================================================
+
 	// DefaultPadding is the default padding for UI elements
 	DefaultPadding = 2
-	// KeyCtrlC is the key binding for cancellation
-	KeyCtrlC                    = "ctrl+c"
-	ProgressBarWidth            = 40  // Width of progress bars
-	ProgressDetailedLogInterval = 100 // Log detailed progress every N files
-	ProgressEllipsisLength      = 3   // Length of ellipsis for truncated paths
-	ProgressHalfDivisor         = 2   // Divisor for calculating half values
-	ProgressLogThreshold        = 20  // Log progress when N or more files processed
-	ProgressPercentageScale     = 100 // Scale for percentage calculations
+	// ProgressBarWidth is the default width of progress bars
+	ProgressBarWidth = 40
+	// MaxProgressBarWidth is the maximum width for progress bars
+	MaxProgressBarWidth = 100
+	// ProgressLogThreshold is the margin for path display calculations
+	ProgressLogThreshold = 20
+
+	// ============================================================================
+	// Time Intervals
+	// ============================================================================
+
+	// TickIntervalMs is the interval for tick messages in milliseconds
+	TickIntervalMs = 100
+	// StatusUpdateThrottleMs is the minimum interval between status updates in milliseconds
+	StatusUpdateThrottleMs = 200
 	// ProgressUpdateInterval is how often to update progress (every N files)
 	ProgressUpdateInterval = 10
+
+	// ============================================================================
+	// Display Limits & Formatting
+	// ============================================================================
+
+	// ProgressEllipsisLength is the length of ellipsis for truncated paths
+	ProgressEllipsisLength = 3
+	// ProgressPercentageScale is the scale for percentage calculations (100 for percentages)
+	ProgressPercentageScale = 100
+
+	// ============================================================================
+	// Mathematical Constants
+	// ============================================================================
+
+	// ProgressHalfDivisor is the divisor for calculating half values
+	ProgressHalfDivisor = 2
+
+	// ============================================================================
+	// Keys & Symbols
+	// ============================================================================
+
+	// KeyCtrlC is the key binding for cancellation
+	KeyCtrlC = "ctrl+c"
 	// PromptArrow is the arrow character used in prompts
-	PromptArrow    = "▶ "
-	StateBalanced  = "balanced"
-	StateCancelled = "cancelled"
-	// StateComplete indicates the operation is complete
+	PromptArrow = "▶ "
+
+	// ============================================================================
+	// State Constants
+	// ============================================================================
+
+	StateBalanced    = "balanced"
+	StateCancelled   = "cancelled"
 	StateComplete    = "complete"
 	StateDestination = "destination"
 	StateError       = "error"

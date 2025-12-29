@@ -171,7 +171,7 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 	// Update status from engine, but only every 200ms to reduce lock contention
 	if s.engine != nil {
 		now := time.Now()
-		if now.Sub(s.lastUpdate) >= 200*time.Millisecond {
+		if now.Sub(s.lastUpdate) >= shared.StatusUpdateThrottleMs*time.Millisecond {
 			s.status = s.engine.GetStatus()
 			s.lastUpdate = now
 		}
@@ -186,7 +186,7 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 
 func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	// Set progress bar width
-	progressWidth := min(max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold), shared.ProgressDetailedLogInterval)
+	progressWidth := min(max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold), shared.MaxProgressBarWidth)
 
 	s.overallProgress.Width = progressWidth
 
@@ -317,7 +317,7 @@ func (s AnalysisScreen) renderInitializingView() string {
 type tickMsg time.Time
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(shared.ProgressDetailedLogInterval*time.Millisecond, func(t time.Time) tea.Msg {
+	return tea.Tick(shared.TickIntervalMs*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
