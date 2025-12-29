@@ -68,6 +68,12 @@ path = "internal/tui/shared/"
 text = "var-naming.*avoid meaningless package names"
 linters = ['revive']
 
+[[linters.exclusions.rules]]
+# Package name 'errors' is acceptable for error handling utilities
+path = "pkg/errors/"
+text = "var-naming.*avoid package names that conflict with Go standard library package names"
+linters = ['revive']
+
 [formatters]
 enable = ['gofmt', 'gofumpt', 'goimports']
 
