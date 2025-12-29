@@ -78,12 +78,13 @@ var (
 
 // Config holds the application configuration
 type Config struct {
-	SourcePath      string     `arg:"-s,--source"             help:"Source directory path"`
-	DestPath        string     `arg:"-d,--dest"               help:"Destination directory path"`
-	InteractiveMode bool       `arg:"-i,--interactive"        help:"Run in interactive mode"`
-	AdaptiveMode    bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll
-	Workers         int        `arg:"-w,--workers"            default:"4"                       help:"Number of workers (0 = adaptive)"`                                                                                                                                                   //nolint:lll
-	TypeOfChange    ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll // Struct tag with comprehensive help text
+	SourcePath       string     `arg:"-s,--source"             help:"Source directory path"`
+	DestPath         string     `arg:"-d,--dest"               help:"Destination directory path"`
+	InteractiveMode  bool       `arg:"-i,--interactive"        help:"Run in interactive mode"`
+	SkipConfirmation bool       `arg:"--yes,-y"                help:"Skip confirmation screen and proceed directly to sync"`                                                                                                                                                                //nolint:lll
+	AdaptiveMode     bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll
+	Workers          int        `arg:"-w,--workers"            default:"4"                       help:"Number of workers (0 = adaptive)"`                                                                                                                                                   //nolint:lll
+	TypeOfChange     ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll // Struct tag with comprehensive help text
 }
 
 // Description returns the program description for go-arg

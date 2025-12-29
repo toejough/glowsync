@@ -70,6 +70,39 @@ func TestAppModelTransitionToAnalysis(t *testing.T) {
 	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen after TransitionToAnalysisMsg")
 }
 
+func TestAppModelTransitionToConfirmation(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Start with config
+	cfg := &config.Config{
+		InteractiveMode: true,
+		SourcePath:      "/source",
+		DestPath:        "/dest",
+	}
+
+	model := tui.NewAppModel(cfg)
+
+	// Create a test engine
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	logPath := "/tmp/test-debug.log"
+
+	// Send TransitionToConfirmationMsg
+	confirmMsg := shared.TransitionToConfirmationMsg{
+		Engine:  engine,
+		LogPath: logPath,
+	}
+	updatedModel, _ := model.Update(confirmMsg)
+	appModel, ok := updatedModel.(tui.AppModel)
+	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel")
+
+	model = &appModel
+
+	// Verify we transitioned to ConfirmationScreen
+	_, isConfirmationScreen := model.CurrentScreen().(*screens.ConfirmationScreen)
+	g.Expect(isConfirmationScreen).Should(BeTrue(), "Expected ConfirmationScreen after TransitionToConfirmationMsg")
+}
+
 func TestAppModelTransitionToInput(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)

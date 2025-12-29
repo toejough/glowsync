@@ -109,9 +109,20 @@ func (s AnalysisScreen) getAnalysisPhaseText() string {
 }
 
 func (s AnalysisScreen) handleAnalysisComplete() (tea.Model, tea.Cmd) {
-	// Transition to sync screen with log path
+	// Check if confirmation should be skipped
+	if s.config.SkipConfirmation {
+		// Skip confirmation and go directly to sync
+		return s, func() tea.Msg {
+			return shared.TransitionToSyncMsg{
+				Engine:  s.engine,
+				LogPath: s.logPath,
+			}
+		}
+	}
+
+	// Show confirmation screen
 	return s, func() tea.Msg {
-		return shared.TransitionToSyncMsg{
+		return shared.TransitionToConfirmationMsg{
 			Engine:  s.engine,
 			LogPath: s.logPath,
 		}

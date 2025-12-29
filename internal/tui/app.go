@@ -54,12 +54,17 @@ func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case shared.TransitionToAnalysisMsg:
 		return a.transitionToAnalysis(msg)
+	case shared.TransitionToConfirmationMsg:
+		return a.transitionToConfirmation(msg)
 	case shared.TransitionToInputMsg:
 		return a.transitionToInput()
 	case shared.TransitionToSyncMsg:
 		return a.transitionToSync(msg)
 	case shared.TransitionToSummaryMsg:
 		return a.transitionToSummary(msg)
+	case shared.ConfirmSyncMsg:
+		// Convert ConfirmSyncMsg to TransitionToSyncMsg
+		return a.transitionToSync(shared.TransitionToSyncMsg(msg))
 	}
 
 	// Otherwise, pass the message to the current screen
@@ -86,6 +91,17 @@ func (a AppModel) transitionToAnalysis(msg shared.TransitionToAnalysisMsg) (tea.
 
 	// Create analysis screen
 	a.currentScreen = screens.NewAnalysisScreen(a.config)
+
+	return a, a.currentScreen.Init()
+}
+
+func (a AppModel) transitionToConfirmation(msg shared.TransitionToConfirmationMsg) (tea.Model, tea.Cmd) {
+	// Store engine and log path references
+	a.engine = msg.Engine
+	a.logPath = msg.LogPath
+
+	// Create confirmation screen
+	a.currentScreen = screens.NewConfirmationScreen(msg.Engine, msg.LogPath)
 
 	return a, a.currentScreen.Init()
 }

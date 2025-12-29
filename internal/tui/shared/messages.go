@@ -10,6 +10,12 @@ type AnalysisCompleteMsg struct{}
 // AnalysisStartedMsg is sent when analysis has started
 type AnalysisStartedMsg struct{}
 
+// ConfirmSyncMsg is sent by ConfirmationScreen when user confirms to proceed with sync
+type ConfirmSyncMsg struct {
+	Engine  *syncengine.Engine
+	LogPath string
+}
+
 // EngineInitializedMsg is sent when the engine has been created
 type EngineInitializedMsg struct {
 	Engine *syncengine.Engine
@@ -45,6 +51,12 @@ type SyncCompleteMsg struct{}
 type TransitionToAnalysisMsg struct {
 	SourcePath string
 	DestPath   string
+}
+
+// TransitionToConfirmationMsg is sent by AnalysisScreen when analysis completes
+type TransitionToConfirmationMsg struct {
+	Engine  *syncengine.Engine
+	LogPath string
 }
 
 // TransitionToInputMsg is sent by AnalysisScreen when user presses Esc to go back
