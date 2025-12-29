@@ -21,6 +21,7 @@ type InputScreen struct {
 	completions     []string
 	completionIndex int
 	showCompletions bool
+	validationError string
 }
 
 // NewInputScreen creates a new input screen
@@ -28,7 +29,7 @@ func NewInputScreen(cfg *config.Config) *InputScreen {
 	sourceInput := textinput.New()
 	sourceInput.Placeholder = "/path/to/source"
 	sourceInput.Focus()
-	sourceInput.Prompt = shared.PromptArrow
+	sourceInput.Prompt = shared.PromptArrow()
 
 	destInput := textinput.New()
 	destInput.Placeholder = "/path/to/destination"
@@ -177,7 +178,7 @@ func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 
 		err := s.config.ValidatePaths()
 		if err != nil {
-			// TODO: Show error inline instead of just staying on screen
+			s.validationError = err.Error()
 			return s, nil
 		}
 
@@ -211,6 +212,7 @@ func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return s.handleEnter()
 	default:
 		s.showCompletions = false
+		s.validationError = "" // Clear error when user types
 	}
 
 	// Update the focused input
@@ -317,10 +319,11 @@ func (s InputScreen) moveToNextField() (tea.Model, tea.Cmd) {
 		s.sourceInput.Blur()
 		s.sourceInput.Prompt = "  "
 		s.destInput.Focus()
-		s.destInput.Prompt = shared.PromptArrow
+		s.destInput.Prompt = shared.PromptArrow()
 	}
 
 	s.showCompletions = false
+	s.validationError = "" // Clear error when navigating
 
 	return s, nil
 }
@@ -331,10 +334,11 @@ func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
 		s.destInput.Blur()
 		s.destInput.Prompt = "  "
 		s.sourceInput.Focus()
-		s.sourceInput.Prompt = shared.PromptArrow
+		s.sourceInput.Prompt = shared.PromptArrow()
 	}
 
 	s.showCompletions = false
+	s.validationError = "" // Clear error when navigating
 
 	return s, nil
 }
@@ -361,6 +365,11 @@ func (s InputScreen) renderInputView() string {
 	// Show completion list for dest
 	if s.focusIndex == 1 && s.showCompletions && len(s.completions) > 0 {
 		content += s.formatCompletionList(s.completions, s.completionIndex) + "\n"
+	}
+
+	// Show validation error if present
+	if s.validationError != "" {
+		content += "\n" + shared.RenderError("Error: "+s.validationError) + "\n"
 	}
 
 	content += "\n" +

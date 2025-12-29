@@ -35,6 +35,36 @@ const (
 	Paranoid
 )
 
+// String returns the string representation of ChangeType
+func (ct *ChangeType) String() string {
+	switch *ct {
+	case MonotonicCount:
+		return "monotonic-count"
+	case FluctuatingCount:
+		return "fluctuating-count"
+	case Content:
+		return "content"
+	case DeviousContent:
+		return "devious-content-changes"
+	case Paranoid:
+		return "paranoid-does-not-mean-wrong"
+	default:
+		return "unknown"
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler for go-arg
+func (ct *ChangeType) UnmarshalText(text []byte) error {
+	parsed, err := ParseChangeType(string(text))
+	if err != nil {
+		return err
+	}
+
+	*ct = parsed
+
+	return nil
+}
+
 // Exported variables.
 var (
 	ErrDestPathNotDirectory   = errors.New("destination path is not a directory")
@@ -51,8 +81,8 @@ type Config struct {
 	SourcePath      string     `arg:"-s,--source"             help:"Source directory path"`
 	DestPath        string     `arg:"-d,--dest"               help:"Destination directory path"`
 	InteractiveMode bool       `arg:"-i,--interactive"        help:"Run in interactive mode"`
-	AdaptiveMode    bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll // Struct tag
-	Workers         int        `arg:"-w,--workers"            default:"4"                       help:"Number of concurrent workers (0 = adaptive)"`                                                                                                                                        //nolint:lll // Struct tag
+	AdaptiveMode    bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`
+	Workers         int        `arg:"-w,--workers"            default:"4"                       help:"Number of concurrent workers (0 = adaptive)"`
 	TypeOfChange    ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll // Struct tag with comprehensive help text
 }
 
@@ -110,8 +140,6 @@ func (Config) Version() string {
 }
 
 // ParseChangeType parses a string into a ChangeType
-//
-//nolint:varnamelen // 's' is idiomatic for simple string parameter
 func ParseChangeType(s string) (ChangeType, error) {
 	s = strings.ToLower(s)
 	switch s {

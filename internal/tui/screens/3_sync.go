@@ -54,7 +54,7 @@ func (s SyncScreen) Init() tea.Cmd {
 	return tea.Batch(
 		s.spinner.Tick,
 		s.startSync(),
-		tickCmd(),
+		shared.TickCmd(),
 	)
 }
 
@@ -71,7 +71,7 @@ func (s SyncScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s.handleError(msg)
 	case spinner.TickMsg:
 		return s.handleSpinnerTick(msg)
-	case tickMsg:
+	case shared.TickMsg:
 		return s.handleTick()
 	}
 
@@ -193,7 +193,7 @@ func (s SyncScreen) handleTick() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return s, tickCmd()
+	return s, shared.TickCmd()
 }
 
 // ============================================================================
@@ -305,16 +305,16 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 		switch file.Status {
 		case "complete":
 			style = shared.FileItemCompleteStyle()
-			icon = "✓"
+			icon = shared.SuccessSymbol()
 		case "copying":
 			style = shared.FileItemCopyingStyle()
 			icon = s.spinner.View()
 		case "error":
 			style = shared.FileItemErrorStyle()
-			icon = "✗"
+			icon = shared.ErrorSymbol()
 		default:
 			style = shared.FileItemStyle()
-			icon = "○"
+			icon = shared.PendingSymbol()
 		}
 
 		fmt.Fprintf(builder, "%s %s\n", icon, style.Render(file.RelativePath))

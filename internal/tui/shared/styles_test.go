@@ -55,3 +55,15 @@ func TestStyles(t *testing.T) {
 	g.Expect(shared.SuccessColor()).ShouldNot(BeEmpty())
 	g.Expect(shared.WarningColor()).ShouldNot(BeEmpty())
 }
+
+func TestSymbolFunctions(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Test symbol functions return non-empty strings
+	g.Expect(shared.ErrorSymbol()).ShouldNot(BeEmpty())
+	g.Expect(shared.PendingSymbol()).ShouldNot(BeEmpty())
+	g.Expect(shared.PromptArrow()).ShouldNot(BeEmpty())
+	g.Expect(shared.RightArrow()).ShouldNot(BeEmpty())
+	g.Expect(shared.SuccessSymbol()).ShouldNot(BeEmpty())
+}

@@ -1,7 +1,10 @@
-//nolint:revive // "shared" package name is meaningful for shared TUI utilities
 package shared
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"os"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Exported constants.
 const (
@@ -10,7 +13,6 @@ const (
 	// ============================================================================
 	// Keys & Symbols
 	// ============================================================================
-
 	// KeyCtrlC is the key binding for cancellation
 	KeyCtrlC = "ctrl+c"
 	// MaxProgressBarWidth is the maximum width for progress bars
@@ -27,13 +29,11 @@ const (
 	// ============================================================================
 	// Display Limits & Formatting
 	// ============================================================================
-
 	// ProgressEllipsisLength is the length of ellipsis for truncated paths
 	ProgressEllipsisLength = 3
 	// ============================================================================
 	// Mathematical Constants
 	// ============================================================================
-
 	// ProgressHalfDivisor is the divisor for calculating half values
 	ProgressHalfDivisor = 2
 	// ProgressLogThreshold is the margin for path display calculations
@@ -42,12 +42,9 @@ const (
 	ProgressPercentageScale = 100
 	// ProgressUpdateInterval is how often to update progress (every N files)
 	ProgressUpdateInterval = 10
-	// PromptArrow is the arrow character used in prompts
-	PromptArrow = "▶ "
 	// ============================================================================
 	// State Constants
 	// ============================================================================
-
 	// StateBalanced indicates balanced load between source and destination
 	StateBalanced = "balanced"
 	// StateCancelled indicates the operation was cancelled
@@ -61,12 +58,17 @@ const (
 	// ============================================================================
 	// Time Intervals
 	// ============================================================================
-
 	// TickIntervalMs is the interval for tick messages in milliseconds
 	TickIntervalMs = 100
 )
 
-func AccentColor() lipgloss.Color { return lipgloss.Color(accentColorCode) }
+func AccentColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(accentColorCode)
+}
 
 // ============================================================================
 // Box and Container Styles
@@ -97,7 +99,13 @@ func CompletionStyle() lipgloss.Style {
 		Foreground(NormalColor())
 }
 
-func DimColor() lipgloss.Color { return lipgloss.Color(dimColorCode) }
+func DimColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(dimColorCode)
+}
 
 // DimStyle returns the style for dimmed text
 func DimStyle() lipgloss.Style {
@@ -105,13 +113,32 @@ func DimStyle() lipgloss.Style {
 		Foreground(DimColor())
 }
 
-func ErrorColor() lipgloss.Color { return lipgloss.Color(errorColorCode) }
+func ErrorColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(errorColorCode)
+}
 
 // ErrorStyle returns the style for error messages
 func ErrorStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Foreground(ErrorColor()).
 		Bold(true)
+}
+
+// ============================================================================
+// Symbol Helper Functions (with ASCII fallbacks)
+// ============================================================================
+
+// ErrorSymbol returns an X with ASCII fallback
+func ErrorSymbol() string {
+	if unicodeDisabled {
+		return "[X]"
+	}
+
+	return "✗"
 }
 
 // FileItemCompleteStyle returns the style for completed file items
@@ -142,7 +169,13 @@ func FileItemStyle() lipgloss.Style {
 		Foreground(NormalColor())
 }
 
-func HighlightColor() lipgloss.Color { return lipgloss.Color(highlightColorCode) }
+func HighlightColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(highlightColorCode)
+}
 
 // LabelStyle returns the style for labels
 func LabelStyle() lipgloss.Style {
@@ -151,10 +184,40 @@ func LabelStyle() lipgloss.Style {
 		Bold(true)
 }
 
-func NormalColor() lipgloss.Color { return lipgloss.Color(normalColorCode) }
+func NormalColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(normalColorCode)
+}
+
+// PendingSymbol returns a circle symbol with ASCII fallback
+func PendingSymbol() string {
+	if unicodeDisabled {
+		return "[ ]"
+	}
+
+	return "○"
+}
 
 // PrimaryColor returns the primary color for the UI
-func PrimaryColor() lipgloss.Color { return lipgloss.Color(primaryColorCode) }
+func PrimaryColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(primaryColorCode)
+}
+
+// PromptArrow returns the prompt arrow symbol with ASCII fallback
+func PromptArrow() string {
+	if unicodeDisabled {
+		return "> "
+	}
+
+	return "▶ "
+}
 
 // RenderBox renders content in a box with consistent styling
 func RenderBox(content string) string {
@@ -200,6 +263,15 @@ func RenderWarning(text string) string {
 	return WarningStyle().Render(text)
 }
 
+// RightArrow returns a right arrow with ASCII fallback
+func RightArrow() string {
+	if unicodeDisabled {
+		return "->"
+	}
+
+	return "→"
+}
+
 // SubtitleStyle returns the style for subtitles
 func SubtitleStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
@@ -207,15 +279,36 @@ func SubtitleStyle() lipgloss.Style {
 		MarginBottom(1)
 }
 
-func SubtleColor() lipgloss.Color { return lipgloss.Color(subtleColorCode) }
+func SubtleColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
 
-func SuccessColor() lipgloss.Color { return lipgloss.Color(successColorCode) }
+	return lipgloss.Color(subtleColorCode)
+}
+
+func SuccessColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(successColorCode)
+}
 
 // SuccessStyle returns the style for success messages
 func SuccessStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Foreground(SuccessColor()).
 		Bold(true)
+}
+
+// SuccessSymbol returns a checkmark with ASCII fallback
+func SuccessSymbol() string {
+	if unicodeDisabled {
+		return "[OK]"
+	}
+
+	return "✓"
 }
 
 // ============================================================================
@@ -230,7 +323,13 @@ func TitleStyle() lipgloss.Style {
 		MarginBottom(1)
 }
 
-func WarningColor() lipgloss.Color { return lipgloss.Color(warningColorCode) }
+func WarningColor() lipgloss.Color {
+	if colorsDisabled {
+		return lipgloss.Color("")
+	}
+
+	return lipgloss.Color(warningColorCode)
+}
 
 // WarningStyle returns the style for warning messages
 func WarningStyle() lipgloss.Style {
@@ -251,4 +350,14 @@ const (
 	subtleColorCode  = "241" // Medium gray
 	successColorCode = "42"  // Green
 	warningColorCode = "226"
+)
+
+// unexported variables.
+var (
+	// colorsDisabled is true when NO_COLOR is set or TERM=dumb
+	//nolint:gochecknoglobals // Required for terminal capability detection
+	colorsDisabled = os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb"
+	// unicodeDisabled is true when terminal doesn't support Unicode
+	//nolint:gochecknoglobals // Required for terminal capability detection
+	unicodeDisabled = os.Getenv("TERM") == "dumb" || os.Getenv("LANG") == "C"
 )

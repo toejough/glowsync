@@ -2,6 +2,8 @@ package screens
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -49,7 +51,7 @@ func (s AnalysisScreen) Init() tea.Cmd {
 	return tea.Batch(
 		s.spinner.Tick,
 		s.initializeEngine(),
-		tickCmd(),
+		shared.TickCmd(),
 	)
 }
 
@@ -66,7 +68,7 @@ func (s AnalysisScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s.handleError(msg)
 	case spinner.TickMsg:
 		return s.handleSpinnerTick(msg)
-	case tickMsg:
+	case shared.TickMsg:
 		return s.handleTick()
 	}
 
@@ -133,7 +135,11 @@ func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg)
 	return s, tea.Batch(
 		func() tea.Msg {
 			// Enable file logging for debugging (non-fatal if it fails)
-			logPath := "copy-files-debug.log"
+			logPath := os.Getenv("COPY_FILES_LOG")
+			if logPath == "" {
+				logPath = filepath.Join(os.TempDir(), "copy-files-debug.log")
+			}
+
 			_ = engine.EnableFileLogging(logPath)
 
 			return nil
@@ -177,7 +183,7 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return s, tickCmd()
+	return s, shared.TickCmd()
 }
 
 // ============================================================================
@@ -309,16 +315,4 @@ func (s AnalysisScreen) renderInitializingView() string {
 	builder.WriteString("\n")
 
 	return shared.RenderBox(builder.String())
-}
-
-// ============================================================================
-// Tick Command
-// ============================================================================
-
-type tickMsg time.Time
-
-func tickCmd() tea.Cmd {
-	return tea.Tick(shared.TickIntervalMs*time.Millisecond, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
 }
