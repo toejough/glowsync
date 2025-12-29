@@ -81,8 +81,8 @@ type Config struct {
 	SourcePath      string     `arg:"-s,--source"             help:"Source directory path"`
 	DestPath        string     `arg:"-d,--dest"               help:"Destination directory path"`
 	InteractiveMode bool       `arg:"-i,--interactive"        help:"Run in interactive mode"`
-	AdaptiveMode    bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`
-	Workers         int        `arg:"-w,--workers"            default:"4"                       help:"Number of concurrent workers (0 = adaptive)"`
+	AdaptiveMode    bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll
+	Workers         int        `arg:"-w,--workers"            default:"4"                       help:"Number of workers (0 = adaptive)"`                                                                                                                                                   //nolint:lll
 	TypeOfChange    ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll // Struct tag with comprehensive help text
 }
 
@@ -140,9 +140,9 @@ func (Config) Version() string {
 }
 
 // ParseChangeType parses a string into a ChangeType
-func ParseChangeType(s string) (ChangeType, error) {
-	s = strings.ToLower(s)
-	switch s {
+func ParseChangeType(changeTypeStr string) (ChangeType, error) {
+	changeTypeStr = strings.ToLower(changeTypeStr)
+	switch changeTypeStr {
 	case "monotonic-count", "monotonic":
 		return MonotonicCount, nil
 	case "fluctuating-count", "fluctuating":
@@ -156,7 +156,7 @@ func ParseChangeType(s string) (ChangeType, error) {
 	default:
 		return MonotonicCount, fmt.Errorf(
 			"%w: %s (valid: monotonic, fluctuating, content, devious, paranoid)",
-			ErrInvalidChangeType, s)
+			ErrInvalidChangeType, changeTypeStr)
 	}
 }
 

@@ -11,9 +11,6 @@ import (
 const (
 	// DefaultPadding is the default padding for UI elements
 	DefaultPadding = 2
-	// ============================================================================
-	// Keys & Symbols
-	// ============================================================================
 	// KeyCtrlC is the key binding for cancellation
 	KeyCtrlC = "ctrl+c"
 	// MaxProgressBarWidth is the maximum width for progress bars
@@ -27,14 +24,8 @@ const (
 	PhaseScanningSource = "scanning_source" // PhaseScanningSource indicates source directory is being scanned
 	// ProgressBarWidth is the default width of progress bars
 	ProgressBarWidth = 40
-	// ============================================================================
-	// Display Limits & Formatting
-	// ============================================================================
 	// ProgressEllipsisLength is the length of ellipsis for truncated paths
 	ProgressEllipsisLength = 3
-	// ============================================================================
-	// Mathematical Constants
-	// ============================================================================
 	// ProgressHalfDivisor is the divisor for calculating half values
 	ProgressHalfDivisor = 2
 	// ProgressLogThreshold is the margin for path display calculations
@@ -43,9 +34,6 @@ const (
 	ProgressPercentageScale = 100
 	// ProgressUpdateInterval is how often to update progress (every N files)
 	ProgressUpdateInterval = 10
-	// ============================================================================
-	// State Constants
-	// ============================================================================
 	// StateBalanced indicates balanced load between source and destination
 	StateBalanced = "balanced"
 	// StateCancelled indicates the operation was cancelled
@@ -56,9 +44,6 @@ const (
 	StateSource      = "source"      // StateSource indicates source is the bottleneck
 	// StatusUpdateThrottleMs is the minimum interval between status updates in milliseconds
 	StatusUpdateThrottleMs = 200
-	// ============================================================================
-	// Time Intervals
-	// ============================================================================
 	// TickIntervalMs is the interval for tick messages in milliseconds
 	TickIntervalMs = 100
 )
@@ -185,6 +170,13 @@ func LabelStyle() lipgloss.Style {
 		Bold(true)
 }
 
+// MakePathClickable wraps a file path with OSC 8 hyperlink escape codes
+// to make it clickable in supported terminals (iTerm2, Terminal.app, etc.)
+func MakePathClickable(path string) string {
+	// OSC 8 format: \033]8;;file://path\033\\text\033]8;;\033\\
+	return fmt.Sprintf("\033]8;;file://%s\033\\%s\033]8;;\033\\", path, path)
+}
+
 func NormalColor() lipgloss.Color {
 	if colorsDisabled {
 		return lipgloss.Color("")
@@ -271,13 +263,6 @@ func RightArrow() string {
 	}
 
 	return "→"
-}
-
-// MakePathClickable wraps a file path with OSC 8 hyperlink escape codes
-// to make it clickable in supported terminals (iTerm2, Terminal.app, etc.)
-func MakePathClickable(path string) string {
-	// OSC 8 format: \033]8;;file://path\033\\text\033]8;;\033\\
-	return fmt.Sprintf("\033]8;;file://%s\033\\%s\033]8;;\033\\", path, path)
 }
 
 // SubtitleStyle returns the style for subtitles

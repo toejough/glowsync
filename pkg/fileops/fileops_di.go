@@ -26,6 +26,11 @@ func NewFileOps(fs filesystem.FileSystem) *FileOps {
 	return &FileOps{FS: fs}
 }
 
+// NewRealFileOps creates a new FileOps instance using the real filesystem.
+func NewRealFileOps() *FileOps {
+	return &FileOps{FS: filesystem.NewRealFileSystem()}
+}
+
 // Chtimes changes the access and modification times of a file
 func (fo *FileOps) Chtimes(path string, atime, mtime time.Time) error {
 	err := fo.FS.Chtimes(path, atime, mtime)
@@ -439,11 +444,6 @@ func (fo *FileOps) simpleCopyLoop(sourceFile filesystem.File, destFile filesyste
 	}
 
 	return written, nil
-}
-
-// NewRealFileOps creates a new FileOps instance using the real filesystem.
-func NewRealFileOps() *FileOps {
-	return &FileOps{FS: filesystem.NewRealFileSystem()}
 }
 
 // compareByteBuffers compares two byte buffers up to n bytes.
