@@ -162,6 +162,24 @@ func TestRenderRecentFiles(t *testing.T) {
 	g.Expect(result).Should(ContainSubstring("Recent Files"))
 }
 
+func TestRenderRecentFiles_Empty(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			FilesToSync: []*syncengine.FileToSync{},
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderRecentFiles(&builder, 5)
+	result := builder.String()
+
+	// Should NOT show "Recent Files:" header when list is empty
+	g.Expect(result).ShouldNot(ContainSubstring("Recent Files"))
+}
+
 func TestRenderStatistics(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)

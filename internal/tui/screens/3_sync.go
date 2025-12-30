@@ -353,6 +353,11 @@ func (s SyncScreen) renderFileList(builder *strings.Builder) {
 
 func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow int) {
 	// Show recent files when nothing is currently copying
+	// Only show header if there are files to display
+	if len(s.status.FilesToSync) == 0 {
+		return
+	}
+
 	builder.WriteString(shared.RenderLabel("Recent Files:"))
 	builder.WriteString("\n")
 
