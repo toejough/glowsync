@@ -372,6 +372,20 @@ func (e *Engine) Sync() error {
 	return e.syncFixed()
 }
 
+// applyFileFilter applies the file pattern filter to the given files
+func (e *Engine) applyFileFilter(files map[string]*fileops.FileInfo) map[string]*fileops.FileInfo {
+	filter := NewGlobFilter(e.FilePattern)
+	filtered := make(map[string]*fileops.FileInfo)
+
+	for relativePath, info := range files {
+		if filter.ShouldInclude(relativePath) {
+			filtered[relativePath] = info
+		}
+	}
+
+	return filtered
+}
+
 func (e *Engine) checkCancellation() error {
 	select {
 	case <-e.cancelChan:
@@ -1298,20 +1312,6 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 	e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found", len(sourceFiles)))
 
 	return sourceFiles, nil
-}
-
-// applyFileFilter applies the file pattern filter to the given files
-func (e *Engine) applyFileFilter(files map[string]*fileops.FileInfo) map[string]*fileops.FileInfo {
-	filter := NewGlobFilter(e.FilePattern)
-	filtered := make(map[string]*fileops.FileInfo)
-
-	for relativePath, info := range files {
-		if filter.ShouldInclude(relativePath) {
-			filtered[relativePath] = info
-		}
-	}
-
-	return filtered
 }
 
 // startAdaptiveScaling starts a goroutine that monitors performance and adjusts worker count

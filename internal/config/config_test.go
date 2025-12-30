@@ -194,43 +194,6 @@ func TestPostProcessConfig(t *testing.T) {
 	}
 }
 
-func TestValidatePaths(t *testing.T) {
-	t.Parallel()
-
-	// Note: ValidatePaths uses os.Stat internally, which we can't easily mock
-	// without changing the config package to accept a FileSystem interface.
-	// For now, we test the logic without filesystem access by using paths
-	// that we know will fail validation (empty strings).
-
-	tests := []struct {
-		name    string
-		cfg     config.Config
-		wantErr bool
-	}{
-		{
-			name:    "missing source path",
-			cfg:     config.Config{SourcePath: "", DestPath: "/some/dest"},
-			wantErr: true,
-		},
-		{
-			name:    "missing dest path",
-			cfg:     config.Config{SourcePath: "/some/source", DestPath: ""},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tt.cfg.ValidatePaths()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidatePaths() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestValidateFilePattern(t *testing.T) {
 	t.Parallel()
 
@@ -287,6 +250,43 @@ func TestValidateFilePattern(t *testing.T) {
 
 			if err != nil && !tt.wantErr {
 				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidatePaths(t *testing.T) {
+	t.Parallel()
+
+	// Note: ValidatePaths uses os.Stat internally, which we can't easily mock
+	// without changing the config package to accept a FileSystem interface.
+	// For now, we test the logic without filesystem access by using paths
+	// that we know will fail validation (empty strings).
+
+	tests := []struct {
+		name    string
+		cfg     config.Config
+		wantErr bool
+	}{
+		{
+			name:    "missing source path",
+			cfg:     config.Config{SourcePath: "", DestPath: "/some/dest"},
+			wantErr: true,
+		},
+		{
+			name:    "missing dest path",
+			cfg:     config.Config{SourcePath: "/some/source", DestPath: ""},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.cfg.ValidatePaths()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidatePaths() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

@@ -6,17 +6,6 @@ import (
 	"strings"
 )
 
-// pathExtractionPatterns are pre-compiled regex patterns for extracting file paths
-// from common Go error message formats. Compiled at package initialization for efficiency.
-var pathExtractionPatterns = []*regexp.Regexp{
-	// Unix/Linux paths (absolute and relative)
-	regexp.MustCompile(`\b\w+\s+([./][^\s:]+):`),
-	// Windows paths with backslashes
-	regexp.MustCompile(`\b\w+\s+([A-Za-z]:\\[^\s:]+):`),
-	// Windows paths with forward slashes
-	regexp.MustCompile(`\b\w+\s+([A-Za-z]:/[^\s:]+):`),
-}
-
 // Enricher enriches standard errors with actionable suggestions.
 type Enricher interface {
 	Enrich(err error, affectedPath string) error
@@ -29,6 +18,18 @@ func NewEnricher() Enricher {
 		generator: NewSuggestionGenerator(),
 	}
 }
+
+// unexported variables.
+var (
+	pathExtractionPatterns = []*regexp.Regexp{
+		// Unix/Linux paths (absolute and relative)
+		regexp.MustCompile(`\b\w+\s+([./][^\s:]+):`),
+		// Windows paths with backslashes
+		regexp.MustCompile(`\b\w+\s+([A-Za-z]:\\[^\s:]+):`),
+		// Windows paths with forward slashes
+		regexp.MustCompile(`\b\w+\s+([A-Za-z]:/[^\s:]+):`),
+	}
+)
 
 // enricher is the concrete implementation of Enricher.
 type enricher struct {

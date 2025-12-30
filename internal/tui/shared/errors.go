@@ -8,14 +8,12 @@ import (
 	"github.com/joe/copy-files/pkg/errors"
 )
 
-// Error display limits for different screen contexts
+// Exported constants.
 const (
-	// ErrorLimitInProgress is for screens showing ongoing operations (sync, confirmation)
-	ErrorLimitInProgress = 3
-
 	// ErrorLimitComplete is for the summary screen when sync completed
 	ErrorLimitComplete = 10
-
+	// ErrorLimitInProgress is for screens showing ongoing operations (sync, confirmation)
+	ErrorLimitInProgress = 3
 	// ErrorLimitOther is for summary screen in cancelled/error states
 	ErrorLimitOther = 5
 )
@@ -23,6 +21,7 @@ const (
 // ErrorDisplayContext defines the context in which errors are being displayed
 type ErrorDisplayContext int
 
+// ErrorDisplayContext values.
 const (
 	// ContextInProgress indicates errors shown during sync or confirmation
 	ContextInProgress ErrorDisplayContext = iota

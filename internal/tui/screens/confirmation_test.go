@@ -99,45 +99,6 @@ func TestConfirmationScreen_View(t *testing.T) {
 	g.Expect(output).Should(ContainSubstring("Esc to cancel"), "Expected help text for Esc")
 }
 
-func TestNewConfirmationScreen(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create a test engine
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
-	logPath := "/tmp/test-debug.log"
-
-	// Create confirmation screen
-	screen := screens.NewConfirmationScreen(engine, logPath)
-
-	// Verify screen is created
-	g.Expect(screen).ShouldNot(BeNil(), "Expected screen to be created")
-}
-
-func TestConfirmationScreen_View_WithErrors(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create a test engine with errors from analysis phase
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
-
-	// Simulate errors that occurred during analysis
-	// Need to modify engine.Status.Errors directly (not the copy from GetStatus())
-	engine.Status.Errors = []syncengine.FileError{
-		{FilePath: "/path/to/file1.txt", Error: errors.New("error 1")},
-		{FilePath: "/path/to/file2.txt", Error: errors.New("error 2")},
-	}
-
-	logPath := "/tmp/test-debug.log"
-	screen := screens.NewConfirmationScreen(engine, logPath)
-
-	output := screen.View()
-
-	// Should display errors during analysis
-	g.Expect(output).Should(ContainSubstring("error 1"), "Should show first error")
-	g.Expect(output).Should(ContainSubstring("error 2"), "Should show second error")
-}
-
 func TestConfirmationScreen_View_ErrorDisplayLimit(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -174,4 +135,43 @@ func TestConfirmationScreen_View_ErrorDisplayLimit(t *testing.T) {
 	// Should show truncation message with "see summary"
 	g.Expect(output).Should(ContainSubstring("... and 3 more (see summary)"),
 		"Should show truncation message pointing to summary")
+}
+
+func TestConfirmationScreen_View_WithErrors(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create a test engine with errors from analysis phase
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+
+	// Simulate errors that occurred during analysis
+	// Need to modify engine.Status.Errors directly (not the copy from GetStatus())
+	engine.Status.Errors = []syncengine.FileError{
+		{FilePath: "/path/to/file1.txt", Error: errors.New("error 1")},
+		{FilePath: "/path/to/file2.txt", Error: errors.New("error 2")},
+	}
+
+	logPath := "/tmp/test-debug.log"
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	output := screen.View()
+
+	// Should display errors during analysis
+	g.Expect(output).Should(ContainSubstring("error 1"), "Should show first error")
+	g.Expect(output).Should(ContainSubstring("error 2"), "Should show second error")
+}
+
+func TestNewConfirmationScreen(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create a test engine
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	logPath := "/tmp/test-debug.log"
+
+	// Create confirmation screen
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	// Verify screen is created
+	g.Expect(screen).ShouldNot(BeNil(), "Expected screen to be created")
 }

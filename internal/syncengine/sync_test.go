@@ -323,6 +323,188 @@ func TestEngineEnableFileLogging(t *testing.T) {
 	wrapper.ExpectReturnedValuesShould(Not(BeNil()))
 }
 
+//nolint:gocognit,funlen,cyclop,noinlineerr,modernize // Integration test with comprehensive scenarios
+func TestEngineFilePatternFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		pattern         string
+		createFiles     []string
+		expectedMatches []string
+	}{
+		{
+			name:    "empty pattern matches all",
+			pattern: "",
+			createFiles: []string{
+				"video.mov",
+				"photo.jpg",
+				"document.pdf",
+			},
+			expectedMatches: []string{
+				"video.mov",
+				"photo.jpg",
+				"document.pdf",
+			},
+		},
+		{
+			name:    "simple extension filter",
+			pattern: "*.mov",
+			createFiles: []string{
+				"video1.mov",
+				"video2.mov",
+				"photo.jpg",
+				"document.pdf",
+			},
+			expectedMatches: []string{
+				"video1.mov",
+				"video2.mov",
+			},
+		},
+		{
+			name:    "double star nested files",
+			pattern: "**/*.mov",
+			createFiles: []string{
+				"video.mov",
+				"videos/clip.mov",
+				"videos/2023/vacation.mov",
+				"photos/pic.jpg",
+			},
+			expectedMatches: []string{
+				"video.mov",
+				"videos/clip.mov",
+				"videos/2023/vacation.mov",
+			},
+		},
+		{
+			name:    "brace expansion multiple extensions",
+			pattern: "*.{mov,mp4}",
+			createFiles: []string{
+				"video1.mov",
+				"video2.mp4",
+				"video3.avi",
+				"photo.jpg",
+			},
+			expectedMatches: []string{
+				"video1.mov",
+				"video2.mp4",
+			},
+		},
+		{
+			name:    "specific directory pattern",
+			pattern: "videos/*.mov",
+			createFiles: []string{
+				"root.mov",
+				"videos/clip1.mov",
+				"videos/clip2.mov",
+				"photos/vid.mov",
+			},
+			expectedMatches: []string{
+				"videos/clip1.mov",
+				"videos/clip2.mov",
+			},
+		},
+		{
+			name:    "case insensitive matching",
+			pattern: "*.MOV",
+			createFiles: []string{
+				"video1.mov",
+				"video2.MOV",
+				"video3.MoV",
+				"photo.jpg",
+			},
+			expectedMatches: []string{
+				"video1.mov",
+				"video2.MOV",
+				"video3.MoV",
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Create temporary directories
+			sourceDir := t.TempDir()
+			destDir := t.TempDir()
+
+			// Create test files in source
+			for _, filePath := range testCase.createFiles {
+				fullPath := filepath.Join(sourceDir, filePath)
+
+				// Create parent directory if needed
+				parentDir := filepath.Dir(fullPath)
+
+				err := os.MkdirAll(parentDir, 0o755)
+				if err != nil {
+					t.Fatalf("Failed to create directory %s: %v", parentDir, err)
+				}
+
+				// Create file with some content
+				err = os.WriteFile(fullPath, []byte("test content"), 0o600)
+				if err != nil {
+					t.Fatalf("Failed to create file %s: %v", fullPath, err)
+				}
+			}
+
+			// Create engine with file pattern
+			engine := syncengine.NewEngine(sourceDir, destDir)
+			engine.FilePattern = testCase.pattern
+
+			// Run analysis
+			err := engine.Analyze()
+			if err != nil {
+				t.Fatalf("Analysis failed: %v", err)
+			}
+
+			// Get the status to see what files were found
+			status := engine.GetStatus()
+
+			// Check that the correct number of files were matched
+			if status.TotalFiles != len(testCase.expectedMatches) {
+				t.Errorf("Expected %d files to match pattern '%s', got %d",
+					len(testCase.expectedMatches),
+					testCase.pattern,
+					status.TotalFiles,
+				)
+			}
+
+			// Sync the files
+			err = engine.Sync()
+			if err != nil {
+				t.Fatalf("Sync failed: %v", err)
+			}
+
+			// Verify only the expected files were synced to destination
+			for _, expectedFile := range testCase.expectedMatches {
+				destPath := filepath.Join(destDir, expectedFile)
+				if _, err := os.Stat(destPath); os.IsNotExist(err) {
+					t.Errorf("Expected file %s to be synced but it doesn't exist in destination", expectedFile)
+				}
+			}
+
+			// Verify files that shouldn't match were NOT synced
+			for _, createdFile := range testCase.createFiles {
+				isExpected := false
+				for _, expected := range testCase.expectedMatches {
+					if createdFile == expected {
+						isExpected = true
+						break
+					}
+				}
+
+				if !isExpected {
+					destPath := filepath.Join(destDir, createdFile)
+					if _, err := os.Stat(destPath); !os.IsNotExist(err) {
+						t.Errorf("File %s should NOT have been synced but it exists in destination", createdFile)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestEngineGetStatus(t *testing.T) {
 	t.Parallel()
 
@@ -881,186 +1063,4 @@ func setupSameSizeModtimeTest(t *testing.T) (sourceDir, destDir, destFile string
 	}
 
 	return sourceDir, destDir, destFile
-}
-
-//nolint:gocognit,funlen,cyclop,noinlineerr,modernize // Integration test with comprehensive scenarios
-func TestEngineFilePatternFilter(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name            string
-		pattern         string
-		createFiles     []string
-		expectedMatches []string
-	}{
-		{
-			name:    "empty pattern matches all",
-			pattern: "",
-			createFiles: []string{
-				"video.mov",
-				"photo.jpg",
-				"document.pdf",
-			},
-			expectedMatches: []string{
-				"video.mov",
-				"photo.jpg",
-				"document.pdf",
-			},
-		},
-		{
-			name:    "simple extension filter",
-			pattern: "*.mov",
-			createFiles: []string{
-				"video1.mov",
-				"video2.mov",
-				"photo.jpg",
-				"document.pdf",
-			},
-			expectedMatches: []string{
-				"video1.mov",
-				"video2.mov",
-			},
-		},
-		{
-			name:    "double star nested files",
-			pattern: "**/*.mov",
-			createFiles: []string{
-				"video.mov",
-				"videos/clip.mov",
-				"videos/2023/vacation.mov",
-				"photos/pic.jpg",
-			},
-			expectedMatches: []string{
-				"video.mov",
-				"videos/clip.mov",
-				"videos/2023/vacation.mov",
-			},
-		},
-		{
-			name:    "brace expansion multiple extensions",
-			pattern: "*.{mov,mp4}",
-			createFiles: []string{
-				"video1.mov",
-				"video2.mp4",
-				"video3.avi",
-				"photo.jpg",
-			},
-			expectedMatches: []string{
-				"video1.mov",
-				"video2.mp4",
-			},
-		},
-		{
-			name:    "specific directory pattern",
-			pattern: "videos/*.mov",
-			createFiles: []string{
-				"root.mov",
-				"videos/clip1.mov",
-				"videos/clip2.mov",
-				"photos/vid.mov",
-			},
-			expectedMatches: []string{
-				"videos/clip1.mov",
-				"videos/clip2.mov",
-			},
-		},
-		{
-			name:    "case insensitive matching",
-			pattern: "*.MOV",
-			createFiles: []string{
-				"video1.mov",
-				"video2.MOV",
-				"video3.MoV",
-				"photo.jpg",
-			},
-			expectedMatches: []string{
-				"video1.mov",
-				"video2.MOV",
-				"video3.MoV",
-			},
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Create temporary directories
-			sourceDir := t.TempDir()
-			destDir := t.TempDir()
-
-			// Create test files in source
-			for _, filePath := range testCase.createFiles {
-				fullPath := filepath.Join(sourceDir, filePath)
-
-				// Create parent directory if needed
-				parentDir := filepath.Dir(fullPath)
-
-				err := os.MkdirAll(parentDir, 0o755)
-				if err != nil {
-					t.Fatalf("Failed to create directory %s: %v", parentDir, err)
-				}
-
-				// Create file with some content
-				err = os.WriteFile(fullPath, []byte("test content"), 0o600)
-				if err != nil {
-					t.Fatalf("Failed to create file %s: %v", fullPath, err)
-				}
-			}
-
-			// Create engine with file pattern
-			engine := syncengine.NewEngine(sourceDir, destDir)
-			engine.FilePattern = testCase.pattern
-
-			// Run analysis
-			err := engine.Analyze()
-			if err != nil {
-				t.Fatalf("Analysis failed: %v", err)
-			}
-
-			// Get the status to see what files were found
-			status := engine.GetStatus()
-
-			// Check that the correct number of files were matched
-			if status.TotalFiles != len(testCase.expectedMatches) {
-				t.Errorf("Expected %d files to match pattern '%s', got %d",
-					len(testCase.expectedMatches),
-					testCase.pattern,
-					status.TotalFiles,
-				)
-			}
-
-			// Sync the files
-			err = engine.Sync()
-			if err != nil {
-				t.Fatalf("Sync failed: %v", err)
-			}
-
-			// Verify only the expected files were synced to destination
-			for _, expectedFile := range testCase.expectedMatches {
-				destPath := filepath.Join(destDir, expectedFile)
-				if _, err := os.Stat(destPath); os.IsNotExist(err) {
-					t.Errorf("Expected file %s to be synced but it doesn't exist in destination", expectedFile)
-				}
-			}
-
-			// Verify files that shouldn't match were NOT synced
-			for _, createdFile := range testCase.createFiles {
-				isExpected := false
-				for _, expected := range testCase.expectedMatches {
-					if createdFile == expected {
-						isExpected = true
-						break
-					}
-				}
-
-				if !isExpected {
-					destPath := filepath.Join(destDir, createdFile)
-					if _, err := os.Stat(destPath); !os.IsNotExist(err) {
-						t.Errorf("File %s should NOT have been synced but it exists in destination", createdFile)
-					}
-				}
-			}
-		})
-	}
 }

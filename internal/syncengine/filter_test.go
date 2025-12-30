@@ -7,6 +7,18 @@ import (
 	"github.com/joe/copy-files/internal/syncengine"
 )
 
+func TestGlobFilterInvalidPattern(t *testing.T) {
+	t.Parallel()
+
+	// Test that invalid patterns don't panic but return false
+	filter := syncengine.NewGlobFilter("[invalid")
+	result := filter.ShouldInclude("test.txt")
+
+	if result {
+		t.Error("Invalid pattern should not match files")
+	}
+}
+
 //nolint:funlen // Test function with comprehensive table-driven test cases
 func TestGlobFilterShouldInclude(t *testing.T) {
 	t.Parallel()
@@ -213,17 +225,5 @@ func TestGlobFilterShouldInclude(t *testing.T) {
 				)
 			}
 		})
-	}
-}
-
-func TestGlobFilterInvalidPattern(t *testing.T) {
-	t.Parallel()
-
-	// Test that invalid patterns don't panic but return false
-	filter := syncengine.NewGlobFilter("[invalid")
-	result := filter.ShouldInclude("test.txt")
-
-	if result {
-		t.Error("Invalid pattern should not match files")
 	}
 }
