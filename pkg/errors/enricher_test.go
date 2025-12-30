@@ -205,6 +205,7 @@ func TestEnricher_EnrichWithEmptyPath(t *testing.T) {
 	}
 }
 
+//nolint:funlen // Comprehensive test cases for path extraction patterns
 func TestEnricher_ExtractPathFromErrorMessage(t *testing.T) {
 	t.Parallel()
 
@@ -266,26 +267,26 @@ func TestEnricher_ExtractPathFromErrorMessage(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
 			enricher := pkgerrors.NewEnricher()
-			originalErr := errors.New(tt.errorMsg)
+			originalErr := errors.New(testCase.errorMsg)
 
-			enriched := enricher.Enrich(originalErr, tt.providedPath)
+			enriched := enricher.Enrich(originalErr, testCase.providedPath)
 
 			var actionableErr pkgerrors.ActionableError
 			if !errors.As(enriched, &actionableErr) {
 				t.Fatalf("expected ActionableError, got %T", enriched)
 			}
 
-			if actionableErr.AffectedPath() != tt.expectedPath {
-				t.Errorf("expected path %q, got %q", tt.expectedPath, actionableErr.AffectedPath())
+			if actionableErr.AffectedPath() != testCase.expectedPath {
+				t.Errorf("expected path %q, got %q", testCase.expectedPath, actionableErr.AffectedPath())
 			}
 
-			if actionableErr.Category() != tt.category {
-				t.Errorf("expected category %q, got %q", tt.category, actionableErr.Category())
+			if actionableErr.Category() != testCase.category {
+				t.Errorf("expected category %q, got %q", testCase.category, actionableErr.Category())
 			}
 		})
 	}
