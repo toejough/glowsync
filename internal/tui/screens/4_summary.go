@@ -282,18 +282,24 @@ func (s SummaryScreen) renderCompleteSummary(builder *strings.Builder, elapsed t
 	builder.WriteString(shared.RenderLabel("This Session:"))
 	builder.WriteString("\n")
 
-	fmt.Fprintf(builder, "Files synced successfully: %d\n", s.status.ProcessedFiles)
+	// Show helpful message when zero files were synced
+	if s.status.ProcessedFiles == 0 && s.status.TotalFiles == 0 {
+		builder.WriteString(shared.RenderEmptyListPlaceholder("All files already up-to-date"))
+		builder.WriteString("\n")
+	} else {
+		fmt.Fprintf(builder, "Files synced successfully: %d\n", s.status.ProcessedFiles)
 
-	if s.status.CancelledFiles > 0 {
-		fmt.Fprintf(builder, "Files cancelled: %d\n", s.status.CancelledFiles)
+		if s.status.CancelledFiles > 0 {
+			fmt.Fprintf(builder, "Files cancelled: %d\n", s.status.CancelledFiles)
+		}
+
+		if s.status.FailedFiles > 0 {
+			fmt.Fprintf(builder, "Files failed: %d\n", s.status.FailedFiles)
+		}
+
+		fmt.Fprintf(builder, "Total files to copy: %d\n", s.status.TotalFiles)
+		fmt.Fprintf(builder, "Total bytes to copy: %s\n", shared.FormatBytes(s.status.TotalBytes))
 	}
-
-	if s.status.FailedFiles > 0 {
-		fmt.Fprintf(builder, "Files failed: %d\n", s.status.FailedFiles)
-	}
-
-	fmt.Fprintf(builder, "Total files to copy: %d\n", s.status.TotalFiles)
-	fmt.Fprintf(builder, "Total bytes to copy: %s\n", shared.FormatBytes(s.status.TotalBytes))
 	fmt.Fprintf(builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
 
 	// Calculate average speed based on actual elapsed time

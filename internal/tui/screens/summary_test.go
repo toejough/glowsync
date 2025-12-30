@@ -440,3 +440,34 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 	view := screen.View()
 	g.Expect(view).Should(ContainSubstring("Sync Complete"))
 }
+
+func TestSummaryScreenViewCompleteWithZeroFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := syncengine.NewEngine("/source", "/dest")
+
+	// Set up engine with zero files synced (all already up-to-date)
+	status := engine.GetStatus()
+	status.StartTime = time.Now().Add(-2 * time.Second)
+	status.EndTime = time.Now()
+	status.TotalFilesInSource = 10
+	status.AlreadySyncedFiles = 10
+	status.ProcessedFiles = 0 // Zero files synced this session
+	status.TotalFiles = 0
+	status.TotalBytes = 0
+	status.TransferredBytes = 0
+
+	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
+
+	view := screen.View()
+	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+
+	// Should show helpful explanation when 0 files synced
+	// (all files were already up-to-date)
+	g.Expect(view).Should(Or(
+		ContainSubstring("All files already up-to-date"),
+		ContainSubstring("No files needed to be synced"),
+		ContainSubstring("already in sync"),
+	), "Should show explanation for 0 files synced")
+}
