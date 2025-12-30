@@ -133,35 +133,12 @@ func (s SummaryScreen) renderCancelledErrors(builder *strings.Builder) {
 	builder.WriteString(shared.RenderError("Errors:"))
 	builder.WriteString("\n")
 
-	// Create enricher for actionable error messages
-	enricher := errors.NewEnricher()
-
-	// Show up to 5 errors
-	maxErrors := 5
-	for i, fileErr := range s.status.Errors {
-		if i >= maxErrors {
-			remaining := len(s.status.Errors) - maxErrors
-			fmt.Fprintf(builder, "... and %d more error(s)\n", remaining)
-
-			break
-		}
-
-		// Enrich each error
-		enrichedErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
-
-		fmt.Fprintf(builder, "  %s %s: %v\n",
-			shared.ErrorSymbol(),
-			shared.FileItemErrorStyle().Render(fileErr.FilePath),
-			enrichedErr)
-
-		// Show suggestions for this error
-		suggestions := errors.FormatSuggestions(enrichedErr)
-		if suggestions != "" {
-			// Indent suggestions to align with error
-			indentedSuggestions := "    " + strings.ReplaceAll(suggestions, "\n", "\n    ")
-			fmt.Fprintf(builder, "%s\n", indentedSuggestions)
-		}
-	}
+	// Use shared helper with other context (5 error limit for cancelled state)
+	errorList := shared.RenderErrorList(shared.ErrorListConfig{
+		Errors:  s.status.Errors,
+		Context: shared.ContextOther,
+	})
+	builder.WriteString(errorList)
 }
 
 func (s SummaryScreen) renderCancelledStatistics(builder *strings.Builder) {
@@ -263,35 +240,12 @@ func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
 	builder.WriteString(shared.RenderError("Errors:"))
 	builder.WriteString("\n")
 
-	// Create enricher for actionable error messages
-	enricher := errors.NewEnricher()
-
-	// Show up to 10 errors
-	maxErrors := 10
-	for i, fileErr := range s.status.Errors {
-		if i >= maxErrors {
-			remaining := len(s.status.Errors) - maxErrors
-			fmt.Fprintf(builder, "... and %d more error(s)\n", remaining)
-
-			break
-		}
-
-		// Enrich each error
-		enrichedErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
-
-		fmt.Fprintf(builder, "  %s %s: %v\n",
-			shared.ErrorSymbol(),
-			shared.FileItemErrorStyle().Render(fileErr.FilePath),
-			enrichedErr)
-
-		// Show suggestions for this error
-		suggestions := errors.FormatSuggestions(enrichedErr)
-		if suggestions != "" {
-			// Indent suggestions to align with error
-			indentedSuggestions := "    " + strings.ReplaceAll(suggestions, "\n", "\n    ")
-			fmt.Fprintf(builder, "%s\n", indentedSuggestions)
-		}
-	}
+	// Use shared helper with complete state context (10 error limit)
+	errorList := shared.RenderErrorList(shared.ErrorListConfig{
+		Errors:  s.status.Errors,
+		Context: shared.ContextComplete,
+	})
+	builder.WriteString(errorList)
 }
 
 func (s SummaryScreen) renderCompleteStatistics(builder *strings.Builder) {
@@ -439,32 +393,12 @@ func (s SummaryScreen) renderErrorView() string {
 			builder.WriteString(shared.RenderError("Additional Errors:"))
 			builder.WriteString("\n")
 
-			// Show up to 5 errors
-			maxErrors := 5
-			for i, fileErr := range s.status.Errors {
-				if i >= maxErrors {
-					remaining := len(s.status.Errors) - maxErrors
-					builder.WriteString(fmt.Sprintf("... and %d more error(s)\n", remaining))
-
-					break
-				}
-
-				// Enrich each additional error
-				enrichedFileErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
-
-				fmt.Fprintf(&builder, "  %s %s: %v\n",
-					shared.ErrorSymbol(),
-					shared.FileItemErrorStyle().Render(fileErr.FilePath),
-					enrichedFileErr)
-
-				// Show suggestions for this error
-				fileSuggestions := errors.FormatSuggestions(enrichedFileErr)
-				if fileSuggestions != "" {
-					// Indent suggestions to align with error
-					indentedSuggestions := "    " + strings.ReplaceAll(fileSuggestions, "\n", "\n    ")
-					fmt.Fprintf(&builder, "%s\n", indentedSuggestions)
-				}
-			}
+			// Use shared helper with other context (5 error limit for error state)
+			errorList := shared.RenderErrorList(shared.ErrorListConfig{
+				Errors:  s.status.Errors,
+				Context: shared.ContextOther,
+			})
+			builder.WriteString(errorList)
 
 			builder.WriteString("\n")
 		}

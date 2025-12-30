@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/shared"
-	"github.com/joe/copy-files/pkg/errors"
 )
 
 // SyncScreen handles the file synchronization process
@@ -475,47 +474,16 @@ func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 	builder.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors (%d):", len(s.status.Errors))))
 	builder.WriteString("\n")
 
-	// Show up to 5 most recent errors
-	maxErrors := 5
-
-	startIdx := 0
-	if len(s.status.Errors) > maxErrors {
-		startIdx = len(s.status.Errors) - maxErrors
+	// Use shared error rendering with in-progress context (3 error limit)
+	config := shared.ErrorListConfig{
+		Errors:           s.status.Errors,
+		Context:          shared.ContextInProgress,
+		MaxWidth:         s.getMaxPathWidth(),
+		TruncatePathFunc: s.truncatePath,
 	}
 
-	// Create enricher for actionable error messages
-	enricher := errors.NewEnricher()
-
-	maxWidth := s.getMaxPathWidth()
-	for i := startIdx; i < len(s.status.Errors); i++ {
-		fileErr := s.status.Errors[i]
-		fmt.Fprintf(builder, "  %s %s\n",
-			shared.ErrorSymbol(),
-			shared.FileItemErrorStyle().Render(s.truncatePath(fileErr.FilePath, maxWidth)))
-
-		// Enrich the error with actionable suggestions
-		enrichedErr := enricher.Enrich(fileErr.Error, fileErr.FilePath)
-
-		// Truncate error message if too long
-		errMsg := enrichedErr.Error()
-		if len(errMsg) > maxWidth {
-			errMsg = errMsg[:maxWidth-3] + "..."
-		}
-
-		fmt.Fprintf(builder, "    %s\n", errMsg)
-
-		// Show suggestions if available
-		suggestions := errors.FormatSuggestions(enrichedErr)
-		if suggestions != "" {
-			// Indent suggestions to align with error message
-			indentedSuggestions := "    " + strings.ReplaceAll(suggestions, "\n", "\n    ")
-			fmt.Fprintf(builder, "%s\n", indentedSuggestions)
-		}
-	}
-
-	if len(s.status.Errors) > maxErrors {
-		fmt.Fprintf(builder, "  ... and %d more (see completion screen)\n", len(s.status.Errors)-maxErrors)
-	}
+	errorList := shared.RenderErrorList(config)
+	builder.WriteString(errorList)
 }
 
 func (s SyncScreen) renderSyncingView() string {

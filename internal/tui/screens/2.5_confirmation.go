@@ -66,6 +66,20 @@ func (s ConfirmationScreen) View() string {
 		builder.WriteString("\n")
 	}
 
+	// Show errors if any occurred during analysis
+	if len(status.Errors) > 0 {
+		builder.WriteString("\n")
+		builder.WriteString(shared.RenderError("Errors during analysis:"))
+		builder.WriteString("\n")
+
+		// Use shared helper with in-progress context (3 error limit with "see summary" message)
+		errorList := shared.RenderErrorList(shared.ErrorListConfig{
+			Errors:  status.Errors,
+			Context: shared.ContextInProgress,
+		})
+		builder.WriteString(errorList)
+	}
+
 	// Help text
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Enter to begin sync • Esc to cancel • Ctrl+C to exit"))
