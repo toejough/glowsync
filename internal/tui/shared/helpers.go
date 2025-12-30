@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/joe/copy-files/pkg/formatters"
 )
 
@@ -54,6 +55,17 @@ func FormatRate(bytesPerSec float64) string {
 	}
 
 	return fmt.Sprintf("%.1f %cB/s", bytesPerSec/div, "KMGTPE"[exp])
+}
+
+// RenderPath returns a styled path string, truncated if necessary
+func RenderPath(path string, style lipgloss.Style, maxWidth int) string {
+	truncatedPath := TruncatePath(path, maxWidth)
+	return style.Render(truncatedPath)
+}
+
+// RenderPathPlain returns a plain (unstyled) path string, truncated if necessary
+func RenderPathPlain(path string, maxWidth int) string {
+	return TruncatePath(path, maxWidth)
 }
 
 // ============================================================================
