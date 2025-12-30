@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/syncengine"
+	"github.com/joe/copy-files/internal/tui/shared"
 )
 
 func TestCalculateMaxFilesToShow(t *testing.T) {
@@ -88,6 +89,19 @@ func TestGetMaxPathWidth(t *testing.T) {
 
 	width := screen.getMaxPathWidth()
 	g.Expect(width).Should(BeNumerically(">", 0))
+}
+
+func TestNewSyncScreen_InitializesProgressBars(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := NewSyncScreen(nil)
+
+	// Should initialize overallProgress for unified bar
+	g.Expect(screen.overallProgress).ShouldNot(BeNil())
+
+	// Should initialize fileProgress for per-file progress
+	g.Expect(screen.fileProgress).ShouldNot(BeNil())
 }
 
 func TestRenderCurrentlyCopying(t *testing.T) {
@@ -199,17 +213,20 @@ func TestRenderSyncingErrors(t *testing.T) {
 	g.Expect(result).Should(BeEmpty())
 }
 
-func TestRenderSyncingErrors_WithEnrichedErrors(t *testing.T) {
+func TestRenderSyncingErrors_AtLimit(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	permissionErr := errors.New("permission denied: /path/to/file1.txt")
+	// Create exactly 3 errors (at the limit)
+	fileErrors := []syncengine.FileError{
+		{FilePath: "/path/to/file1.txt", Error: errors.New("error 1")},
+		{FilePath: "/path/to/file2.txt", Error: errors.New("error 2")},
+		{FilePath: "/path/to/file3.txt", Error: errors.New("error 3")},
+	}
 
 	screen := &SyncScreen{
 		status: &syncengine.Status{
-			Errors: []syncengine.FileError{
-				{FilePath: "/path/to/file1.txt", Error: permissionErr},
-			},
+			Errors: fileErrors,
 		},
 		width: 100,
 	}
@@ -218,45 +235,13 @@ func TestRenderSyncingErrors_WithEnrichedErrors(t *testing.T) {
 	screen.renderSyncingErrors(&builder)
 	result := builder.String()
 
-	// Should show error message
-	g.Expect(result).Should(ContainSubstring("Errors"))
-	g.Expect(result).Should(ContainSubstring("permission denied"))
+	// Should show all 3 errors
+	errorCount := strings.Count(result, "✗")
+	g.Expect(errorCount).Should(Equal(3))
 
-	// Should show actionable suggestions
-	g.Expect(result).Should(ContainSubstring("ls -la"))
-
-	// Should show category or other enrichment
-	// (The exact format depends on implementation, but we expect more than just the raw error)
-}
-
-func TestRenderSyncingErrors_WithMultipleEnrichedErrors(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	permissionErr := errors.New("permission denied")
-	diskErr := errors.New("no space left on device")
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			Errors: []syncengine.FileError{
-				{FilePath: "/path/to/file1.txt", Error: permissionErr},
-				{FilePath: "/path/to/file2.txt", Error: diskErr},
-			},
-		},
-		width: 100,
-	}
-
-	var builder strings.Builder
-	screen.renderSyncingErrors(&builder)
-	result := builder.String()
-
-	// Should show both errors
-	g.Expect(result).Should(ContainSubstring("permission denied"))
-	g.Expect(result).Should(ContainSubstring("no space left"))
-
-	// Should show suggestions for both error types
-	g.Expect(result).Should(ContainSubstring("ls -la")) // permission suggestion
-	g.Expect(result).Should(ContainSubstring("df"))     // disk space suggestion
+	// Should NOT show overflow message when exactly at limit
+	g.Expect(result).ShouldNot(ContainSubstring("... and"))
+	g.Expect(result).ShouldNot(ContainSubstring("more (see summary)"))
 }
 
 func TestRenderSyncingErrors_ErrorLimit(t *testing.T) {
@@ -324,20 +309,17 @@ func TestRenderSyncingErrors_UnderLimit(t *testing.T) {
 	g.Expect(result).ShouldNot(ContainSubstring("more (see summary)"))
 }
 
-func TestRenderSyncingErrors_AtLimit(t *testing.T) {
+func TestRenderSyncingErrors_WithEnrichedErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	// Create exactly 3 errors (at the limit)
-	fileErrors := []syncengine.FileError{
-		{FilePath: "/path/to/file1.txt", Error: errors.New("error 1")},
-		{FilePath: "/path/to/file2.txt", Error: errors.New("error 2")},
-		{FilePath: "/path/to/file3.txt", Error: errors.New("error 3")},
-	}
+	permissionErr := errors.New("permission denied: /path/to/file1.txt")
 
 	screen := &SyncScreen{
 		status: &syncengine.Status{
-			Errors: fileErrors,
+			Errors: []syncengine.FileError{
+				{FilePath: "/path/to/file1.txt", Error: permissionErr},
+			},
 		},
 		width: 100,
 	}
@@ -346,160 +328,45 @@ func TestRenderSyncingErrors_AtLimit(t *testing.T) {
 	screen.renderSyncingErrors(&builder)
 	result := builder.String()
 
-	// Should show all 3 errors
-	errorCount := strings.Count(result, "✗")
-	g.Expect(errorCount).Should(Equal(3))
+	// Should show error message
+	g.Expect(result).Should(ContainSubstring("Errors"))
+	g.Expect(result).Should(ContainSubstring("permission denied"))
 
-	// Should NOT show overflow message when exactly at limit
-	g.Expect(result).ShouldNot(ContainSubstring("... and"))
-	g.Expect(result).ShouldNot(ContainSubstring("more (see summary)"))
+	// Should show actionable suggestions
+	g.Expect(result).Should(ContainSubstring("ls -la"))
+
+	// Should show category or other enrichment
+	// (The exact format depends on implementation, but we expect more than just the raw error)
 }
 
-func TestTruncatePath(t *testing.T) {
+func TestRenderSyncingErrors_WithMultipleEnrichedErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	screen := &SyncScreen{}
-
-	// Test short path (no truncation)
-	result := screen.truncatePath("/short/path.txt", 100)
-	g.Expect(result).Should(Equal("/short/path.txt"))
-
-	// Test long path (truncation)
-	longPath := "/very/long/path/to/some/file/that/needs/truncation/file.txt"
-	result = screen.truncatePath(longPath, 20)
-	g.Expect(result).Should(ContainSubstring("..."))
-	g.Expect(len(result)).Should(BeNumerically("<=", 20))
-}
-
-func TestRenderUnifiedProgress(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
+	permissionErr := errors.New("permission denied")
+	diskErr := errors.New("no space left on device")
 
 	screen := &SyncScreen{
 		status: &syncengine.Status{
-			TotalFilesInSource: 100,
-			AlreadySyncedFiles: 30,
-			ProcessedFiles:     20,
-			TotalBytesInSource: 10 * 1024 * 1024, // 10 MB
-			AlreadySyncedBytes: 3 * 1024 * 1024,  // 3 MB
-			TransferredBytes:   2 * 1024 * 1024,  // 2 MB
-			TotalBytes:         7 * 1024 * 1024,  // 7 MB (files to sync this session)
-			FailedFiles:        2,
-			StartTime:          time.Now().Add(-10 * time.Second),
-			ActiveWorkers:      4,
+			Errors: []syncengine.FileError{
+				{FilePath: "/path/to/file1.txt", Error: permissionErr},
+				{FilePath: "/path/to/file2.txt", Error: diskErr},
+			},
 		},
+		width: 100,
 	}
 
 	var builder strings.Builder
-	screen.renderUnifiedProgress(&builder)
+	screen.renderSyncingErrors(&builder)
 	result := builder.String()
 
-	// Should show file progress prominently
-	g.Expect(result).Should(ContainSubstring("50 / 100")) // Total processed files
+	// Should show both errors
+	g.Expect(result).Should(ContainSubstring("permission denied"))
+	g.Expect(result).Should(ContainSubstring("no space left"))
 
-	// Should show bytes in subtitle
-	g.Expect(result).Should(ContainSubstring("MB"))
-
-	// Should show transfer rate
-	g.Expect(result).Should(ContainSubstring("/s"))
-
-	// Should show ETA when transfer is in progress
-	g.Expect(result).Should(ContainSubstring("ETA"))
-
-	// Should show failed files count
-	g.Expect(result).Should(ContainSubstring("2 failed"))
-}
-
-func TestRenderUnifiedProgress_ZeroTotalFiles(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			TotalFilesInSource: 0,
-			ProcessedFiles:     0,
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderUnifiedProgress(&builder)
-	result := builder.String()
-
-	// Should not crash with zero division
-	g.Expect(result).ShouldNot(BeEmpty())
-	g.Expect(result).Should(ContainSubstring("0 / 0"))
-}
-
-func TestRenderUnifiedProgress_NoFailedFiles(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			TotalFilesInSource: 50,
-			AlreadySyncedFiles: 20,
-			ProcessedFiles:     10,
-			TotalBytesInSource: 5 * 1024 * 1024,
-			AlreadySyncedBytes: 2 * 1024 * 1024,
-			TransferredBytes:   1 * 1024 * 1024,
-			FailedFiles:        0,
-			StartTime:          time.Now().Add(-5 * time.Second),
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderUnifiedProgress(&builder)
-	result := builder.String()
-
-	// Should not show failed files when there are none
-	g.Expect(result).ShouldNot(ContainSubstring("failed"))
-}
-
-func TestNewSyncScreen_InitializesProgressBars(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := NewSyncScreen(nil)
-
-	// Should initialize overallProgress for unified bar
-	g.Expect(screen.overallProgress).ShouldNot(BeNil())
-
-	// Should initialize fileProgress for per-file progress
-	g.Expect(screen.fileProgress).ShouldNot(BeNil())
-}
-
-func TestRenderSyncingView_UsesUnifiedProgress(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			TotalFilesInSource: 100,
-			AlreadySyncedFiles: 30,
-			ProcessedFiles:     20,
-			TotalBytesInSource: 10 * 1024 * 1024,
-			AlreadySyncedBytes: 3 * 1024 * 1024,
-			TransferredBytes:   2 * 1024 * 1024,
-			TotalBytes:         7 * 1024 * 1024,
-			FailedFiles:        2,
-			StartTime:          time.Now().Add(-10 * time.Second),
-			ActiveWorkers:      4,
-		},
-		height: 50,
-	}
-
-	result := screen.renderSyncingView()
-
-	// Should use unified progress (single "Progress:" label)
-	g.Expect(result).Should(ContainSubstring("Progress:"))
-
-	// Should NOT have separate "Overall Progress" and "This Session" sections
-	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))
-	g.Expect(result).ShouldNot(ContainSubstring("This Session:"))
-
-	// Should show file count in unified bar
-	g.Expect(result).Should(ContainSubstring("50 / 100 files"))
+	// Should show suggestions for both error types
+	g.Expect(result).Should(ContainSubstring("ls -la")) // permission suggestion
+	g.Expect(result).Should(ContainSubstring("df"))     // disk space suggestion
 }
 
 func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
@@ -546,4 +413,136 @@ func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
 
 	// Verify help text
 	g.Expect(result).Should(ContainSubstring("Press Esc or q to cancel"))
+}
+
+func TestRenderSyncingView_UsesUnifiedProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 100,
+			AlreadySyncedFiles: 30,
+			ProcessedFiles:     20,
+			TotalBytesInSource: 10 * 1024 * 1024,
+			AlreadySyncedBytes: 3 * 1024 * 1024,
+			TransferredBytes:   2 * 1024 * 1024,
+			TotalBytes:         7 * 1024 * 1024,
+			FailedFiles:        2,
+			StartTime:          time.Now().Add(-10 * time.Second),
+			ActiveWorkers:      4,
+		},
+		height: 50,
+	}
+
+	result := screen.renderSyncingView()
+
+	// Should use unified progress (single "Progress:" label)
+	g.Expect(result).Should(ContainSubstring("Progress:"))
+
+	// Should NOT have separate "Overall Progress" and "This Session" sections
+	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))
+	g.Expect(result).ShouldNot(ContainSubstring("This Session:"))
+
+	// Should show file count in unified bar
+	g.Expect(result).Should(ContainSubstring("50 / 100 files"))
+}
+
+func TestRenderUnifiedProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 100,
+			AlreadySyncedFiles: 30,
+			ProcessedFiles:     20,
+			TotalBytesInSource: 10 * 1024 * 1024, // 10 MB
+			AlreadySyncedBytes: 3 * 1024 * 1024,  // 3 MB
+			TransferredBytes:   2 * 1024 * 1024,  // 2 MB
+			TotalBytes:         7 * 1024 * 1024,  // 7 MB (files to sync this session)
+			FailedFiles:        2,
+			StartTime:          time.Now().Add(-10 * time.Second),
+			ActiveWorkers:      4,
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderUnifiedProgress(&builder)
+	result := builder.String()
+
+	// Should show file progress prominently
+	g.Expect(result).Should(ContainSubstring("50 / 100")) // Total processed files
+
+	// Should show bytes in subtitle
+	g.Expect(result).Should(ContainSubstring("MB"))
+
+	// Should show transfer rate
+	g.Expect(result).Should(ContainSubstring("/s"))
+
+	// Should show ETA when transfer is in progress
+	g.Expect(result).Should(ContainSubstring("ETA"))
+
+	// Should show failed files count
+	g.Expect(result).Should(ContainSubstring("2 failed"))
+}
+
+func TestRenderUnifiedProgress_NoFailedFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 50,
+			AlreadySyncedFiles: 20,
+			ProcessedFiles:     10,
+			TotalBytesInSource: 5 * 1024 * 1024,
+			AlreadySyncedBytes: 2 * 1024 * 1024,
+			TransferredBytes:   1 * 1024 * 1024,
+			FailedFiles:        0,
+			StartTime:          time.Now().Add(-5 * time.Second),
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderUnifiedProgress(&builder)
+	result := builder.String()
+
+	// Should not show failed files when there are none
+	g.Expect(result).ShouldNot(ContainSubstring("failed"))
+}
+
+func TestRenderUnifiedProgress_ZeroTotalFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			TotalFilesInSource: 0,
+			ProcessedFiles:     0,
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderUnifiedProgress(&builder)
+	result := builder.String()
+
+	// Should not crash with zero division
+	g.Expect(result).ShouldNot(BeEmpty())
+	g.Expect(result).Should(ContainSubstring("0 / 0"))
+}
+
+func TestTruncatePath(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Test short path (no truncation)
+	result := shared.TruncatePath("/short/path.txt", 100)
+	g.Expect(result).Should(Equal("/short/path.txt"))
+
+	// Test long path (truncation)
+	longPath := "/very/long/path/to/some/file/that/needs/truncation/file.txt"
+	result = shared.TruncatePath(longPath, 20)
+	g.Expect(result).Should(ContainSubstring("..."))
+	g.Expect(len(result)).Should(BeNumerically("<=", 20))
 }

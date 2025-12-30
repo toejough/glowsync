@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/syncengine"
+	"github.com/joe/copy-files/internal/tui/shared"
 )
 
 func TestGetMaxPathWidthSummary(t *testing.T) {
@@ -68,21 +69,38 @@ func TestRenderErrorView_WithEnrichedMainError(t *testing.T) {
 	g.Expect(result).Should(ContainSubstring("ls -la"))
 }
 
-func TestTruncatePathSummary(t *testing.T) {
+func TestSummaryScreen_CancelledState_ErrorDisplayLimit(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	screen := &SummaryScreen{}
+	// Create 10 errors
+	fileErrors := make([]syncengine.FileError, 10)
+	for i := range 10 {
+		fileErrors[i] = syncengine.FileError{
+			FilePath: fmt.Sprintf("/path/to/file%d.txt", i),
+			Error:    fmt.Errorf("error %d", i),
+		}
+	}
 
-	// Test short path (no truncation)
-	result := screen.truncatePath("/short/path.txt", 100)
-	g.Expect(result).Should(Equal("/short/path.txt"))
+	screen := &SummaryScreen{
+		finalState: "cancelled",
+		status: &syncengine.Status{
+			Errors: fileErrors,
+		},
+	}
 
-	// Test long path (truncation)
-	longPath := "/very/long/path/to/some/file/that/needs/truncation/file.txt"
-	result = screen.truncatePath(longPath, 20)
-	g.Expect(result).Should(ContainSubstring("..."))
-	g.Expect(len(result)).Should(BeNumerically("<=", 20))
+	result := screen.renderCancelledView()
+
+	// Should show first 5 errors
+	g.Expect(result).Should(ContainSubstring("error 0"))
+	g.Expect(result).Should(ContainSubstring("error 4"))
+
+	// Should NOT show 6th error and beyond in full
+	g.Expect(result).ShouldNot(ContainSubstring("error 5"))
+	g.Expect(result).ShouldNot(ContainSubstring("error 9"))
+
+	// Should show truncation message
+	g.Expect(result).Should(ContainSubstring("... and 5 more error(s)"))
 }
 
 func TestSummaryScreen_CompleteState_ErrorDisplayLimit(t *testing.T) {
@@ -114,40 +132,6 @@ func TestSummaryScreen_CompleteState_ErrorDisplayLimit(t *testing.T) {
 	// Should NOT show 11th error and beyond in full
 	g.Expect(result).ShouldNot(ContainSubstring("error 10"))
 	g.Expect(result).ShouldNot(ContainSubstring("error 14"))
-
-	// Should show truncation message
-	g.Expect(result).Should(ContainSubstring("... and 5 more error(s)"))
-}
-
-func TestSummaryScreen_CancelledState_ErrorDisplayLimit(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create 10 errors
-	fileErrors := make([]syncengine.FileError, 10)
-	for i := range 10 {
-		fileErrors[i] = syncengine.FileError{
-			FilePath: fmt.Sprintf("/path/to/file%d.txt", i),
-			Error:    fmt.Errorf("error %d", i),
-		}
-	}
-
-	screen := &SummaryScreen{
-		finalState: "cancelled",
-		status: &syncengine.Status{
-			Errors: fileErrors,
-		},
-	}
-
-	result := screen.renderCancelledView()
-
-	// Should show first 5 errors
-	g.Expect(result).Should(ContainSubstring("error 0"))
-	g.Expect(result).Should(ContainSubstring("error 4"))
-
-	// Should NOT show 6th error and beyond in full
-	g.Expect(result).ShouldNot(ContainSubstring("error 5"))
-	g.Expect(result).ShouldNot(ContainSubstring("error 9"))
 
 	// Should show truncation message
 	g.Expect(result).Should(ContainSubstring("... and 5 more error(s)"))
@@ -191,4 +175,19 @@ func TestSummaryScreen_ErrorState_ErrorDisplayLimit(t *testing.T) {
 
 	// Should show truncation message for additional errors
 	g.Expect(result).Should(ContainSubstring("... and 3 more error(s)"))
+}
+
+func TestTruncatePathSummary(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Test short path (no truncation)
+	result := shared.TruncatePath("/short/path.txt", 100)
+	g.Expect(result).Should(Equal("/short/path.txt"))
+
+	// Test long path (truncation)
+	longPath := "/very/long/path/to/some/file/that/needs/truncation/file.txt"
+	result = shared.TruncatePath(longPath, 20)
+	g.Expect(result).Should(ContainSubstring("..."))
+	g.Expect(len(result)).Should(BeNumerically("<=", 20))
 }

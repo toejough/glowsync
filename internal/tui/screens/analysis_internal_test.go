@@ -105,3 +105,32 @@ func TestRenderAnalysisProgress(t *testing.T) {
 	result = builder.String()
 	g.Expect(result).Should(ContainSubstring("Processed"))
 }
+
+func TestRenderCurrentPathWithTruncation(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create screen with a known width
+	screen := &AnalysisScreen{
+		status: &syncengine.Status{
+			CurrentPath: "very/long/path/that/will/need/to/be/truncated/because/it/exceeds/width.txt",
+		},
+		width: 80, // Terminal width
+	}
+
+	var builder strings.Builder
+	screen.renderCurrentPathSection(&builder)
+	result := builder.String()
+
+	// Path should be in the output
+	g.Expect(result).Should(ContainSubstring("Current:"))
+
+	// Path should be truncated (not contain the full path)
+	fullPath := "very/long/path/that/will/need/to/be/truncated/because/it/exceeds/width.txt"
+	g.Expect(result).ShouldNot(ContainSubstring(fullPath))
+
+	// Should contain ellipsis indicating truncation
+	if len(screen.status.CurrentPath) > screen.width {
+		g.Expect(result).Should(ContainSubstring("..."))
+	}
+}
