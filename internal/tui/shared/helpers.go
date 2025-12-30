@@ -57,6 +57,11 @@ func FormatRate(bytesPerSec float64) string {
 	return fmt.Sprintf("%.1f %cB/s", bytesPerSec/div, "KMGTPE"[exp])
 }
 
+// RenderEmptyListPlaceholder renders a dimmed placeholder message for empty lists
+func RenderEmptyListPlaceholder(message string) string {
+	return RenderDim(message)
+}
+
 // RenderPath returns a styled path string, truncated if necessary
 func RenderPath(path string, style lipgloss.Style, maxWidth int) string {
 	truncatedPath := TruncatePath(path, maxWidth)
@@ -82,9 +87,4 @@ func TruncatePath(path string, maxWidth int) string {
 	halfWidth := (maxWidth - ProgressEllipsisLength) / ProgressHalfDivisor
 
 	return path[:halfWidth] + "..." + path[len(path)-halfWidth:]
-}
-
-// RenderEmptyListPlaceholder renders a dimmed placeholder message for empty lists
-func RenderEmptyListPlaceholder(message string) string {
-	return RenderDim(message)
 }

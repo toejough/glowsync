@@ -7,6 +7,22 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 )
 
+// NewProgressModel creates a new progress bar model with the specified width.
+// This is a helper function for creating progress bars with consistent styling.
+func NewProgressModel(width int) progress.Model {
+	progressBar := progress.New(progress.WithDefaultGradient())
+	progressBar.Width = width
+	progressBar.ShowPercentage = false // We render percentage ourselves
+
+	// Apply custom colors if not disabled
+	if !colorsDisabled {
+		progressBar.EmptyColor = dimColorCode
+		progressBar.FullColor = accentColorCode
+	}
+
+	return progressBar
+}
+
 // RenderASCIIProgress renders a progress bar in ASCII format.
 // percent should be between 0.0 and 1.0, width is the total width of the bar.
 // Returns a string like: "[=========>          ] 45%"
@@ -57,22 +73,6 @@ func RenderASCIIProgress(percent float64, width int) string {
 	bar.WriteString("]")
 
 	return fmt.Sprintf("%s %d%%", bar.String(), pct)
-}
-
-// NewProgressModel creates a new progress bar model with the specified width.
-// This is a helper function for creating progress bars with consistent styling.
-func NewProgressModel(width int) progress.Model {
-	progressBar := progress.New(progress.WithDefaultGradient())
-	progressBar.Width = width
-	progressBar.ShowPercentage = false // We render percentage ourselves
-
-	// Apply custom colors if not disabled
-	if !colorsDisabled {
-		progressBar.EmptyColor = dimColorCode
-		progressBar.FullColor = accentColorCode
-	}
-
-	return progressBar
 }
 
 // RenderProgress is a wrapper that renders progress using either Bubble Tea's progress bar

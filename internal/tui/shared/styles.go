@@ -155,6 +155,11 @@ func FileItemStyle() lipgloss.Style {
 		Foreground(NormalColor())
 }
 
+// GetColorsDisabled returns the current value of colorsDisabled for testing purposes.
+func GetColorsDisabled() bool {
+	return colorsDisabled
+}
+
 func HighlightColor() lipgloss.Color {
 	if colorsDisabled {
 		return lipgloss.Color("")
@@ -265,6 +270,12 @@ func RightArrow() string {
 	return "→"
 }
 
+// SetColorsDisabledForTesting sets the colorsDisabled variable for testing purposes.
+// This should only be used in tests to control the behavior of color-dependent functions.
+func SetColorsDisabledForTesting(disabled bool) {
+	colorsDisabled = disabled
+}
+
 // SubtitleStyle returns the style for subtitles
 func SubtitleStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
@@ -354,14 +365,3 @@ var (
 	//nolint:gochecknoglobals // Required for terminal capability detection
 	unicodeDisabled = os.Getenv("TERM") == "dumb" || os.Getenv("LANG") == "C"
 )
-
-// GetColorsDisabled returns the current value of colorsDisabled for testing purposes.
-func GetColorsDisabled() bool {
-	return colorsDisabled
-}
-
-// SetColorsDisabledForTesting sets the colorsDisabled variable for testing purposes.
-// This should only be used in tests to control the behavior of color-dependent functions.
-func SetColorsDisabledForTesting(disabled bool) {
-	colorsDisabled = disabled
-}
