@@ -88,6 +88,7 @@ type Config struct {
 	AdaptiveMode     bool       `arg:"--adaptive"              default:"true"                    help:"Use adaptive concurrency"`                                                                                                                                                           //nolint:lll,tagalign
 	Workers          int        `arg:"-w,--workers"            default:"4"                       help:"Number of workers (0 = adaptive)"`                                                                                                                                                   //nolint:lll,tagalign
 	TypeOfChange     ChangeType `arg:"--type-of-change,--type" default:"monotonic-count"         help:"Type of changes expected: monotonic-count|fluctuating-count|content|devious-content-changes|paranoid-does-not-mean-wrong (aliases: monotonic|fluctuating|content|devious|paranoid)"` //nolint:lll,tagalign // Struct tag with comprehensive help text
+	Verbose          bool       `arg:"-v,--verbose"            help:"Enable verbose progress logging"`                                                                                                                                                                                      //nolint:tagalign
 }
 
 // Description returns the program description for go-arg

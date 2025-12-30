@@ -253,6 +253,7 @@ func (s AnalysisScreen) initializeEngine() tea.Cmd {
 	return func() tea.Msg {
 		engine := syncengine.NewEngine(s.config.SourcePath, s.config.DestPath)
 		engine.FilePattern = s.config.FilePattern
+		engine.Verbose = s.config.Verbose
 
 		return shared.EngineInitializedMsg{
 			Engine: engine,
