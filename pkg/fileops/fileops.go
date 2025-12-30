@@ -50,8 +50,8 @@ type FileInfo struct {
 type ProgressCallback func(bytesTransferred int64, totalBytes int64, currentFile string)
 
 // ScanProgressCallback is called during directory scanning to report progress
-// Parameters: currentPath, scannedCount, totalCount (0 if unknown)
-type ScanProgressCallback func(path string, scannedCount int, totalCount int)
+// Parameters: currentPath, scannedCount, totalCount (0 if unknown), fileSize
+type ScanProgressCallback func(path string, scannedCount int, totalCount int, fileSize int64)
 
 func CompareFilesBytes(path1, path2 string) (bool, error) {
 	// Open both files
@@ -317,8 +317,8 @@ func ScanDirectoryWithProgress(rootPath string, progressCallback ScanProgressCal
 		var err error
 		// Use the progress callback during counting too
 		totalCount, err = CountFilesWithProgress(rootPath, func(path string, count int) {
-			// Report counting progress (with totalCount = 0 to indicate counting phase)
-			progressCallback(path, count, 0)
+			// Report counting progress (with totalCount = 0 to indicate counting phase, fileSize = 0 during counting)
+			progressCallback(path, count, 0, 0)
 		})
 		if err != nil {
 			// If counting fails, continue without total count
@@ -354,7 +354,7 @@ func ScanDirectoryWithProgress(rootPath string, progressCallback ScanProgressCal
 
 		// Report progress if callback provided
 		if progressCallback != nil {
-			progressCallback(path, fileCount, totalCount)
+			progressCallback(path, fileCount, totalCount, info.Size())
 		}
 
 		return nil

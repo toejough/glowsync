@@ -293,7 +293,7 @@ func TestFileOpsScanDirectoryWithProgress(t *testing.T) {
 	ops := fileops.NewFileOps(fsImp.Mock)
 
 	progressCalls := 0
-	progressCallback := func(_ string, _, _ int) {
+	progressCallback := func(_ string, _, _ int, _ int64) {
 		progressCalls++
 	}
 

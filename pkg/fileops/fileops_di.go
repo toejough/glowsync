@@ -299,7 +299,7 @@ func (fo *FileOps) ScanDirectoryWithProgress(rootPath string, progressCallback S
 		// Report progress if callback provided
 		// Note: totalCount is 0 because we don't know the total until we finish scanning
 		if progressCallback != nil {
-			progressCallback(path, fileCount, 0)
+			progressCallback(path, fileCount, 0, info.Size)
 		}
 	}
 
