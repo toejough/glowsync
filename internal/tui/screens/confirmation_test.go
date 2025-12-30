@@ -99,6 +99,72 @@ func TestConfirmationScreen_View(t *testing.T) {
 	g.Expect(output).Should(ContainSubstring("Esc to cancel"), "Expected help text for Esc")
 }
 
+func TestConfirmationScreen_View_EmptyNoFilter(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create engine with no filter and no files (source empty or already synced)
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine.FilePattern = ""
+	engine.Status.TotalFiles = 0
+	engine.Status.TotalBytes = 0
+
+	logPath := "/tmp/test-debug.log"
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	output := screen.View()
+
+	// Should show context-aware empty message
+	// Could be "Source directory is empty" or "All files already synced"
+	// For now, we'll test for a generic helpful message
+	g.Expect(output).Should(Or(
+		ContainSubstring("Source directory is empty"),
+		ContainSubstring("All files already synced"),
+	), "Should show helpful empty state message")
+}
+
+func TestConfirmationScreen_View_EmptyState_PreservesControls(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create engine with no files
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine.Status.TotalFiles = 0
+
+	logPath := "/tmp/test-debug.log"
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	output := screen.View()
+
+	// Should still show help text even when empty
+	g.Expect(output).Should(ContainSubstring("Press Enter to begin sync"),
+		"Should show Enter key help")
+	g.Expect(output).Should(ContainSubstring("Esc to cancel"),
+		"Should show Esc key help")
+}
+
+func TestConfirmationScreen_View_EmptyWithFilter(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create engine with filter applied but no matching files
+	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine.FilePattern = "*.mov"
+	engine.Status.TotalFiles = 0
+	engine.Status.TotalBytes = 0
+
+	logPath := "/tmp/test-debug.log"
+	screen := screens.NewConfirmationScreen(engine, logPath)
+
+	output := screen.View()
+
+	// Should show filter-specific message
+	g.Expect(output).Should(ContainSubstring("No files match your filter"),
+		"Should show filter-specific empty message")
+	g.Expect(output).Should(ContainSubstring("*.mov"),
+		"Should show the filter pattern")
+}
+
 func TestConfirmationScreen_View_ErrorDisplayLimit(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -174,70 +240,4 @@ func TestNewConfirmationScreen(t *testing.T) {
 
 	// Verify screen is created
 	g.Expect(screen).ShouldNot(BeNil(), "Expected screen to be created")
-}
-
-func TestConfirmationScreen_View_EmptyWithFilter(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create engine with filter applied but no matching files
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
-	engine.FilePattern = "*.mov"
-	engine.Status.TotalFiles = 0
-	engine.Status.TotalBytes = 0
-
-	logPath := "/tmp/test-debug.log"
-	screen := screens.NewConfirmationScreen(engine, logPath)
-
-	output := screen.View()
-
-	// Should show filter-specific message
-	g.Expect(output).Should(ContainSubstring("No files match your filter"),
-		"Should show filter-specific empty message")
-	g.Expect(output).Should(ContainSubstring("*.mov"),
-		"Should show the filter pattern")
-}
-
-func TestConfirmationScreen_View_EmptyNoFilter(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create engine with no filter and no files (source empty or already synced)
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
-	engine.FilePattern = ""
-	engine.Status.TotalFiles = 0
-	engine.Status.TotalBytes = 0
-
-	logPath := "/tmp/test-debug.log"
-	screen := screens.NewConfirmationScreen(engine, logPath)
-
-	output := screen.View()
-
-	// Should show context-aware empty message
-	// Could be "Source directory is empty" or "All files already synced"
-	// For now, we'll test for a generic helpful message
-	g.Expect(output).Should(Or(
-		ContainSubstring("Source directory is empty"),
-		ContainSubstring("All files already synced"),
-	), "Should show helpful empty state message")
-}
-
-func TestConfirmationScreen_View_EmptyState_PreservesControls(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create engine with no files
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
-	engine.Status.TotalFiles = 0
-
-	logPath := "/tmp/test-debug.log"
-	screen := screens.NewConfirmationScreen(engine, logPath)
-
-	output := screen.View()
-
-	// Should still show help text even when empty
-	g.Expect(output).Should(ContainSubstring("Press Enter to begin sync"),
-		"Should show Enter key help")
-	g.Expect(output).Should(ContainSubstring("Esc to cancel"),
-		"Should show Esc key help")
 }

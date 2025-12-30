@@ -12,6 +12,248 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+// TestEnterOnDestWithValidInputsSubmits verifies that pressing Enter on the dest field
+// with valid source and dest values triggers submission (transition to analysis)
+func TestEnterOnDestWithValidInputsSubmits(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temporary directories for testing
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Type valid source path
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(sourceDir)}
+	updatedModel, _ := screen.Update(typeMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Move to dest field and type valid dest path
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	updatedModel, _ = inputScreen.Update(downMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	typeMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(destDir)}
+	updatedModel, _ = inputScreen.Update(typeMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Press Enter on dest field - should submit
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	//nolint:ineffassign,staticcheck,wastedassign // Need updatedModel for type assertion check
+	updatedModel, cmd := inputScreen.Update(enterMsg)
+
+	// Should return a command (TransitionToAnalysisMsg)
+	g.Expect(cmd).ShouldNot(BeNil(), "Enter with valid inputs should trigger transition")
+
+	// Execute command and verify it's TransitionToAnalysisMsg
+	if cmd != nil {
+		msg := cmd()
+		_, ok := msg.(shared.TransitionToAnalysisMsg)
+		g.Expect(ok).Should(BeTrue(), "Command should be TransitionToAnalysisMsg")
+	}
+}
+
+// TestEnterOnSourceWithValidInputsSubmits verifies that pressing Enter on the source field
+// with valid source and dest values triggers submission (transition to analysis)
+func TestEnterOnSourceWithValidInputsSubmits(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temporary directories for testing
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Type valid source path
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(sourceDir)}
+	updatedModel, _ := screen.Update(typeMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Move to dest field and type valid dest path
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	updatedModel, _ = inputScreen.Update(downMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	typeMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(destDir)}
+	updatedModel, _ = inputScreen.Update(typeMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Move back to source field
+	upMsg := tea.KeyMsg{Type: tea.KeyUp}
+	updatedModel, _ = inputScreen.Update(upMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Press Enter on source field - should submit
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	//nolint:ineffassign,staticcheck,wastedassign // Need updatedModel for type assertion check
+	updatedModel, cmd := inputScreen.Update(enterMsg)
+
+	// Should return a command (TransitionToAnalysisMsg)
+	g.Expect(cmd).ShouldNot(BeNil(), "Enter with valid inputs should trigger transition")
+
+	// Execute command and verify it's TransitionToAnalysisMsg
+	if cmd != nil {
+		msg := cmd()
+		_, ok := msg.(shared.TransitionToAnalysisMsg)
+		g.Expect(ok).Should(BeTrue(), "Command should be TransitionToAnalysisMsg")
+	}
+}
+
+// TestEnterWithBothEmptyShowsError verifies that pressing Enter with both fields empty
+// shows a validation error and focuses the source field
+func TestEnterWithBothEmptyShowsError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Press Enter with both empty
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := screen.Update(enterMsg)
+
+	// Should NOT transition
+	g.Expect(cmd).Should(BeNil(), "Enter with empty inputs should not trigger transition")
+
+	// Check view contains error message
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+	view := inputScreen.View()
+	g.Expect(view).Should(ContainSubstring("source path is required"), "Should show source error message")
+}
+
+// TestEnterWithEmptyDestShowsError verifies that pressing Enter with empty dest
+// shows a validation error and focuses the dest field
+func TestEnterWithEmptyDestShowsError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Type valid source
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/tmp/source")}
+	updatedModel, _ := screen.Update(typeMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Press Enter - should show error about dest
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := inputScreen.Update(enterMsg)
+
+	// Should NOT transition
+	g.Expect(cmd).Should(BeNil(), "Enter with empty dest should not trigger transition")
+
+	// Check view contains error message
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+	view := inputScreen.View()
+	g.Expect(view).Should(ContainSubstring("destination path is required"), "Should show dest error message")
+}
+
+// TestEnterWithEmptySourceShowsError verifies that pressing Enter with empty source
+// shows a validation error and focuses the source field
+func TestEnterWithEmptySourceShowsError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Leave source empty, type dest
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	updatedModel, _ := screen.Update(downMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/tmp/dest")}
+	updatedModel, _ = inputScreen.Update(typeMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Press Enter - should show error
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := inputScreen.Update(enterMsg)
+
+	// Should NOT transition
+	g.Expect(cmd).Should(BeNil(), "Enter with empty source should not trigger transition")
+
+	// Check view contains error message
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+	view := inputScreen.View()
+	g.Expect(view).Should(ContainSubstring("source path is required"), "Should show source error message")
+}
+
+// TestErrorClearsOnFieldNavigation verifies that validation errors are cleared when navigating fields
+func TestErrorClearsOnFieldNavigation(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Press Enter to trigger error
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, _ := screen.Update(enterMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Verify error is shown
+	view := inputScreen.View()
+	g.Expect(view).Should(ContainSubstring("source path is required"))
+
+	// Navigate to next field
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	updatedModel, _ = inputScreen.Update(downMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Verify error is cleared
+	view = inputScreen.View()
+	g.Expect(view).ShouldNot(ContainSubstring("source path is required"), "Error should be cleared after navigation")
+}
+
+// TestErrorClearsWhenUserTypes verifies that validation errors are cleared when the user types
+func TestErrorClearsWhenUserTypes(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Press Enter to trigger error
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, _ := screen.Update(enterMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Verify error is shown
+	view := inputScreen.View()
+	g.Expect(view).Should(ContainSubstring("source path is required"))
+
+	// Type something
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}
+	updatedModel, _ = inputScreen.Update(typeMsg)
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Verify error is cleared
+	view = inputScreen.View()
+	g.Expect(view).ShouldNot(ContainSubstring("source path is required"), "Error should be cleared after typing")
+}
+
 func TestInputScreenCtrlCQuitsApp(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -393,274 +635,6 @@ func TestInputScreenWindowSize(t *testing.T) {
 	g.Expect(updatedModel).ShouldNot(BeNil())
 }
 
-// TestEnterOnSourceWithValidInputsSubmits verifies that pressing Enter on the source field
-// with valid source and dest values triggers submission (transition to analysis)
-func TestEnterOnSourceWithValidInputsSubmits(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create temporary directories for testing
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Type valid source path
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(sourceDir)}
-	updatedModel, _ := screen.Update(typeMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Move to dest field and type valid dest path
-	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	updatedModel, _ = inputScreen.Update(downMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	typeMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(destDir)}
-	updatedModel, _ = inputScreen.Update(typeMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Move back to source field
-	upMsg := tea.KeyMsg{Type: tea.KeyUp}
-	updatedModel, _ = inputScreen.Update(upMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Press Enter on source field - should submit
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, cmd := inputScreen.Update(enterMsg)
-
-	// Should return a command (TransitionToAnalysisMsg)
-	g.Expect(cmd).ShouldNot(BeNil(), "Enter with valid inputs should trigger transition")
-
-	// Execute command and verify it's TransitionToAnalysisMsg
-	if cmd != nil {
-		msg := cmd()
-		_, ok := msg.(shared.TransitionToAnalysisMsg)
-		g.Expect(ok).Should(BeTrue(), "Command should be TransitionToAnalysisMsg")
-	}
-}
-
-// TestEnterOnDestWithValidInputsSubmits verifies that pressing Enter on the dest field
-// with valid source and dest values triggers submission (transition to analysis)
-func TestEnterOnDestWithValidInputsSubmits(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	// Create temporary directories for testing
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Type valid source path
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(sourceDir)}
-	updatedModel, _ := screen.Update(typeMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Move to dest field and type valid dest path
-	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	updatedModel, _ = inputScreen.Update(downMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	typeMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(destDir)}
-	updatedModel, _ = inputScreen.Update(typeMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Press Enter on dest field - should submit
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, cmd := inputScreen.Update(enterMsg)
-
-	// Should return a command (TransitionToAnalysisMsg)
-	g.Expect(cmd).ShouldNot(BeNil(), "Enter with valid inputs should trigger transition")
-
-	// Execute command and verify it's TransitionToAnalysisMsg
-	if cmd != nil {
-		msg := cmd()
-		_, ok := msg.(shared.TransitionToAnalysisMsg)
-		g.Expect(ok).Should(BeTrue(), "Command should be TransitionToAnalysisMsg")
-	}
-}
-
-// TestEnterWithEmptySourceShowsError verifies that pressing Enter with empty source
-// shows a validation error and focuses the source field
-func TestEnterWithEmptySourceShowsError(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Leave source empty, type dest
-	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	updatedModel, _ := screen.Update(downMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/tmp/dest")}
-	updatedModel, _ = inputScreen.Update(typeMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Press Enter - should show error
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, cmd := inputScreen.Update(enterMsg)
-
-	// Should NOT transition
-	g.Expect(cmd).Should(BeNil(), "Enter with empty source should not trigger transition")
-
-	// Check view contains error message
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Source path is required"), "Should show source error message")
-}
-
-// TestEnterWithEmptyDestShowsError verifies that pressing Enter with empty dest
-// shows a validation error and focuses the dest field
-func TestEnterWithEmptyDestShowsError(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Type valid source
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/tmp/source")}
-	updatedModel, _ := screen.Update(typeMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Press Enter - should show error about dest
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, cmd := inputScreen.Update(enterMsg)
-
-	// Should NOT transition
-	g.Expect(cmd).Should(BeNil(), "Enter with empty dest should not trigger transition")
-
-	// Check view contains error message
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Destination path is required"), "Should show dest error message")
-}
-
-// TestEnterWithBothEmptyShowsError verifies that pressing Enter with both fields empty
-// shows a validation error and focuses the source field
-func TestEnterWithBothEmptyShowsError(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Press Enter with both empty
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, cmd := screen.Update(enterMsg)
-
-	// Should NOT transition
-	g.Expect(cmd).Should(BeNil(), "Enter with empty inputs should not trigger transition")
-
-	// Check view contains error message
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Source path is required"), "Should show source error message")
-}
-
-// TestErrorClearsWhenUserTypes verifies that validation errors are cleared when the user types
-func TestErrorClearsWhenUserTypes(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Press Enter to trigger error
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, _ := screen.Update(enterMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Verify error is shown
-	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Source path is required"))
-
-	// Type something
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}
-	updatedModel, _ = inputScreen.Update(typeMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Verify error is cleared
-	view = inputScreen.View()
-	g.Expect(view).ShouldNot(ContainSubstring("Source path is required"), "Error should be cleared after typing")
-}
-
-// TestErrorClearsOnFieldNavigation verifies that validation errors are cleared when navigating fields
-func TestErrorClearsOnFieldNavigation(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Press Enter to trigger error
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, _ := screen.Update(enterMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Verify error is shown
-	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Source path is required"))
-
-	// Navigate to next field
-	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	updatedModel, _ = inputScreen.Update(downMsg)
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Verify error is cleared
-	view = inputScreen.View()
-	g.Expect(view).ShouldNot(ContainSubstring("Source path is required"), "Error should be cleared after navigation")
-}
-
-// TestWhitespaceOnlySourceShowsError verifies that whitespace-only source is treated as empty
-func TestWhitespaceOnlySourceShowsError(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{}
-	screen := screens.NewInputScreen(cfg)
-
-	// Type whitespace-only source
-	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("   ")}
-	updatedModel, _ := screen.Update(typeMsg)
-	inputScreen, ok := updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-
-	// Press Enter - should show error
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	updatedModel, cmd := inputScreen.Update(enterMsg)
-
-	// Should NOT transition
-	g.Expect(cmd).Should(BeNil(), "Enter with whitespace-only source should not trigger transition")
-
-	// Check view contains error message
-	inputScreen, ok = updatedModel.(screens.InputScreen)
-	g.Expect(ok).Should(BeTrue())
-	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Source path is required"), "Should show source error for whitespace")
-}
-
 // TestWhitespaceOnlyDestShowsError verifies that whitespace-only dest is treated as empty
 func TestWhitespaceOnlyDestShowsError(t *testing.T) {
 	t.Parallel()
@@ -700,5 +674,33 @@ func TestWhitespaceOnlyDestShowsError(t *testing.T) {
 	inputScreen, ok = updatedModel.(screens.InputScreen)
 	g.Expect(ok).Should(BeTrue())
 	view := inputScreen.View()
-	g.Expect(view).Should(ContainSubstring("Destination path is required"), "Should show dest error for whitespace")
+	g.Expect(view).Should(ContainSubstring("destination path is required"), "Should show dest error for whitespace")
+}
+
+// TestWhitespaceOnlySourceShowsError verifies that whitespace-only source is treated as empty
+func TestWhitespaceOnlySourceShowsError(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{}
+	screen := screens.NewInputScreen(cfg)
+
+	// Type whitespace-only source
+	typeMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("   ")}
+	updatedModel, _ := screen.Update(typeMsg)
+	inputScreen, ok := updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+
+	// Press Enter - should show error
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := inputScreen.Update(enterMsg)
+
+	// Should NOT transition
+	g.Expect(cmd).Should(BeNil(), "Enter with whitespace-only source should not trigger transition")
+
+	// Check view contains error message
+	inputScreen, ok = updatedModel.(screens.InputScreen)
+	g.Expect(ok).Should(BeTrue())
+	view := inputScreen.View()
+	g.Expect(view).Should(ContainSubstring("source path is required"), "Should show source error for whitespace")
 }

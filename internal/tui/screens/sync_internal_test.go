@@ -199,7 +199,7 @@ func TestRenderStatistics(t *testing.T) {
 	screen.renderStatistics(&builder)
 	result := builder.String()
 	g.Expect(result).Should(ContainSubstring("Workers"))
-	g.Expect(result).Should(ContainSubstring("Rate"))
+	g.Expect(result).Should(ContainSubstring("Elapsed"))
 }
 
 func TestRenderSyncingErrors(t *testing.T) {
@@ -415,12 +415,14 @@ func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
 
 	// Verify unified progress bar is present
 	g.Expect(result).Should(ContainSubstring("Progress:"))
-	g.Expect(result).Should(ContainSubstring("50 / 100 files (50.0%) • 2 failed"))
-	g.Expect(result).Should(ContainSubstring("5.0 MB / 10.0 MB"))
+	g.Expect(result).Should(ContainSubstring("Files: 50 / 100"))
+	g.Expect(result).Should(ContainSubstring("2 failed"))
+	g.Expect(result).Should(ContainSubstring("Bytes: 5.0 MB / 10.0 MB"))
+	g.Expect(result).Should(ContainSubstring("Time:"))
 
 	// Verify statistics are present
 	g.Expect(result).Should(ContainSubstring("Workers:"))
-	g.Expect(result).Should(ContainSubstring("Rate:"))
+	g.Expect(result).Should(ContainSubstring("Elapsed:"))
 
 	// Verify file list is present
 	g.Expect(result).Should(ContainSubstring("Recent Files:"))
@@ -462,8 +464,8 @@ func TestRenderSyncingView_UsesUnifiedProgress(t *testing.T) {
 	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))
 	g.Expect(result).ShouldNot(ContainSubstring("This Session:"))
 
-	// Should show file count in unified bar
-	g.Expect(result).Should(ContainSubstring("50 / 100 files"))
+	// Should show file count with new format
+	g.Expect(result).Should(ContainSubstring("Files: 50 / 100"))
 }
 
 func TestRenderUnifiedProgress(t *testing.T) {
@@ -491,15 +493,14 @@ func TestRenderUnifiedProgress(t *testing.T) {
 
 	// Should show file progress prominently
 	g.Expect(result).Should(ContainSubstring("50 / 100")) // Total processed files
+	g.Expect(result).Should(ContainSubstring("Files:"))   // New format prefix
 
-	// Should show bytes in subtitle
+	// Should show bytes line
 	g.Expect(result).Should(ContainSubstring("MB"))
+	g.Expect(result).Should(ContainSubstring("Bytes:")) // New format prefix
 
-	// Should show transfer rate
-	g.Expect(result).Should(ContainSubstring("/s"))
-
-	// Should show ETA when transfer is in progress
-	g.Expect(result).Should(ContainSubstring("ETA"))
+	// Should show time line
+	g.Expect(result).Should(ContainSubstring("Time:")) // New format prefix
 
 	// Should show failed files count
 	g.Expect(result).Should(ContainSubstring("2 failed"))
