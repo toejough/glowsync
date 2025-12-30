@@ -75,6 +75,7 @@ func FormatSuggestions(err error) string {
 		return ""
 	}
 
+	//nolint:errorlint // Type assertion preferred over errors.As for interface check
 	actionable, ok := err.(ActionableError)
 	if !ok {
 		return ""

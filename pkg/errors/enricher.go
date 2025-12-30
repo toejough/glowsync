@@ -21,6 +21,7 @@ func NewEnricher() Enricher {
 
 // unexported variables.
 var (
+	//nolint:gochecknoglobals // Compiled regexes shared across all enricher instances for performance
 	pathExtractionPatterns = []*regexp.Regexp{
 		// Unix/Linux paths (absolute and relative)
 		regexp.MustCompile(`\b\w+\s+([./][^\s:]+):`),
