@@ -295,6 +295,12 @@ func (e *Engine) GetStatus() *Status {
 	status.AnalysisLog = make([]string, len(e.Status.AnalysisLog))
 	copy(status.AnalysisLog, e.Status.AnalysisLog)
 
+	// Copy analysis progress tracking fields
+	status.ScannedBytes = e.Status.ScannedBytes
+	status.TotalBytesToScan = e.Status.TotalBytesToScan
+	status.AnalysisStartTime = e.Status.AnalysisStartTime
+	status.AnalysisRate = e.Status.AnalysisRate
+
 	// Only copy recently active files from FilesToSync to reduce lock time
 	// UI only needs to see files that are copying or recently completed
 	// This prevents holding the lock for milliseconds copying 1000+ file pointers
@@ -1223,11 +1229,21 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 	e.Status.mu.Unlock()
 
 	// Scan destination directory with progress
-	destFiles, err := e.FileOps.ScanDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int) {
+	destFiles, err := e.FileOps.ScanDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int, fileSize int64) {
 		e.Status.mu.Lock()
 		e.Status.CurrentPath = path
 		e.Status.ScannedFiles = scannedCount
 		e.Status.TotalFilesToScan = totalCount
+		// Accumulate scanned bytes
+		e.Status.ScannedBytes += fileSize
+
+		// Calculate analysis rate if we have elapsed time
+		if !e.Status.AnalysisStartTime.IsZero() {
+			elapsed := e.TimeProvider.Now().Sub(e.Status.AnalysisStartTime).Seconds()
+			if elapsed > 0 {
+				e.Status.AnalysisRate = float64(scannedCount) / elapsed
+			}
+		}
 
 		// Update phase when we transition from counting to scanning
 		if totalCount > 0 && e.Status.AnalysisPhase == phaseCountingDest {
@@ -1266,20 +1282,33 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 	e.logAnalysis("Scanning source: " + e.SourcePath)
 
-	// Update analysis phase
+	// Update analysis phase and start time
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = phaseCountingSource
 	e.Status.ScannedFiles = 0
 	e.Status.TotalFilesToScan = 0
+	if e.Status.AnalysisStartTime.IsZero() {
+		e.Status.AnalysisStartTime = e.TimeProvider.Now()
+	}
 	e.Status.mu.Unlock()
 
 	// Scan source directory with progress
 	//nolint:lll // Anonymous function with parameters as part of method call
-	sourceFiles, err := e.FileOps.ScanDirectoryWithProgress(e.SourcePath, func(path string, scannedCount int, totalCount int) {
+	sourceFiles, err := e.FileOps.ScanDirectoryWithProgress(e.SourcePath, func(path string, scannedCount int, totalCount int, fileSize int64) {
 		e.Status.mu.Lock()
 		e.Status.CurrentPath = path
 		e.Status.ScannedFiles = scannedCount
 		e.Status.TotalFilesToScan = totalCount
+		// Accumulate scanned bytes
+		e.Status.ScannedBytes += fileSize
+
+		// Calculate analysis rate if we have elapsed time
+		if !e.Status.AnalysisStartTime.IsZero() {
+			elapsed := e.TimeProvider.Now().Sub(e.Status.AnalysisStartTime).Seconds()
+			if elapsed > 0 {
+				e.Status.AnalysisRate = float64(scannedCount) / elapsed
+			}
+		}
 
 		// Update phase when we transition from counting to scanning
 		if totalCount > 0 && e.Status.AnalysisPhase == phaseCountingSource {
@@ -1309,7 +1338,20 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 		e.logAnalysis(fmt.Sprintf("After filtering by pattern '%s': %d items remain", e.FilePattern, len(sourceFiles)))
 	}
 
-	e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found", len(sourceFiles)))
+	// Calculate total bytes to scan
+	var totalBytes int64
+	for _, fileInfo := range sourceFiles {
+		if !fileInfo.IsDir {
+			totalBytes += fileInfo.Size
+		}
+	}
+
+	e.Status.mu.Lock()
+	e.Status.TotalBytesToScan = totalBytes
+	e.Status.mu.Unlock()
+
+	e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found, %s total",
+		len(sourceFiles), formatters.FormatBytes(totalBytes)))
 
 	return sourceFiles, nil
 }
@@ -1849,6 +1891,16 @@ func (e *Engine) worker(wg *sync.WaitGroup, jobs <-chan *FileToSync, errors chan
 	}
 }
 
+// ProgressMetrics represents calculated progress metrics for analysis
+type ProgressMetrics struct {
+	FilesPercent           float64
+	BytesPercent           float64
+	TimePercent            float64
+	OverallPercent         float64
+	IsCounting             bool
+	EstimatedTimeRemaining time.Duration
+}
+
 // FileError represents an error that occurred while syncing a file
 type FileError struct {
 	FilePath string
@@ -1862,6 +1914,78 @@ type FileToSync struct {
 	Transferred  int64
 	Status       string // "pending", "copying", "complete", "error"
 	Error        error
+}
+
+// CalculateAnalysisProgress calculates progress metrics for the analysis phase
+func (s *Status) CalculateAnalysisProgress() ProgressMetrics {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// During counting: TotalBytesToScan == 0
+	// Note: We only check TotalBytesToScan because TotalFilesToScan is a temporary
+	// counter that gets reset during each scan phase and doesn't reliably indicate
+	// whether analysis is complete.
+	if s.TotalBytesToScan == 0 {
+		return ProgressMetrics{
+			IsCounting:             true,
+			FilesPercent:           0,
+			BytesPercent:           0,
+			TimePercent:            0,
+			OverallPercent:         0,
+			EstimatedTimeRemaining: 0,
+		}
+	}
+
+	// During processing: Calculate percentages
+	filesPercent := 0.0
+	if s.TotalFilesToScan > 0 {
+		filesPercent = (float64(s.ScannedFiles) / float64(s.TotalFilesToScan)) * 100
+	}
+
+	bytesPercent := 0.0
+	if s.TotalBytesToScan > 0 {
+		bytesPercent = (float64(s.ScannedBytes) / float64(s.TotalBytesToScan)) * 100
+	}
+
+	// Calculate time-based percentage
+	timePercent := 0.0
+	estimatedTimeRemaining := time.Duration(0)
+
+	if !s.AnalysisStartTime.IsZero() {
+		elapsed := time.Since(s.AnalysisStartTime).Seconds()
+		if elapsed > 0 && s.AnalysisRate > 0 && s.TotalFilesToScan > 0 {
+			// Estimate total time based on rate
+			estimatedTotal := float64(s.TotalFilesToScan) / s.AnalysisRate
+			if estimatedTotal > 0 {
+				timePercent = (elapsed / estimatedTotal) * 100
+				remainingSeconds := estimatedTotal - elapsed
+				if remainingSeconds > 0 {
+					estimatedTimeRemaining = time.Duration(remainingSeconds) * time.Second
+				}
+			}
+		}
+	}
+
+	// Calculate overall as average of the three metrics
+	overallPercent := (filesPercent + bytesPercent + timePercent) / 3.0
+
+	// Clamp to 0-100 range
+	if overallPercent < 0 {
+		overallPercent = 0
+	}
+
+	if overallPercent > 100 {
+		overallPercent = 100
+	}
+
+	return ProgressMetrics{
+		IsCounting:             false,
+		FilesPercent:           filesPercent,
+		BytesPercent:           bytesPercent,
+		TimePercent:            timePercent,
+		OverallPercent:         overallPercent,
+		EstimatedTimeRemaining: estimatedTimeRemaining,
+	}
 }
 
 // Status represents the current status of synchronization
@@ -1899,6 +2023,12 @@ type Status struct {
 	TotalFilesToScan int      // Total files to scan/compare (0 if unknown/counting)
 	CurrentPath      string   // Current path being analyzed
 	AnalysisLog      []string // Recent analysis activities
+
+	// Analysis progress tracking for time estimation
+	ScannedBytes      int64     // Bytes scanned so far
+	TotalBytesToScan  int64     // Total bytes to scan (0 if unknown)
+	AnalysisStartTime time.Time // When analysis started
+	AnalysisRate      float64   // Items per second (rolling)
 
 	// Concurrency tracking
 	ActiveWorkers int  // Current number of active workers

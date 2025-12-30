@@ -34,6 +34,21 @@ func TestAdaptiveScalingWithMockedTime(t *testing.T) {
 	// Create engine with adaptive mode
 	engine := setupAdaptiveEngine(sourceDir, destDir, timeImp)
 
+	// Set up mock expectations for Analyze phase
+	// The Analyze phase calls Now() during scanSourceDirectory and scanDestDirectory
+	analyzeStartTime := time.Now()
+	go func() {
+		// Expect first Now() call (AnalysisStartTime initialization)
+		nowCall1 := timeImp.Within(5 * time.Second).ExpectCallIs.Now()
+		nowCall1.InjectResult(analyzeStartTime)
+
+		// Expect subsequent Now() calls during progress callbacks (up to 40 total - 20 files x 2 scans)
+		for range 40 {
+			nowCall := timeImp.Within(5 * time.Second).ExpectCallIs.Now()
+			nowCall.InjectResult(analyzeStartTime.Add(100 * time.Millisecond)) // Simulate some elapsed time
+		}
+	}()
+
 	// Run Analyze
 	err := engine.Analyze()
 	g.Expect(err).ShouldNot(HaveOccurred())
@@ -1063,4 +1078,131 @@ func setupSameSizeModtimeTest(t *testing.T) (sourceDir, destDir, destFile string
 	}
 
 	return sourceDir, destDir, destFile
+}
+
+// TestStatus_AnalysisFields_Initialization verifies new analysis tracking fields initialize to zero
+func TestStatus_AnalysisFields_Initialization(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	status := &syncengine.Status{
+		StartTime: time.Now(),
+	}
+
+	// Verify analysis tracking fields are zero-initialized
+	g.Expect(status.ScannedBytes).Should(Equal(int64(0)))
+	g.Expect(status.TotalBytesToScan).Should(Equal(int64(0)))
+	g.Expect(status.AnalysisStartTime).Should(Equal(time.Time{}))
+	g.Expect(status.AnalysisRate).Should(Equal(float64(0)))
+}
+
+// TestStatus_AnalysisFields_SetAndGet verifies fields can be set and retrieved
+func TestStatus_AnalysisFields_SetAndGet(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	status := &syncengine.Status{
+		StartTime: time.Now(),
+	}
+
+	// Set analysis tracking fields
+	now := time.Now()
+	status.ScannedBytes = 1024
+	status.TotalBytesToScan = 4096
+	status.AnalysisStartTime = now
+	status.AnalysisRate = 42.5
+
+	// Verify fields can be retrieved
+	g.Expect(status.ScannedBytes).Should(Equal(int64(1024)))
+	g.Expect(status.TotalBytesToScan).Should(Equal(int64(4096)))
+	g.Expect(status.AnalysisStartTime).Should(Equal(now))
+	g.Expect(status.AnalysisRate).Should(Equal(42.5))
+}
+
+// TestCalculateAnalysisProgress_CountingPhase verifies IsCounting=true when totals unknown
+func TestCalculateAnalysisProgress_CountingPhase(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	status := &syncengine.Status{
+		StartTime:         time.Now(),
+		ScannedFiles:      50,
+		TotalFilesToScan:  0, // Unknown during counting
+		ScannedBytes:      1024 * 50,
+		TotalBytesToScan:  0, // Unknown during counting
+		AnalysisStartTime: time.Now().Add(-5 * time.Second),
+	}
+
+	progress := status.CalculateAnalysisProgress()
+
+	// During counting phase, IsCounting should be true
+	g.Expect(progress.IsCounting).Should(BeTrue())
+	g.Expect(progress.FilesPercent).Should(Equal(float64(0)))
+	g.Expect(progress.BytesPercent).Should(Equal(float64(0)))
+	g.Expect(progress.OverallPercent).Should(Equal(float64(0)))
+}
+
+// TestCalculateAnalysisProgress_ProcessingPhase verifies correct percentages when totals known
+func TestCalculateAnalysisProgress_ProcessingPhase(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	status := &syncengine.Status{
+		StartTime:         time.Now(),
+		ScannedFiles:      50,
+		TotalFilesToScan:  100,
+		ScannedBytes:      1024 * 50,
+		TotalBytesToScan:  1024 * 100,
+		AnalysisStartTime: time.Now().Add(-10 * time.Second),
+	}
+
+	progress := status.CalculateAnalysisProgress()
+
+	// During processing phase, IsCounting should be false
+	g.Expect(progress.IsCounting).Should(BeFalse())
+	g.Expect(progress.FilesPercent).Should(Equal(50.0))
+	g.Expect(progress.BytesPercent).Should(Equal(50.0))
+	// Overall is average of files, bytes, and time percent
+	g.Expect(progress.OverallPercent).Should(BeNumerically(">=", 0))
+	g.Expect(progress.OverallPercent).Should(BeNumerically("<=", 100))
+}
+
+// TestCalculateAnalysisProgress_EdgeCases verifies handling of zero values
+func TestCalculateAnalysisProgress_EdgeCases(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Test zero files case
+	status := &syncengine.Status{
+		StartTime:         time.Now(),
+		ScannedFiles:      0,
+		TotalFilesToScan:  0,
+		ScannedBytes:      0,
+		TotalBytesToScan:  0,
+		AnalysisStartTime: time.Time{}, // Not started
+	}
+
+	progress := status.CalculateAnalysisProgress()
+	g.Expect(progress.IsCounting).Should(BeTrue())
+	g.Expect(progress.OverallPercent).Should(Equal(float64(0)))
+}
+
+// TestCalculateAnalysisProgress_ProgressionAccuracy verifies 50/100 = 50%
+func TestCalculateAnalysisProgress_ProgressionAccuracy(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	status := &syncengine.Status{
+		StartTime:         time.Now(),
+		ScannedFiles:      50,
+		TotalFilesToScan:  100,
+		ScannedBytes:      2048,
+		TotalBytesToScan:  4096,
+		AnalysisStartTime: time.Now().Add(-10 * time.Second),
+	}
+
+	progress := status.CalculateAnalysisProgress()
+
+	g.Expect(progress.FilesPercent).Should(Equal(50.0))
+	g.Expect(progress.BytesPercent).Should(Equal(50.0))
 }
