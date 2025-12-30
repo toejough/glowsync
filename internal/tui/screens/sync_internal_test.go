@@ -61,17 +61,17 @@ func TestGetBottleneckInfo(t *testing.T) {
 	// Test source bottleneck
 	screen.status.Bottleneck = "source"
 	result := screen.getBottleneckInfo()
-	g.Expect(result).Should(ContainSubstring("source"))
+	g.Expect(result).Should(ContainSubstring("source slow"))
 
 	// Test destination bottleneck
 	screen.status.Bottleneck = "destination"
 	result = screen.getBottleneckInfo()
-	g.Expect(result).Should(ContainSubstring("dest"))
+	g.Expect(result).Should(ContainSubstring("dest slow"))
 
-	// Test balanced
+	// Test balanced (optimal)
 	screen.status.Bottleneck = "balanced"
 	result = screen.getBottleneckInfo()
-	g.Expect(result).Should(ContainSubstring("balanced"))
+	g.Expect(result).Should(ContainSubstring("optimal"))
 
 	// Test no adaptive mode
 	screen.status.AdaptiveMode = false
