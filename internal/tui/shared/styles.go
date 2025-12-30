@@ -43,7 +43,8 @@ const (
 	StateError       = "error"       // StateError indicates an error occurred
 	StateSource      = "source"      // StateSource indicates source is the bottleneck
 	// StatusUpdateThrottleMs is the minimum interval between status updates in milliseconds
-	StatusUpdateThrottleMs = 200
+	// Set to 100ms for smooth progress updates with minimal CPU overhead
+	StatusUpdateThrottleMs = 100
 	// TickIntervalMs is the interval for tick messages in milliseconds
 	TickIntervalMs = 100
 )
