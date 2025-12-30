@@ -17,7 +17,19 @@
       "Bash(git checkout:*)",
       "Bash(mage -l:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd back navigation from Analysis screen \\(Issue 1.1\\)\n\nImplemented Esc key support in the Analysis screen to allow users to \ngo back and change paths if they entered them incorrectly.\n\nChanges:\n- Added TransitionToInputMsg for screen transition back to input\n- Implemented Esc key handler in AnalysisScreen\n- Added app-level transition handler for transitionToInput\\(\\)\n- Cancels running analysis when user presses Esc\n- Added help text \"Press Esc to change paths\"\n- Full test coverage for screen and app-level transitions\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__linear-server__list_issue_statuses",
+      "mcp__linear-server__update_issue",
+      "mcp__linear-server__create_comment",
+      "Skill(feature-dev:feature-dev)",
+      "Bash(mage checkCoverage:*)",
+      "Bash(go tool cover:*)",
+      "Bash(sort:*)",
+      "Bash(go clean:*)",
+      "Bash(mage tidy:*)",
+      "Bash(mage checkNils:*)",
+      "Bash(mage deadcode:*)",
+      "Bash(mage reorderDecls:*)"
     ]
   },
   "sandbox": {
