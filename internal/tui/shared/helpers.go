@@ -83,3 +83,8 @@ func TruncatePath(path string, maxWidth int) string {
 
 	return path[:halfWidth] + "..." + path[len(path)-halfWidth:]
 }
+
+// RenderEmptyListPlaceholder renders a dimmed placeholder message for empty lists
+func RenderEmptyListPlaceholder(message string) string {
+	return RenderDim(message)
+}
