@@ -129,11 +129,11 @@ func (s SyncScreen) getBottleneckInfo() string {
 
 	switch s.status.Bottleneck {
 	case shared.StateSource:
-		return " 🔴 source-limited"
+		return " 🔴 source slow"
 	case shared.StateDestination:
-		return " 🟡 dest-limited"
+		return " 🟡 dest slow"
 	case shared.StateBalanced:
-		return " 🟢 balanced"
+		return " 🟢 optimal"
 	default:
 		return ""
 	}
