@@ -338,7 +338,7 @@ func TestSummaryScreenViewComplete(t *testing.T) {
 
 	// Test View rendering
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+	g.Expect(view).Should(ContainSubstring("All files already up-to-date"))
 }
 
 func TestSummaryScreenViewCompleteWithAlreadySynced(t *testing.T) {
@@ -351,7 +351,7 @@ func TestSummaryScreenViewCompleteWithAlreadySynced(t *testing.T) {
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+	g.Expect(view).Should(ContainSubstring("All files already up-to-date"))
 }
 
 func TestSummaryScreenViewCompleteWithErrors(t *testing.T) {
@@ -364,7 +364,7 @@ func TestSummaryScreenViewCompleteWithErrors(t *testing.T) {
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+	g.Expect(view).Should(ContainSubstring("All files already up-to-date"))
 }
 
 func TestSummaryScreenViewError(t *testing.T) {
@@ -425,7 +425,7 @@ func TestSummaryScreenViewWithAdaptiveMode(t *testing.T) {
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+	g.Expect(view).Should(ContainSubstring("All files already up-to-date"))
 }
 
 func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
@@ -438,7 +438,7 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+	g.Expect(view).Should(ContainSubstring("All files already up-to-date"))
 }
 
 func TestSummaryScreenViewCompleteWithZeroFiles(t *testing.T) {
@@ -461,7 +461,7 @@ func TestSummaryScreenViewCompleteWithZeroFiles(t *testing.T) {
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Sync Complete"))
+	g.Expect(view).Should(ContainSubstring("All files already up-to-date"))
 
 	// Should show helpful explanation when 0 files synced
 	// (all files were already up-to-date)
