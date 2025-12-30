@@ -3,6 +3,7 @@ package screens
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -128,7 +129,6 @@ func TestRenderFileList(t *testing.T) {
 	g.Expect(result).ShouldNot(BeEmpty())
 }
 
-
 func TestRenderRecentFiles(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -147,7 +147,6 @@ func TestRenderRecentFiles(t *testing.T) {
 	result := builder.String()
 	g.Expect(result).Should(ContainSubstring("Recent Files"))
 }
-
 
 func TestRenderStatistics(t *testing.T) {
 	t.Parallel()
@@ -258,6 +257,102 @@ func TestRenderSyncingErrors_WithMultipleEnrichedErrors(t *testing.T) {
 	// Should show suggestions for both error types
 	g.Expect(result).Should(ContainSubstring("ls -la")) // permission suggestion
 	g.Expect(result).Should(ContainSubstring("df"))     // disk space suggestion
+}
+
+func TestRenderSyncingErrors_ErrorLimit(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create 5 errors to test the limit of 3
+	fileErrors := make([]syncengine.FileError, 5)
+	for i := range 5 {
+		fileErrors[i] = syncengine.FileError{
+			FilePath: fmt.Sprintf("/path/to/file%d.txt", i+1),
+			Error:    fmt.Errorf("error %d", i+1),
+		}
+	}
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			Errors: fileErrors,
+		},
+		width: 100,
+	}
+
+	var builder strings.Builder
+	screen.renderSyncingErrors(&builder)
+	result := builder.String()
+
+	// Should show first 3 errors only (using error symbol count)
+	errorCount := strings.Count(result, "✗")
+	g.Expect(errorCount).Should(Equal(3), "Should display exactly 3 errors")
+
+	// Should show overflow message
+	g.Expect(result).Should(ContainSubstring("... and 2 more (see summary)"))
+
+	// Should NOT show the old completion screen message
+	g.Expect(result).ShouldNot(ContainSubstring("completion screen"))
+}
+
+func TestRenderSyncingErrors_UnderLimit(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create only 2 errors (under the limit of 3)
+	fileErrors := []syncengine.FileError{
+		{FilePath: "/path/to/file1.txt", Error: errors.New("error 1")},
+		{FilePath: "/path/to/file2.txt", Error: errors.New("error 2")},
+	}
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			Errors: fileErrors,
+		},
+		width: 100,
+	}
+
+	var builder strings.Builder
+	screen.renderSyncingErrors(&builder)
+	result := builder.String()
+
+	// Should show all 2 errors
+	errorCount := strings.Count(result, "✗")
+	g.Expect(errorCount).Should(Equal(2))
+
+	// Should NOT show overflow message
+	g.Expect(result).ShouldNot(ContainSubstring("... and"))
+	g.Expect(result).ShouldNot(ContainSubstring("more (see summary)"))
+}
+
+func TestRenderSyncingErrors_AtLimit(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create exactly 3 errors (at the limit)
+	fileErrors := []syncengine.FileError{
+		{FilePath: "/path/to/file1.txt", Error: errors.New("error 1")},
+		{FilePath: "/path/to/file2.txt", Error: errors.New("error 2")},
+		{FilePath: "/path/to/file3.txt", Error: errors.New("error 3")},
+	}
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			Errors: fileErrors,
+		},
+		width: 100,
+	}
+
+	var builder strings.Builder
+	screen.renderSyncingErrors(&builder)
+	result := builder.String()
+
+	// Should show all 3 errors
+	errorCount := strings.Count(result, "✗")
+	g.Expect(errorCount).Should(Equal(3))
+
+	// Should NOT show overflow message when exactly at limit
+	g.Expect(result).ShouldNot(ContainSubstring("... and"))
+	g.Expect(result).ShouldNot(ContainSubstring("more (see summary)"))
 }
 
 func TestTruncatePath(t *testing.T) {
