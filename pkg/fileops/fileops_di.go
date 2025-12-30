@@ -158,9 +158,10 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 
 // CopyFileWithStats copies a file and returns detailed timing statistics.
 // If cancelChan is provided and closed, the copy will be aborted.
+// If onDataComplete is provided, it will be called after data transfer but before file close/chtimes.
 //
-//nolint:lll // Long function signature with channel parameter
-func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}) (*CopyStats, error) {
+//nolint:lll,funlen // Long function signature with channel parameter; function handles file copy with finalization callback
+func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}, onDataComplete func()) (*CopyStats, error) {
 	stats := &CopyStats{}
 
 	sourceFile, err := fo.FS.Open(src)
@@ -210,6 +211,11 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 	}
 
 	stats.BytesCopied = written
+
+	// Call onDataComplete callback after data transfer completes, before file finalization
+	if onDataComplete != nil {
+		onDataComplete()
+	}
 
 	// Close the file before setting modification time
 	// This is important for network filesystems like SMB

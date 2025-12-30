@@ -13,7 +13,7 @@ import (
 // then use ExpectReturnedValuesAre/Should() or ExpectPanicWith() to verify behavior.
 type CopyFileWithStatsImp struct {
 	*_imptest.CallableController[CopyFileWithStatsImpReturn]
-	callable func(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}) (*CopyStats, error)
+	callable func(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}, onDataComplete func()) (*CopyStats, error)
 }
 
 // NewCopyFileWithStatsImp creates a new wrapper for testing the callable function.
@@ -23,7 +23,7 @@ type CopyFileWithStatsImp struct {
 //
 //	wrapper := NewCopyFileWithStatsImp(t, myFunction)
 //	wrapper.Start(args...).ExpectReturnedValuesAre(expectedVals...)
-func NewCopyFileWithStatsImp(t _testing.TB, callable func(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}) (*CopyStats, error)) *CopyFileWithStatsImp {
+func NewCopyFileWithStatsImp(t _testing.TB, callable func(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}, onDataComplete func()) (*CopyStats, error)) *CopyFileWithStatsImp {
 	return &CopyFileWithStatsImp{
 		CallableController: _imptest.NewCallableController[CopyFileWithStatsImpReturn](t),
 		callable:           callable,
@@ -99,7 +99,7 @@ func (s *CopyFileWithStatsImp) ExpectReturnedValuesShould(v1 any, v2 any) {
 // Example:
 //
 //	wrapper.Start(arg1, arg2).ExpectReturnedValuesAre(expectedResult)
-func (s *CopyFileWithStatsImp) Start(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}) *CopyFileWithStatsImp {
+func (s *CopyFileWithStatsImp) Start(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}, onDataComplete func()) *CopyFileWithStatsImp {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -107,7 +107,7 @@ func (s *CopyFileWithStatsImp) Start(src, dst string, progress ProgressCallback,
 			}
 		}()
 
-		ret0, ret1 := s.callable(src, dst, progress, cancelChan)
+		ret0, ret1 := s.callable(src, dst, progress, cancelChan, onDataComplete)
 		s.ReturnChan <- CopyFileWithStatsImpReturn{
 			Result0: ret0,
 			Result1: ret1,
