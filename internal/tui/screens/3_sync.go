@@ -85,21 +85,41 @@ func (s SyncScreen) View() string {
 
 func (s SyncScreen) calculateMaxFilesToShow() int {
 	// Calculate how many file progress bars we can show based on available screen height
-	// Count lines used so far (approximate)
-	linesUsed := 0
-	linesUsed += 2 // Title
-	linesUsed += 5 // Unified progress section (label + bar + file line + byte/rate line + blank)
-	linesUsed += 8 // Statistics section (varies, but estimate)
-	linesUsed += 2 // Section header
-	linesUsed += 5 // Error section (if shown)
-	linesUsed += 2 // Bottom padding
+	// Count lines used by fixed UI elements based on actual rendering
+	fixedLines := 0
 
-	// Each file takes 3 lines (filename + progress bar + blank line)
-	linesPerFile := 3
-	availableLines := max(s.height-linesUsed, 0)
-	maxFilesToShow := max(availableLines/linesPerFile, 1) // Always show at least 1 file
+	// Box vertical padding (top + bottom)
+	fixedLines += 2
 
-	return maxFilesToShow
+	// Title section: "📦 Syncing Files\n\n"
+	fixedLines += 2
+
+	// Unified progress section: label + bar + files + bytes + time + blank
+	fixedLines += 6
+
+	// Statistics section: workers line + speed line (conditional) + blank
+	fixedLines += 3
+
+	// File list section header: "Currently Copying (N):\n"
+	fixedLines++
+
+	// Help text at bottom: blank + help text
+	fixedLines += 2
+
+	// Reserve space for conditional error section (if shown)
+	// Errors take: blank + header + error list (~3 errors × 2 lines each)
+	if s.status != nil && len(s.status.Errors) > 0 {
+		fixedLines += 8
+	}
+
+	// Reserve space for overflow message "... and X more files"
+	fixedLines++
+
+	// Calculate available lines for file list
+	// Each file takes exactly 1 line: [spinner] [progress bar] [percentage] [path]
+	availableLines := max(s.height-fixedLines, 1)
+
+	return availableLines
 }
 
 func (s SyncScreen) getBottleneckInfo() string {
@@ -220,12 +240,16 @@ func (s SyncScreen) handleTick() (tea.Model, tea.Cmd) {
 func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	s.width = msg.Width
 	s.height = msg.Height
+
 	// Set progress bar widths
 	progressWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
 	progressWidth = min(progressWidth, shared.MaxProgressBarWidth)
 
 	s.overallProgress.Width = progressWidth
-	s.fileProgress.Width = progressWidth
+
+	// File progress bars are kept small (max 20 chars) to leave room for file names
+	fileProgressWidth := min(progressWidth, 20)
+	s.fileProgress.Width = fileProgressWidth
 
 	return s, nil
 }
@@ -282,7 +306,7 @@ func (s SyncScreen) renderCancellationProgress() string {
 	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
 	builder.WriteString("\n")
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToShow int) {
@@ -294,14 +318,21 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 	builder.WriteString("\n")
 
 	// Calculate available width for path display
-	// Format: [spinner(1)] [space] [progress bar(20)] [space] [percentage(8)] [space] [path]
+	// Format: [spinner(1)] [space] [progress bar(dynamic)] [space] [percentage(8)] [space] [path]
+
+	// Account for box border (1+1) and padding (2+2)
+	boxOverhead := 6
+	contentWidth := s.width - boxOverhead
+
+	// Calculate fixed width for non-path elements
 	spinnerWidth := 1
-	progressBarWidth := 20
-	percentageWidth := 8 // " (100.0%)"
-	spacing := 4         // spaces between components
+	progressBarWidth := s.fileProgress.Width // Use actual dynamic progress bar width
+	percentageWidth := 8                     // " (100.0%)"
+	spacing := 4                             // spaces between components
 	fixedWidth := spinnerWidth + progressBarWidth + percentageWidth + spacing
 
-	maxPathWidth := max(s.width-fixedWidth, syncengine.MinPathDisplayWidth)
+	// Calculate available width for path
+	maxPathWidth := max(contentWidth-fixedWidth, syncengine.MinPathDisplayWidth)
 
 	// Display up to maxFilesToShow files
 	for _, file := range s.status.FilesToSync {
@@ -368,7 +399,7 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 			icon  string
 		)
 
-		//nolint:goconst // Status strings used for clarity and consistency
+		//nolint:goconst // Status strings used for clarity in this context
 		switch file.Status {
 		case "complete":
 			style = shared.FileItemCompleteStyle()
@@ -389,7 +420,7 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 }
 
 func (s SyncScreen) renderStatistics(builder *strings.Builder) {
-	// Worker count with bottleneck info
+	// Worker count with bottleneck info and read/write percentage
 	bottleneckInfo := s.getBottleneckInfo()
 	fmt.Fprintf(builder, "Workers: %d%s",
 		s.status.ActiveWorkers,
@@ -402,22 +433,17 @@ func (s SyncScreen) renderStatistics(builder *strings.Builder) {
 			s.status.Workers.WritePercent)
 	}
 
-	// Per-worker and total rates (from rolling window)
+	builder.WriteString("\n")
+
+	// Per-worker and total rates on separate line (from rolling window)
 	if s.status.Workers.TotalRate > 0 {
-		fmt.Fprintf(builder, " • %s/worker • %s total",
+		fmt.Fprintf(builder, "Speed: %s/worker • %s total",
 			shared.FormatRate(s.status.Workers.PerWorkerRate),
 			shared.FormatRate(s.status.Workers.TotalRate))
+		builder.WriteString("\n")
 	}
 
-	// Elapsed time and ETA
-	elapsed := time.Since(s.status.StartTime)
-	fmt.Fprintf(builder, " • Elapsed: %s", shared.FormatDuration(elapsed))
-
-	if s.status.EstimatedTimeLeft > 0 && s.status.ProcessedFiles < s.status.TotalFiles {
-		fmt.Fprintf(builder, " • ETA: %s", shared.FormatDuration(s.status.EstimatedTimeLeft))
-	}
-
-	builder.WriteString("\n\n")
+	builder.WriteString("\n")
 }
 
 func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
@@ -467,7 +493,7 @@ func (s SyncScreen) renderSyncingView() string {
 		builder.WriteString(s.spinner.View())
 		builder.WriteString(" Starting sync...\n\n")
 
-		return shared.RenderBox(builder.String())
+		return shared.RenderBox(builder.String(), s.width, s.height)
 	}
 
 	// Unified progress (replaces separate overall and session progress)
@@ -486,7 +512,7 @@ func (s SyncScreen) renderSyncingView() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
