@@ -83,26 +83,6 @@ func (s SyncScreen) View() string {
 	return s.renderSyncingView()
 }
 
-// calculateETA returns the estimated time remaining based on current transfer rate.
-// Returns 0 if rate is too low or no bytes remaining.
-func (s SyncScreen) calculateETA(rate float64) time.Duration {
-	if rate <= 0 {
-		return 0
-	}
-
-	// Calculate total bytes processed (including already-synced files)
-	totalProcessedBytes := s.status.AlreadySyncedBytes + s.status.TransferredBytes
-
-	// Calculate remaining bytes from total source
-	remainingBytes := s.status.TotalBytesInSource - totalProcessedBytes
-
-	if remainingBytes <= 0 {
-		return 0
-	}
-
-	return time.Duration(float64(remainingBytes)/rate) * time.Second
-}
-
 func (s SyncScreen) calculateMaxFilesToShow() int {
 	// Calculate how many file progress bars we can show based on available screen height
 	// Count lines used so far (approximate)
@@ -158,6 +138,7 @@ func (s SyncScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+//nolint:exhaustive // Only handling specific key types
 func (s SyncScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
@@ -175,6 +156,7 @@ func (s SyncScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle other keys by string
+	//nolint:gocritic // Single case switch is intentional for extensibility
 	switch msg.String() {
 	case "q":
 		// Cancel the sync gracefully
@@ -311,23 +293,37 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 	builder.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Copying (%d):", len(s.status.CurrentFiles))))
 	builder.WriteString("\n")
 
+	// Calculate available width for path display
+	// Format: [spinner(1)] [space] [progress bar(20)] [space] [percentage(8)] [space] [path]
+	spinnerWidth := 1
+	progressBarWidth := 20
+	percentageWidth := 8 // " (100.0%)"
+	spacing := 4         // spaces between components
+	fixedWidth := spinnerWidth + progressBarWidth + percentageWidth + spacing
+
+	maxPathWidth := max(s.width-fixedWidth, syncengine.MinPathDisplayWidth)
+
 	// Display up to maxFilesToShow files
 	for _, file := range s.status.FilesToSync {
 		if file.Status == "copying" {
 			totalCopying++
 
 			if filesDisplayed < maxFilesToShow {
-				fmt.Fprintf(builder, "%s %s\n", s.spinner.View(), shared.FileItemCopyingStyle().Render(file.RelativePath))
-
-				// Show progress bar for this file
+				// Calculate file progress percentage
 				var filePercent float64
 				if file.Size > 0 {
 					filePercent = float64(file.Transferred) / float64(file.Size)
 				}
 
-				builder.WriteString("  ")
-				builder.WriteString(shared.RenderProgress(s.fileProgress, filePercent))
-				builder.WriteString("\n")
+				// Truncate path to fit available width
+				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
+
+				// Single line: [spinner] [progress bar] [percentage] [path]
+				fmt.Fprintf(builder, "%s %s (%.1f%%) %s\n",
+					s.spinner.View(),
+					shared.RenderProgress(s.fileProgress, filePercent),
+					filePercent*shared.ProgressPercentageScale,
+					shared.FileItemCopyingStyle().Render(truncPath))
 
 				filesDisplayed++
 			}
@@ -372,6 +368,7 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 			icon  string
 		)
 
+		//nolint:goconst // Status strings used for clarity and consistency
 		switch file.Status {
 		case "complete":
 			style = shared.FileItemCompleteStyle()
@@ -392,25 +389,32 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 }
 
 func (s SyncScreen) renderStatistics(builder *strings.Builder) {
-	// Calculate transfer rate
-	elapsed := time.Since(s.status.StartTime)
-
-	var rate float64
-	if elapsed.Seconds() > 0 {
-		rate = float64(s.status.TransferredBytes) / elapsed.Seconds()
-	}
-
 	// Worker count with bottleneck info
 	bottleneckInfo := s.getBottleneckInfo()
-	fmt.Fprintf(builder, "Workers: %d%s • Rate: %s • Elapsed: %s",
+	fmt.Fprintf(builder, "Workers: %d%s",
 		s.status.ActiveWorkers,
-		bottleneckInfo,
-		shared.FormatRate(rate),
-		shared.FormatDuration(elapsed))
+		bottleneckInfo)
 
-	// Calculate and show ETA if available
-	if eta := s.calculateETA(rate); eta > 0 && s.status.ProcessedFiles < s.status.TotalFiles {
-		fmt.Fprintf(builder, " • ETA: %s", shared.FormatDuration(eta))
+	// Read/write percentage (from rolling window)
+	if s.status.Workers.ReadPercent > 0 || s.status.Workers.WritePercent > 0 {
+		fmt.Fprintf(builder, " • R:%.0f%% / W:%.0f%%",
+			s.status.Workers.ReadPercent,
+			s.status.Workers.WritePercent)
+	}
+
+	// Per-worker and total rates (from rolling window)
+	if s.status.Workers.TotalRate > 0 {
+		fmt.Fprintf(builder, " • %s/worker • %s total",
+			shared.FormatRate(s.status.Workers.PerWorkerRate),
+			shared.FormatRate(s.status.Workers.TotalRate))
+	}
+
+	// Elapsed time and ETA
+	elapsed := time.Since(s.status.StartTime)
+	fmt.Fprintf(builder, " • Elapsed: %s", shared.FormatDuration(elapsed))
+
+	if s.status.EstimatedTimeLeft > 0 && s.status.ProcessedFiles < s.status.TotalFiles {
+		fmt.Fprintf(builder, " • ETA: %s", shared.FormatDuration(s.status.EstimatedTimeLeft))
 	}
 
 	builder.WriteString("\n\n")
@@ -486,26 +490,20 @@ func (s SyncScreen) renderSyncingView() string {
 }
 
 func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
-	// Unified progress bar - primary metric is file count, secondary info in subtitle
+	// Unified progress bar - shows average of files%, bytes%, and time%
 	builder.WriteString(shared.RenderLabel("Progress:"))
 	builder.WriteString("\n")
 
-	// Calculate file-based progress percentage
-	totalProcessedFiles := s.status.AlreadySyncedFiles + s.status.ProcessedFiles
-	var filePercent float64
-	if s.status.TotalFilesInSource > 0 {
-		filePercent = float64(totalProcessedFiles) / float64(s.status.TotalFilesInSource)
-	}
-
-	// Render progress bar
-	builder.WriteString(shared.RenderProgress(s.overallProgress, filePercent))
+	// Render progress bar using overall percentage (average of three metrics)
+	builder.WriteString(shared.RenderProgress(s.overallProgress, s.status.Progress.OverallPercent))
 	builder.WriteString("\n")
 
-	// Primary line: file count and percentage
-	fmt.Fprintf(builder, "%d / %d files (%.1f%%)",
+	// Files line with percentage
+	totalProcessedFiles := s.status.AlreadySyncedFiles + s.status.ProcessedFiles
+	fmt.Fprintf(builder, "Files: %d / %d (%.1f%%)",
 		totalProcessedFiles,
 		s.status.TotalFilesInSource,
-		filePercent*shared.ProgressPercentageScale)
+		s.status.Progress.FilesPercent*shared.ProgressPercentageScale)
 
 	if s.status.FailedFiles > 0 {
 		fmt.Fprintf(builder, " • %d failed", s.status.FailedFiles)
@@ -513,27 +511,23 @@ func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
 
 	builder.WriteString("\n")
 
-	// Secondary info line: bytes, rate, ETA
+	// Bytes line with percentage (no rate/ETA - moved to worker line)
 	totalProcessedBytes := s.status.AlreadySyncedBytes + s.status.TransferredBytes
-	fmt.Fprintf(builder, "%s / %s",
+	fmt.Fprintf(builder, "Bytes: %s / %s (%.1f%%)",
 		shared.FormatBytes(totalProcessedBytes),
-		shared.FormatBytes(s.status.TotalBytesInSource))
+		shared.FormatBytes(s.status.TotalBytesInSource),
+		s.status.Progress.BytesPercent*shared.ProgressPercentageScale)
 
-	// Calculate transfer rate
+	builder.WriteString("\n")
+
+	// Time line: elapsed / estimated (percentage)
 	elapsed := time.Since(s.status.StartTime)
-	var rate float64
-	if elapsed.Seconds() > 0 {
-		rate = float64(s.status.TransferredBytes) / elapsed.Seconds()
-	}
+	totalEstimated := elapsed + s.status.EstimatedTimeLeft
 
-	if rate > 0 {
-		fmt.Fprintf(builder, " • %s", shared.FormatRate(rate))
-
-		// Calculate and show ETA if available
-		if eta := s.calculateETA(rate); eta > 0 {
-			fmt.Fprintf(builder, " • ETA: %s", shared.FormatDuration(eta))
-		}
-	}
+	fmt.Fprintf(builder, "Time: %s / %s (%.1f%%)",
+		shared.FormatDuration(elapsed),
+		shared.FormatDuration(totalEstimated),
+		s.status.Progress.TimePercent*shared.ProgressPercentageScale)
 
 	builder.WriteString("\n\n")
 }

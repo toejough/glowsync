@@ -182,6 +182,7 @@ func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+//nolint:exhaustive // Only handling specific key types
 func (s AnalysisScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	//nolint:exhaustive // Default case handles all other keys
 	switch msg.Type {

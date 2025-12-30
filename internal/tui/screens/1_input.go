@@ -191,6 +191,7 @@ func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 		// Validation failed - set error and focus the problematic field
 		s.validationError = err
 		s = s.setFocus(focusField)
+
 		return s, nil
 	}
 
@@ -203,38 +204,7 @@ func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 	}
 }
 
-// setFocus sets the focus to the specified field index and updates all prompts accordingly.
-func (s InputScreen) setFocus(fieldIndex int) InputScreen {
-	// Blur all inputs first
-	s.sourceInput.Blur()
-	s.destInput.Blur()
-	s.patternInput.Blur()
-
-	// Reset all prompts
-	s.sourceInput.Prompt = "  "
-	s.destInput.Prompt = "  "
-	s.patternInput.Prompt = "  "
-
-	// Set focus and prompt for the target field
-	s.focusIndex = fieldIndex
-	switch fieldIndex {
-	case 0:
-		s.sourceInput.Focus()
-		s.sourceInput.Prompt = shared.PromptArrow()
-	case 1:
-		s.destInput.Focus()
-		s.destInput.Prompt = shared.PromptArrow()
-	case 2: //nolint:mnd // Field index for pattern input
-		s.patternInput.Focus()
-		s.patternInput.Prompt = shared.PromptArrow()
-	}
-
-	return s
-}
-
-// handleKeyMsg processes keyboard input for the input screen.
-//
-//nolint:cyclop // Key handlers naturally have high cyclomatic complexity
+//nolint:cyclop,exhaustive // Key handlers naturally have high cyclomatic complexity; only handling specific key types
 func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle special keys using msg.Type (consistent with other screens)
 	switch msg.Type {
@@ -250,6 +220,7 @@ func (s InputScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		s.showCompletions = false
 		s.validationError = nil
+
 		return s, nil
 	case tea.KeyDown:
 		return s.moveToNextField()
@@ -327,45 +298,6 @@ func (s InputScreen) handleShiftTabCompletion() InputScreen {
 	}
 
 	return s
-}
-
-// ============================================================================
-// Validation
-// ============================================================================
-
-// validateInputs checks if the source and dest paths are valid.
-// Returns an error and the field index to focus if validation fails.
-// Returns nil error if validation succeeds.
-func (s InputScreen) validateInputs() (error, int) {
-	// Trim whitespace from inputs
-	sourceValue := strings.TrimSpace(s.sourceInput.Value())
-	destValue := strings.TrimSpace(s.destInput.Value())
-
-	// Check source path
-	if sourceValue == "" {
-		return errors.New("Source path is required"), 0
-	}
-
-	// Check dest path
-	if destValue == "" {
-		return errors.New("Destination path is required"), 1
-	}
-
-	// Set config values for further validation
-	s.config.SourcePath = sourceValue
-	s.config.DestPath = destValue
-	s.config.FilePattern = s.patternInput.Value()
-
-	// Use config validation
-	err := s.config.ValidatePaths()
-	if err != nil {
-		// Determine which field is invalid
-		// If it's a source-related error, focus source; otherwise dest
-		// For now, we'll focus dest for path validation errors
-		return err, 1
-	}
-
-	return nil, 0
 }
 
 // ============================================================================
@@ -523,6 +455,72 @@ func (s InputScreen) renderInputView() string {
 		shared.RenderDim("Other: Esc to clear field • Ctrl+C to exit")
 
 	return shared.RenderBox(content)
+}
+
+// setFocus sets the focus to the specified field index and updates all prompts accordingly.
+func (s InputScreen) setFocus(fieldIndex int) InputScreen {
+	// Blur all inputs first
+	s.sourceInput.Blur()
+	s.destInput.Blur()
+	s.patternInput.Blur()
+
+	// Reset all prompts
+	s.sourceInput.Prompt = "  "
+	s.destInput.Prompt = "  "
+	s.patternInput.Prompt = "  "
+
+	// Set focus and prompt for the target field
+	s.focusIndex = fieldIndex
+	switch fieldIndex {
+	case 0:
+		s.sourceInput.Focus()
+		s.sourceInput.Prompt = shared.PromptArrow()
+	case 1:
+		s.destInput.Focus()
+		s.destInput.Prompt = shared.PromptArrow()
+	case 2: //nolint:mnd // Field index for pattern input
+		s.patternInput.Focus()
+		s.patternInput.Prompt = shared.PromptArrow()
+	}
+
+	return s
+}
+
+// ============================================================================
+// Validation
+// ============================================================================
+
+//nolint:revive,staticcheck // error-return pattern used for field index association
+func (s InputScreen) validateInputs() (error, int) {
+	// Trim whitespace from inputs
+	sourceValue := strings.TrimSpace(s.sourceInput.Value())
+	destValue := strings.TrimSpace(s.destInput.Value())
+
+	// Check source path
+	if sourceValue == "" {
+		return errors.New("source path is required"), 0 //nolint:err113,staticcheck // Simple validation error
+	}
+
+	// Check dest path
+	if destValue == "" {
+		return errors.New("destination path is required"), 1 //nolint:err113,staticcheck // Simple validation error
+	}
+
+	// Set config values for further validation
+	s.config.SourcePath = sourceValue
+	s.config.DestPath = destValue
+	s.config.FilePattern = s.patternInput.Value()
+
+	// Use config validation
+	err := s.config.ValidatePaths()
+	if err != nil {
+		// Determine which field is invalid
+		// If it's a source-related error, focus source; otherwise dest
+		// For now, we'll focus dest for path validation errors
+		return err, 1 //nolint:wrapcheck // Error from config package is already contextualized
+	}
+
+	return nil, 0
 }
 
 func expandHomePath(input string) string {

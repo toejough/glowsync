@@ -51,6 +51,7 @@ func (s SummaryScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return s, nil
 	case tea.KeyMsg:
+		//nolint:exhaustive // Only handling specific key types
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			// Emergency exit - quit immediately
@@ -314,6 +315,42 @@ func (s SummaryScreen) renderCompleteSummary(builder *strings.Builder, elapsed t
 	}
 }
 
+func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
+	// Show error title if there were failures
+	if s.status != nil && s.status.FailedFiles > 0 {
+		builder.WriteString(shared.RenderError("⚠ Sync Complete with Errors"))
+
+		return
+	}
+
+	// Show celebratory success message with stats if files were synced
+	if s.status != nil && s.status.ProcessedFiles > 0 {
+		elapsed := time.Since(s.status.StartTime)
+		if !s.status.EndTime.IsZero() {
+			elapsed = s.status.EndTime.Sub(s.status.StartTime)
+		}
+
+		// Format file count with proper pluralization
+		filesWord := "file"
+		if s.status.ProcessedFiles != 1 {
+			filesWord = "files"
+		}
+
+		message := fmt.Sprintf("%s Successfully synchronized %d %s (%s) in %s",
+			shared.SuccessSymbol(),
+			s.status.ProcessedFiles,
+			filesWord,
+			shared.FormatBytes(s.status.TransferredBytes),
+			shared.FormatDuration(elapsed))
+		builder.WriteString(shared.RenderSuccess(message))
+
+		return
+	}
+
+	// Default: all files already up-to-date
+	builder.WriteString(shared.RenderSuccess(shared.SuccessSymbol() + " All files already up-to-date"))
+}
+
 // ============================================================================
 // Rendering - Complete
 // ============================================================================
@@ -455,40 +492,4 @@ func (s SummaryScreen) renderRecentlyCompleted(builder *strings.Builder) {
 			shared.SuccessSymbol(),
 			shared.RenderPath(file, shared.FileItemCompleteStyle(), maxWidth))
 	}
-}
-
-func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
-	// Show error title if there were failures
-	if s.status != nil && s.status.FailedFiles > 0 {
-		builder.WriteString(shared.RenderError("⚠ Sync Complete with Errors"))
-
-		return
-	}
-
-	// Show celebratory success message with stats if files were synced
-	if s.status != nil && s.status.ProcessedFiles > 0 {
-		elapsed := time.Since(s.status.StartTime)
-		if !s.status.EndTime.IsZero() {
-			elapsed = s.status.EndTime.Sub(s.status.StartTime)
-		}
-
-		// Format file count with proper pluralization
-		filesWord := "file"
-		if s.status.ProcessedFiles != 1 {
-			filesWord = "files"
-		}
-
-		message := fmt.Sprintf("%s Successfully synchronized %d %s (%s) in %s",
-			shared.SuccessSymbol(),
-			s.status.ProcessedFiles,
-			filesWord,
-			shared.FormatBytes(s.status.TransferredBytes),
-			shared.FormatDuration(elapsed))
-		builder.WriteString(shared.RenderSuccess(message))
-
-		return
-	}
-
-	// Default: all files already up-to-date
-	builder.WriteString(shared.RenderSuccess(shared.SuccessSymbol() + " All files already up-to-date"))
 }
