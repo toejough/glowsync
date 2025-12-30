@@ -73,6 +73,7 @@ type Engine struct {
 	Workers         int               // Number of concurrent workers (default: 4, 0 = adaptive)
 	AdaptiveMode    bool              // Enable adaptive concurrency scaling
 	ChangeType      config.ChangeType // Type of changes expected (default: MonotonicCount)
+	Verbose         bool              // Enable verbose progress logging
 	FileOps         *fileops.FileOps  // File operations (for dependency injection)
 	TimeProvider    TimeProvider      // Time provider (for dependency injection)
 	statusCallbacks []func(*Status)
@@ -315,13 +316,23 @@ func (e *Engine) GetStatus() *Status {
 	maxRecent := AdaptiveScalingMinIdleTime // Only copy last 20 files (enough for UI display)
 	for i := len(e.Status.FilesToSync) - 1; i >= 0 && recentCount < maxRecent; i-- {
 		file := e.Status.FilesToSync[i]
-		if file.Status == fileStatusCopying || file.Status == fileStatusComplete || file.Status == fileStatusError {
+		//nolint:lll // Condition checks multiple status values for UI display filtering
+		if file.Status == fileStatusOpening || file.Status == fileStatusCopying || file.Status == fileStatusFinalizing || file.Status == fileStatusComplete || file.Status == fileStatusError {
 			status.FilesToSync = append([]*FileToSync{file}, status.FilesToSync...)
 			recentCount++
 		}
 	}
 
 	return status
+}
+
+// LogVerbose logs verbose progress information (only when Verbose is enabled)
+func (e *Engine) LogVerbose(message string) {
+	if !e.Verbose {
+		return
+	}
+
+	e.logToFile(message)
 }
 
 // MakeScalingDecision decides whether to add workers based on per-worker speed comparison
@@ -595,9 +606,33 @@ func (e *Engine) createProgressCallback(fileToSync *FileToSync) func(int64, int6
 		// Update per-file progress without full lock
 		fileToSync.Transferred = bytesTransferred
 
+		// Transition from "opening" to "copying" on first callback
+		if fileToSync.Status == fileStatusOpening {
+			e.Status.mu.Lock()
+			fileToSync.Status = fileStatusCopying
+			e.Status.mu.Unlock()
+			e.notifyStatusUpdate()
+		}
+
 		// Only acquire lock every 100ms to reduce contention
 		now := time.Now()
-		if now.Sub(lastNotifyTime) < 100*time.Millisecond {
+		throttled := now.Sub(lastNotifyTime) < 100*time.Millisecond //nolint:mnd // Throttle interval
+
+		// Verbose instrumentation: log every progress callback
+		if e.Verbose {
+			var percent float64
+			if fileToSync.Size > 0 {
+				percent = float64(bytesTransferred) / float64(fileToSync.Size) * 100 //nolint:mnd // Percentage calculation
+			}
+			throttledStr := "no"
+			if throttled {
+				throttledStr = "yes"
+			}
+			e.LogVerbose(fmt.Sprintf("[PROGRESS] CALLBACK: %s transferred=%d/%d (%.1f%%) throttled=%s",
+				fileToSync.RelativePath, bytesTransferred, fileToSync.Size, percent, throttledStr))
+		}
+
+		if throttled {
 			return
 		}
 
@@ -1229,6 +1264,10 @@ func (e *Engine) removeFromCurrentFiles(relativePath string) {
 	for i, f := range e.Status.CurrentFiles {
 		if f == relativePath {
 			e.Status.CurrentFiles = append(e.Status.CurrentFiles[:i], e.Status.CurrentFiles[i+1:]...)
+
+			// Verbose instrumentation: log when file is removed from CurrentFiles
+			e.LogVerbose("[PROGRESS] FILE_END: " + relativePath)
+
 			break
 		}
 	}
@@ -1592,9 +1631,12 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 	e.Status.mu.Lock()
 	e.Status.CurrentFile = fileToSync.RelativePath
 	e.Status.CurrentFiles = append(e.Status.CurrentFiles, fileToSync.RelativePath)
-	fileToSync.Status = "copying"
+	fileToSync.Status = fileStatusOpening
 	e.Status.mu.Unlock()
 	e.notifyStatusUpdate()
+
+	// Verbose instrumentation: log when file enters opening state
+	e.LogVerbose(fmt.Sprintf("[PROGRESS] FILE_START: %s (size=%d)", fileToSync.RelativePath, fileToSync.Size))
 
 	// Try hash optimization for Content mode
 	optimized, err := e.tryHashOptimization(fileToSync, srcPath, dstPath)
@@ -1608,7 +1650,16 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 
 	// Copy the file with timing stats (pass cancel channel for mid-copy cancellation)
 	progressCallback := e.createProgressCallback(fileToSync)
-	stats, err := e.FileOps.CopyFileWithStats(srcPath, dstPath, progressCallback, e.cancelChan)
+
+	// Create callback to mark file as finalizing when data transfer completes
+	onDataComplete := func() {
+		e.Status.mu.Lock()
+		fileToSync.Status = fileStatusFinalizing
+		e.Status.mu.Unlock()
+		e.notifyStatusUpdate()
+	}
+
+	stats, err := e.FileOps.CopyFileWithStats(srcPath, dstPath, progressCallback, e.cancelChan, onDataComplete)
 
 	// Update bottleneck detection and handle copy result
 	return e.handleCopyResult(fileToSync, stats, err)
@@ -2257,9 +2308,11 @@ func (s *Status) calculateWorkerMetrics() WorkerMetrics {
 
 // unexported constants.
 const (
-	fileStatusComplete = "complete"
-	fileStatusCopying  = "copying"
-	fileStatusError    = "error"
+	fileStatusComplete   = "complete"
+	fileStatusCopying    = "copying"
+	fileStatusError      = "error"
+	fileStatusFinalizing = "finalizing" // After data transfer, before file close/chtimes
+	fileStatusOpening    = "opening"    // Before first progress callback (file open/create in progress)
 	// FileToSync status constants
 	fileStatusPending = "pending"
 	phaseComplete     = "complete"
