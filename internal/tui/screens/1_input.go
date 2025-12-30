@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/tui/shared"
-	"github.com/joe/copy-files/pkg/errors"
+	pkgerrors "github.com/joe/copy-files/pkg/errors"
 )
 
 // InputScreen handles path input from the user
@@ -184,40 +185,51 @@ func (s InputScreen) formatWindowedCompletions(completions []string, currentInde
 func (s InputScreen) handleEnter() (tea.Model, tea.Cmd) {
 	s.showCompletions = false
 
-	switch s.focusIndex {
-	case 0:
-		if s.sourceInput.Value() != "" {
-			// Move to destination input
-			return s.moveToNextField()
-		}
-	case 1:
-		if s.destInput.Value() != "" {
-			// Move to pattern input
-			return s.moveToNextField()
-		}
-	case 2: //nolint:mnd // Field index for pattern input
-		// Pattern field is optional, so we can proceed even if empty
-		// Validate paths
-		s.config.SourcePath = s.sourceInput.Value()
-		s.config.DestPath = s.destInput.Value()
-		s.config.FilePattern = s.patternInput.Value()
-
-		err := s.config.ValidatePaths()
-		if err != nil {
-			s.validationError = err
-			return s, nil
-		}
-
-		// Paths are valid - trigger transition to analysis
-		return s, func() tea.Msg {
-			return shared.TransitionToAnalysisMsg{
-				SourcePath: s.config.SourcePath,
-				DestPath:   s.config.DestPath,
-			}
-		}
+	// Always validate inputs when Enter is pressed
+	err, focusField := s.validateInputs()
+	if err != nil {
+		// Validation failed - set error and focus the problematic field
+		s.validationError = err
+		s = s.setFocus(focusField)
+		return s, nil
 	}
 
-	return s, nil
+	// Validation succeeded - trigger transition to analysis
+	return s, func() tea.Msg {
+		return shared.TransitionToAnalysisMsg{
+			SourcePath: s.config.SourcePath,
+			DestPath:   s.config.DestPath,
+		}
+	}
+}
+
+// setFocus sets the focus to the specified field index and updates all prompts accordingly.
+func (s InputScreen) setFocus(fieldIndex int) InputScreen {
+	// Blur all inputs first
+	s.sourceInput.Blur()
+	s.destInput.Blur()
+	s.patternInput.Blur()
+
+	// Reset all prompts
+	s.sourceInput.Prompt = "  "
+	s.destInput.Prompt = "  "
+	s.patternInput.Prompt = "  "
+
+	// Set focus and prompt for the target field
+	s.focusIndex = fieldIndex
+	switch fieldIndex {
+	case 0:
+		s.sourceInput.Focus()
+		s.sourceInput.Prompt = shared.PromptArrow()
+	case 1:
+		s.destInput.Focus()
+		s.destInput.Prompt = shared.PromptArrow()
+	case 2: //nolint:mnd // Field index for pattern input
+		s.patternInput.Focus()
+		s.patternInput.Prompt = shared.PromptArrow()
+	}
+
+	return s
 }
 
 // handleKeyMsg processes keyboard input for the input screen.
@@ -315,6 +327,45 @@ func (s InputScreen) handleShiftTabCompletion() InputScreen {
 	}
 
 	return s
+}
+
+// ============================================================================
+// Validation
+// ============================================================================
+
+// validateInputs checks if the source and dest paths are valid.
+// Returns an error and the field index to focus if validation fails.
+// Returns nil error if validation succeeds.
+func (s InputScreen) validateInputs() (error, int) {
+	// Trim whitespace from inputs
+	sourceValue := strings.TrimSpace(s.sourceInput.Value())
+	destValue := strings.TrimSpace(s.destInput.Value())
+
+	// Check source path
+	if sourceValue == "" {
+		return errors.New("Source path is required"), 0
+	}
+
+	// Check dest path
+	if destValue == "" {
+		return errors.New("Destination path is required"), 1
+	}
+
+	// Set config values for further validation
+	s.config.SourcePath = sourceValue
+	s.config.DestPath = destValue
+	s.config.FilePattern = s.patternInput.Value()
+
+	// Use config validation
+	err := s.config.ValidatePaths()
+	if err != nil {
+		// Determine which field is invalid
+		// If it's a source-related error, focus source; otherwise dest
+		// For now, we'll focus dest for path validation errors
+		return err, 1
+	}
+
+	return nil, 0
 }
 
 // ============================================================================
@@ -446,7 +497,7 @@ func (s InputScreen) renderInputView() string {
 
 	// Show validation error if present
 	if s.validationError != nil {
-		enricher := errors.NewEnricher()
+		enricher := pkgerrors.NewEnricher()
 
 		// Determine the path to use for enrichment context
 		var affectedPath string
@@ -460,7 +511,7 @@ func (s InputScreen) renderInputView() string {
 		content += "\n" + shared.RenderError("Error: "+enrichedErr.Error()) + "\n"
 
 		// Show suggestions if available
-		suggestions := errors.FormatSuggestions(enrichedErr)
+		suggestions := pkgerrors.FormatSuggestions(enrichedErr)
 		if suggestions != "" {
 			content += suggestions + "\n"
 		}
@@ -468,7 +519,7 @@ func (s InputScreen) renderInputView() string {
 
 	content += "\n" +
 		shared.RenderDim("Navigation: Tab/Shift+Tab to cycle • ↑↓ to switch fields") + "\n" +
-		shared.RenderDim("Actions: → to accept & continue • Enter to continue") + "\n" +
+		shared.RenderDim("Actions: → to accept & continue • Enter to submit") + "\n" +
 		shared.RenderDim("Other: Esc to clear field • Ctrl+C to exit")
 
 	return shared.RenderBox(content)
