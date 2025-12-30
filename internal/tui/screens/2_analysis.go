@@ -26,6 +26,7 @@ type AnalysisScreen struct {
 	state           string // "initializing" or "analyzing"
 	lastUpdate      time.Time
 	logPath         string
+	width           int
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -228,6 +229,8 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 // ============================================================================
 
 func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	s.width = msg.Width
+
 	// Set progress bar width
 	//nolint:lll // Complex width calculation with multiple constants
 	progressWidth := min(max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold), shared.MaxProgressBarWidth)
@@ -320,7 +323,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 
 	// Show current path being scanned
 	if s.status.CurrentPath != "" {
-		builder.WriteString(fmt.Sprintf("Current: %s\n", s.status.CurrentPath))
+		s.renderCurrentPathSection(&builder)
 		builder.WriteString("\n")
 	}
 
@@ -338,6 +341,12 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
 	return shared.RenderBox(builder.String())
+}
+
+func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
+	maxWidth := shared.CalculateMaxPathWidth(s.width)
+	truncatedPath := shared.RenderPathPlain(s.status.CurrentPath, maxWidth)
+	fmt.Fprintf(builder, "Current: %s\n", truncatedPath)
 }
 
 // ============================================================================

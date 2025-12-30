@@ -446,10 +446,6 @@ func (s SummaryScreen) renderRecentlyCompleted(builder *strings.Builder) {
 	for _, file := range s.status.RecentlyCompleted {
 		fmt.Fprintf(builder, "  %s %s\n",
 			shared.SuccessSymbol(),
-			shared.FileItemCompleteStyle().Render(s.truncatePath(file, maxWidth)))
+			shared.RenderPath(file, shared.FileItemCompleteStyle(), maxWidth))
 	}
-}
-
-func (s SummaryScreen) truncatePath(path string, maxWidth int) string {
-	return shared.TruncatePath(path, maxWidth)
 }
