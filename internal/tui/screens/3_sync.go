@@ -227,6 +227,46 @@ func (s SyncScreen) handleTick() (tea.Model, tea.Cmd) {
 		if now.Sub(s.lastUpdate) >= shared.StatusUpdateThrottleMs*time.Millisecond {
 			s.status = s.engine.GetStatus()
 			s.lastUpdate = now
+
+			// Verbose instrumentation: log what the UI sees
+			if s.status != nil && len(s.status.CurrentFiles) > 0 {
+				var fileStatuses []string
+				// Check for SMB contention (finalizing files blocking opening files)
+				hasFinalizingFiles := false
+				for _, f := range s.status.FilesToSync {
+					if f.Status == "finalizing" {
+						hasFinalizingFiles = true
+						break
+					}
+				}
+
+				for _, filePath := range s.status.CurrentFiles {
+					// Find the file in FilesToSync to get progress
+					for _, f := range s.status.FilesToSync {
+						if f.RelativePath == filePath {
+							if f.Status == "copying" {
+								var percent float64
+								if f.Size > 0 {
+									percent = float64(f.Transferred) / float64(f.Size) * 100 //nolint:mnd // Percentage calculation
+								}
+								fileStatuses = append(fileStatuses, fmt.Sprintf("%s:%.1f%%", filePath, percent))
+							} else if f.Status == "finalizing" {
+								fileStatuses = append(fileStatuses, filePath+":finalizing")
+							} else if f.Status == "opening" {
+								if hasFinalizingFiles {
+									fileStatuses = append(fileStatuses, filePath+":opening(SMB_BUSY)")
+								} else {
+									fileStatuses = append(fileStatuses, filePath+":opening")
+								}
+							}
+
+							break
+						}
+					}
+				}
+				s.engine.LogVerbose(fmt.Sprintf("[PROGRESS] UI_POLL: files_copying=%d [%s]",
+					len(s.status.CurrentFiles), strings.Join(fileStatuses, ", ")))
+			}
 		}
 	}
 
@@ -334,6 +374,15 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 	// Calculate available width for path
 	maxPathWidth := max(contentWidth-fixedWidth, syncengine.MinPathDisplayWidth)
 
+	// Check if any files are finalizing (for SMB contention detection)
+	hasFinalizingFiles := false
+	for _, file := range s.status.FilesToSync {
+		if file.Status == "finalizing" {
+			hasFinalizingFiles = true
+			break
+		}
+	}
+
 	// Display up to maxFilesToShow files
 	for _, file := range s.status.FilesToSync {
 		if file.Status == "copying" {
@@ -354,6 +403,43 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 					s.spinner.View(),
 					shared.RenderProgress(s.fileProgress, filePercent),
 					filePercent*shared.ProgressPercentageScale,
+					shared.FileItemCopyingStyle().Render(truncPath))
+
+				filesDisplayed++
+			}
+		} else if file.Status == "finalizing" {
+			totalCopying++
+
+			if filesDisplayed < maxFilesToShow {
+				// Truncate path to fit available width
+				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
+
+				// Single line: [spinner] Finalizing [path]
+				fmt.Fprintf(builder, "%s Finalizing %s\n",
+					s.spinner.View(),
+					shared.FileItemCopyingStyle().Render(truncPath))
+
+				filesDisplayed++
+			}
+		} else if file.Status == "opening" {
+			totalCopying++
+
+			if filesDisplayed < maxFilesToShow {
+				// Truncate path to fit available width
+				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
+
+				// Show SMB contention message if other files are finalizing
+				var statusMsg string
+				if hasFinalizingFiles {
+					statusMsg = "Waiting (SMB busy)"
+				} else {
+					statusMsg = "Opening file"
+				}
+
+				// Single line: [spinner] [status message] [path]
+				fmt.Fprintf(builder, "%s %s %s\n",
+					s.spinner.View(),
+					statusMsg,
 					shared.FileItemCopyingStyle().Render(truncPath))
 
 				filesDisplayed++
@@ -399,7 +485,6 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 			icon  string
 		)
 
-		//nolint:goconst // Status strings used for clarity in this context
 		switch file.Status {
 		case "complete":
 			style = shared.FileItemCompleteStyle()
