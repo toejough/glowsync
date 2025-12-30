@@ -27,6 +27,7 @@ type AnalysisScreen struct {
 	lastUpdate      time.Time
 	logPath         string
 	width           int
+	height          int
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -233,6 +234,7 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 
 func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	s.width = msg.Width
+	s.height = msg.Height
 
 	// Set progress bar width
 	//nolint:lll // Complex width calculation with multiple constants
@@ -391,7 +393,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 		builder.WriteString(s.spinner.View())
 		builder.WriteString(" Scanning directories and comparing files...\n\n")
 
-		return shared.RenderBox(builder.String())
+		return shared.RenderBox(builder.String(), s.width, s.height)
 	}
 
 	// Show current phase
@@ -423,7 +425,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
@@ -452,5 +454,5 @@ func (s AnalysisScreen) renderInitializingView() string {
 
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }

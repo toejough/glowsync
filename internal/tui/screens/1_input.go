@@ -25,6 +25,8 @@ type InputScreen struct {
 	completionIndex int
 	showCompletions bool
 	validationError error
+	width           int
+	height          int
 }
 
 // NewInputScreen creates a new input screen
@@ -342,6 +344,9 @@ func (s InputScreen) handleTabCompletion() InputScreen {
 // ============================================================================
 
 func (s InputScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	s.width = msg.Width
+	s.height = msg.Height
+
 	// Set input widths to use most of the available width (minus padding and borders)
 	inputWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
 	s.sourceInput.Width = inputWidth
@@ -454,7 +459,7 @@ func (s InputScreen) renderInputView() string {
 		shared.RenderDim("Actions: → to accept & continue • Enter to submit") + "\n" +
 		shared.RenderDim("Other: Esc to clear field • Ctrl+C to exit")
 
-	return shared.RenderBox(content)
+	return shared.RenderBox(content, s.width, s.height)
 }
 
 // setFocus sets the focus to the specified field index and updates all prompts accordingly.

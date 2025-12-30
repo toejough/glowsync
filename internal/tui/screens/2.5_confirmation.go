@@ -14,6 +14,8 @@ import (
 type ConfirmationScreen struct {
 	engine  *syncengine.Engine
 	logPath string
+	width   int
+	height  int
 }
 
 // NewConfirmationScreen creates a new confirmation screen
@@ -31,8 +33,14 @@ func (s ConfirmationScreen) Init() tea.Cmd {
 
 // Update handles messages for the confirmation screen
 func (s ConfirmationScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		return s.handleKeyMsg(keyMsg)
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		s.width = msg.Width
+		s.height = msg.Height
+
+		return s, nil
+	case tea.KeyMsg:
+		return s.handleKeyMsg(msg)
 	}
 
 	return s, nil
@@ -97,7 +105,7 @@ func (s ConfirmationScreen) View() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Enter to begin sync • Esc to cancel • Ctrl+C to exit"))
 
-	return builder.String()
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s ConfirmationScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

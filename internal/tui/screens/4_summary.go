@@ -17,6 +17,7 @@ type SummaryScreen struct {
 	finalState string // "complete", "cancelled", "error"
 	err        error
 	width      int
+	height     int
 	logPath    string
 }
 
@@ -38,6 +39,7 @@ func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error, l
 // Init implements tea.Model
 func (s SummaryScreen) Init() tea.Cmd {
 	// Ring bell for successful completion (delight factor for long-running operations)
+	//nolint:goconst // State strings used for clarity
 	if s.finalState == "complete" && (s.status == nil || s.status.FailedFiles == 0) {
 		fmt.Print("\a")
 	}
@@ -49,6 +51,9 @@ func (s SummaryScreen) Init() tea.Cmd {
 func (s SummaryScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		s.width = msg.Width
+		s.height = msg.Height
+
 		return s, nil
 	case tea.KeyMsg:
 		//nolint:exhaustive // Only handling specific key types
@@ -83,7 +88,7 @@ func (s SummaryScreen) View() string {
 	case shared.StateError:
 		return s.renderErrorView()
 	default:
-		return shared.RenderBox("Unknown state")
+		return shared.RenderBox("Unknown state", s.width, s.height)
 	}
 }
 
@@ -233,7 +238,7 @@ func (s SummaryScreen) renderCancelledView() string {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
@@ -387,7 +392,7 @@ func (s SummaryScreen) renderCompleteView() string {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 // ============================================================================
@@ -455,7 +460,7 @@ func (s SummaryScreen) renderErrorView() string {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return shared.RenderBox(builder.String())
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s SummaryScreen) renderReadWriteSpeeds(builder *strings.Builder) {
