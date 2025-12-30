@@ -1228,6 +1228,10 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 	e.Status.TotalFilesToScan = 0
 	e.Status.mu.Unlock()
 
+	// Notify before accessing (may block on slow/remote filesystems)
+	e.logAnalysis("Accessing destination...")
+	e.notifyStatusUpdate()
+
 	// Scan destination directory with progress
 	destFiles, err := e.FileOps.ScanDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int, fileSize int64) {
 		e.Status.mu.Lock()
@@ -1291,6 +1295,10 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 		e.Status.AnalysisStartTime = e.TimeProvider.Now()
 	}
 	e.Status.mu.Unlock()
+
+	// Notify before accessing (may block on slow/remote filesystems)
+	e.logAnalysis("Accessing source...")
+	e.notifyStatusUpdate()
 
 	// Scan source directory with progress
 	//nolint:lll // Anonymous function with parameters as part of method call
@@ -1724,6 +1732,9 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	e.Status.AnalysisPhase = phaseCountingSource
 	e.Status.mu.Unlock()
 
+	e.logAnalysis("Accessing source...")
+	e.notifyStatusUpdate()
+
 	sourceCount, err := e.FileOps.CountFilesWithProgress(e.SourcePath, func(path string, count int) {
 		e.Status.mu.Lock()
 		e.Status.ScannedFiles = count
@@ -1747,6 +1758,9 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	e.Status.AnalysisPhase = phaseCountingDest
 	e.Status.ScannedFiles = 0
 	e.Status.mu.Unlock()
+
+	e.logAnalysis("Accessing destination...")
+	e.notifyStatusUpdate()
 
 	destCount, err := e.FileOps.CountFilesWithProgress(e.DestPath, func(path string, count int) {
 		e.Status.mu.Lock()
