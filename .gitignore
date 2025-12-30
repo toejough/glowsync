@@ -19,7 +19,7 @@ vendor/
 go.work
 
 # Build artifacts
-copy-files
+/copy-files
 dist/
 
 # IDE
