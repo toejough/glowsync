@@ -37,6 +37,49 @@ func TestFormatRate(t *testing.T) {
 	g.Expect(shared.FormatRate(1024 * 1024)).Should(ContainSubstring("MB/s"))
 }
 
+func TestRenderEmptyListPlaceholder(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		message  string
+		expected string
+	}{
+		{
+			name:     "renders message with dimmed style",
+			message:  "No files to display",
+			expected: "No files to display",
+		},
+		{
+			name:     "renders empty message",
+			message:  "",
+			expected: "",
+		},
+		{
+			name:     "renders filter-specific message",
+			message:  "No files match your filter",
+			expected: "No files match your filter",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			gomega := NewWithT(t)
+
+			result := shared.RenderEmptyListPlaceholder(testCase.message)
+
+			// The result should contain the message (with styling, so use ContainSubstring)
+			if testCase.message != "" {
+				gomega.Expect(result).Should(ContainSubstring(testCase.message))
+			} else {
+				// Empty message should produce styled empty output (likely just ANSI codes)
+				gomega.Expect(result).ShouldNot(BeNil())
+			}
+		})
+	}
+}
+
 func TestRenderPath(t *testing.T) {
 	t.Parallel()
 
@@ -139,49 +182,6 @@ func TestRenderPathPlain(t *testing.T) {
 			gomega.Expect(result).Should(Equal(testCase.expected))
 			// Verify result doesn't exceed maxWidth
 			gomega.Expect(len(result)).Should(BeNumerically("<=", testCase.maxWidth))
-		})
-	}
-}
-
-func TestRenderEmptyListPlaceholder(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name     string
-		message  string
-		expected string
-	}{
-		{
-			name:     "renders message with dimmed style",
-			message:  "No files to display",
-			expected: "No files to display",
-		},
-		{
-			name:     "renders empty message",
-			message:  "",
-			expected: "",
-		},
-		{
-			name:     "renders filter-specific message",
-			message:  "No files match your filter",
-			expected: "No files match your filter",
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			gomega := NewWithT(t)
-
-			result := shared.RenderEmptyListPlaceholder(testCase.message)
-
-			// The result should contain the message (with styling, so use ContainSubstring)
-			if testCase.message != "" {
-				gomega.Expect(result).Should(ContainSubstring(testCase.message))
-			} else {
-				// Empty message should produce styled empty output (likely just ANSI codes)
-				gomega.Expect(result).ShouldNot(BeNil())
-			}
 		})
 	}
 }

@@ -8,16 +8,6 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-func TestRenderASCIIProgress_ZeroPercent(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	result := shared.RenderASCIIProgress(0.0, 40)
-	expected := "[                                        ] 0%"
-
-	g.Expect(result).To(Equal(expected), "0%% progress should show empty bar")
-}
-
 func TestRenderASCIIProgress_HundredPercent(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -36,46 +26,6 @@ func TestRenderASCIIProgress_MidRange(t *testing.T) {
 	expected := "[================>                       ] 45%"
 
 	g.Expect(result).To(Equal(expected), "45%% progress should show arrow at correct position")
-}
-
-func TestRenderASCIIProgress_VariousPercentages(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		percent  float64
-		width    int
-		expected string
-	}{
-		{
-			name:     "25% at width 40",
-			percent:  0.25,
-			width:    40,
-			expected: "[========>                               ] 25%",
-		},
-		{
-			name:     "75% at width 40",
-			percent:  0.75,
-			width:    40,
-			expected: "[============================>           ] 75%",
-		},
-		{
-			name:     "50% at width 20",
-			percent:  0.50,
-			width:    20,
-			expected: "[========>           ] 50%",
-		},
-	}
-
-	for _, tt := range tests { //nolint:varnamelen // Standard Go idiom for table-driven tests
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			g := NewWithT(t)
-
-			result := shared.RenderASCIIProgress(tt.percent, tt.width)
-			g.Expect(result).To(Equal(tt.expected))
-		})
-	}
 }
 
 func TestRenderASCIIProgress_NarrowWidths(t *testing.T) {
@@ -122,6 +72,56 @@ func TestRenderASCIIProgress_NarrowWidths(t *testing.T) {
 			g.Expect(result).To(Equal(tt.expected))
 		})
 	}
+}
+
+func TestRenderASCIIProgress_VariousPercentages(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		percent  float64
+		width    int
+		expected string
+	}{
+		{
+			name:     "25% at width 40",
+			percent:  0.25,
+			width:    40,
+			expected: "[========>                               ] 25%",
+		},
+		{
+			name:     "75% at width 40",
+			percent:  0.75,
+			width:    40,
+			expected: "[============================>           ] 75%",
+		},
+		{
+			name:     "50% at width 20",
+			percent:  0.50,
+			width:    20,
+			expected: "[========>           ] 50%",
+		},
+	}
+
+	for _, tt := range tests { //nolint:varnamelen // Standard Go idiom for table-driven tests
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewWithT(t)
+
+			result := shared.RenderASCIIProgress(tt.percent, tt.width)
+			g.Expect(result).To(Equal(tt.expected))
+		})
+	}
+}
+
+func TestRenderASCIIProgress_ZeroPercent(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	result := shared.RenderASCIIProgress(0.0, 40)
+	expected := "[                                        ] 0%"
+
+	g.Expect(result).To(Equal(expected), "0%% progress should show empty bar")
 }
 
 //nolint:paralleltest // This test modifies package-level state (colorsDisabled variable)
