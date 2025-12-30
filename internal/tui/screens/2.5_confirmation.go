@@ -66,6 +66,19 @@ func (s ConfirmationScreen) View() string {
 		builder.WriteString("\n")
 	}
 
+	// Empty state handling - context-aware messages
+	if status.TotalFiles == 0 {
+		builder.WriteString("\n")
+		if s.engine.FilePattern != "" {
+			// Filter applied but no matches
+			builder.WriteString(shared.RenderEmptyListPlaceholder("No files match your filter"))
+		} else {
+			// No filter - could be empty source or already synced
+			builder.WriteString(shared.RenderEmptyListPlaceholder("All files already synced"))
+		}
+		builder.WriteString("\n")
+	}
+
 	// Show errors if any occurred during analysis
 	if len(status.Errors) > 0 {
 		builder.WriteString("\n")
