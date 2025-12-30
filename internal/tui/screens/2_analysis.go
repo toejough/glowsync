@@ -357,6 +357,26 @@ func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 		builder.WriteString(s.renderCountingProgress(s.status))
 	} else {
 		builder.WriteString(s.renderProcessingProgress(s.status, progress))
+	switch s.status.AnalysisPhase {
+	case shared.PhaseCountingSource, shared.PhaseCountingDest:
+		// Counting phase - show count so far
+		if s.status.ScannedFiles > 0 {
+			fmt.Fprintf(builder, "Found: %d items so far...\n\n", s.status.ScannedFiles)
+		}
+	case shared.PhaseScanningSource, shared.PhaseScanningDest, shared.PhaseComparing, shared.PhaseDeleting:
+		if s.status.TotalFilesToScan > 0 {
+			// Show progress bar
+			scanPercent := float64(s.status.ScannedFiles) / float64(s.status.TotalFilesToScan)
+			builder.WriteString(shared.RenderProgress(s.overallProgress, scanPercent))
+			builder.WriteString("\n")
+			fmt.Fprintf(builder, "%d / %d items (%.1f%%)\n\n",
+				s.status.ScannedFiles,
+				s.status.TotalFilesToScan,
+				scanPercent*shared.ProgressPercentageScale)
+		} else if s.status.ScannedFiles > 0 {
+			// Fallback: show count without progress bar
+			fmt.Fprintf(builder, "Processed: %d items\n\n", s.status.ScannedFiles)
+		}
 	}
 }
 

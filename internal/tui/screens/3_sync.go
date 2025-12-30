@@ -326,7 +326,7 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 				}
 
 				builder.WriteString("  ")
-				builder.WriteString(s.fileProgress.ViewAs(filePercent))
+				builder.WriteString(shared.RenderProgress(s.fileProgress, filePercent))
 				builder.WriteString("\n")
 
 				filesDisplayed++
@@ -498,7 +498,7 @@ func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
 	}
 
 	// Render progress bar
-	builder.WriteString(s.overallProgress.ViewAs(filePercent))
+	builder.WriteString(shared.RenderProgress(s.overallProgress, filePercent))
 	builder.WriteString("\n")
 
 	// Primary line: file count and percentage
