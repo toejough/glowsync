@@ -241,10 +241,13 @@ func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedF
 	}
 }
 
-// GetStatus returns a copy of the current status
+//nolint:funlen // Complex status copying requires comprehensive field copying
 func (e *Engine) GetStatus() *Status {
-	e.Status.mu.RLock()
-	defer e.Status.mu.RUnlock()
+	e.Status.mu.Lock()
+	defer e.Status.mu.Unlock()
+
+	// Compute progress metrics before copying
+	e.Status.ComputeProgressMetrics()
 
 	// Create a new status without the mutex
 	status := &Status{
@@ -276,6 +279,8 @@ func (e *Engine) GetStatus() *Status {
 		TotalReadTime:      e.Status.TotalReadTime,
 		TotalWriteTime:     e.Status.TotalWriteTime,
 		Bottleneck:         e.Status.Bottleneck,
+		Progress:           e.Status.Progress,
+		Workers:            e.Status.Workers,
 		FinalizationPhase:  e.Status.FinalizationPhase,
 	}
 
@@ -909,6 +914,18 @@ func (e *Engine) handleCopyResult(fileToSync *FileToSync, stats *fileops.CopySta
 
 	// Track read/write times for bottleneck detection
 	e.updateBottleneckDetection(stats)
+
+	// Add rolling window sample for metrics calculation
+	if stats != nil {
+		sample := RateSample{
+			Timestamp:        time.Now(),
+			BytesTransferred: stats.BytesCopied,
+			ReadTime:         stats.ReadTime,
+			WriteTime:        stats.WriteTime,
+			ActiveWorkers:    e.Status.ActiveWorkers,
+		}
+		e.Status.addRateSample(sample)
+	}
 
 	// Remove from currently copying files
 	e.removeFromCurrentFiles(fileToSync.RelativePath)
@@ -2054,10 +2071,188 @@ type Status struct {
 	TotalWriteTime time.Duration // Total time spent writing to destination
 	Bottleneck     string        // "source", "destination", or "balanced"
 
+	// Progress metrics (pre-computed for UI display)
+	Progress ProgressMetrics // Pre-computed progress percentages
+	Workers  WorkerMetrics   // Pre-computed worker performance metrics
+
 	// Cleanup/finalization status
 	FinalizationPhase string // "updating_cache", "complete", or empty
 
 	mu sync.RWMutex
+}
+
+// ComputeProgressMetrics calculates all progress metrics and updates the
+// Progress and Workers fields in the Status struct.
+// Must be called with the Status mutex already locked.
+func (s *Status) ComputeProgressMetrics() {
+	s.Progress = s.calculateProgressMetrics()
+	s.Workers = s.calculateWorkerMetrics()
+}
+
+// addRateSample adds a new sample to the rolling window, keeping only the most recent samples.
+// Must be called with the Status mutex already locked.
+func (s *Status) addRateSample(sample RateSample) {
+	const maxSamples = 5 // Keep last 5 file completion samples
+
+	s.Workers.RecentSamples = append(s.Workers.RecentSamples, sample)
+
+	// Keep only the most recent samples
+	if len(s.Workers.RecentSamples) > maxSamples {
+		s.Workers.RecentSamples = s.Workers.RecentSamples[len(s.Workers.RecentSamples)-maxSamples:]
+	}
+}
+
+// calculateAverageWorkers calculates the average number of active workers across samples.
+func (s *Status) calculateAverageWorkers(samples []RateSample) float64 {
+	if len(samples) == 0 {
+		return 0
+	}
+
+	var totalWorkers int
+	for _, sample := range samples {
+		totalWorkers += sample.ActiveWorkers
+	}
+
+	return float64(totalWorkers) / float64(len(samples))
+}
+
+// calculateCumulativeRates calculates transfer rates from overall elapsed time.
+func (s *Status) calculateCumulativeRates(metrics *WorkerMetrics) {
+	if s.StartTime.IsZero() {
+		return
+	}
+
+	elapsed := time.Since(s.StartTime)
+	if elapsed <= 0 {
+		return
+	}
+
+	totalBytes := atomic.LoadInt64(&s.TransferredBytes)
+	metrics.TotalRate = float64(totalBytes) / elapsed.Seconds()
+
+	if s.ActiveWorkers > 0 {
+		metrics.PerWorkerRate = metrics.TotalRate / float64(s.ActiveWorkers)
+	}
+}
+
+// calculateCumulativeWorkerMetrics calculates worker metrics from cumulative totals.
+func (s *Status) calculateCumulativeWorkerMetrics(metrics *WorkerMetrics) {
+	// Use cumulative totals as fallback
+	totalTime := s.TotalReadTime + s.TotalWriteTime
+	if totalTime > 0 {
+		metrics.ReadPercent = (float64(s.TotalReadTime) / float64(totalTime)) * ProgressPercentageScale
+		metrics.WritePercent = (float64(s.TotalWriteTime) / float64(totalTime)) * ProgressPercentageScale
+	}
+
+	// Calculate rate from overall progress
+	s.calculateCumulativeRates(metrics)
+}
+
+// calculateProgressMetrics computes files%, bytes%, time%, and overall%.
+func (s *Status) calculateProgressMetrics() ProgressMetrics {
+	metrics := ProgressMetrics{}
+
+	// Calculate files percentage
+	if s.TotalFilesInSource > 0 {
+		totalProcessed := s.AlreadySyncedFiles + s.ProcessedFiles
+		metrics.FilesPercent = float64(totalProcessed) / float64(s.TotalFilesInSource)
+	}
+
+	// Calculate bytes percentage
+	if s.TotalBytesInSource > 0 {
+		totalProcessedBytes := s.AlreadySyncedBytes + atomic.LoadInt64(&s.TransferredBytes)
+		metrics.BytesPercent = float64(totalProcessedBytes) / float64(s.TotalBytesInSource)
+	}
+
+	// Calculate time percentage
+	//nolint:nestif // Complex time calculation logic requires nested conditions
+	if !s.StartTime.IsZero() {
+		elapsed := time.Since(s.StartTime)
+		if s.EstimatedTimeLeft > 0 {
+			totalEstimated := elapsed + s.EstimatedTimeLeft
+			if totalEstimated > 0 {
+				metrics.TimePercent = float64(elapsed) / float64(totalEstimated)
+			}
+		} else if elapsed > 0 {
+			// If no ETA available but sync is running, assume we're early in progress
+			// Use bytes or files progress as fallback
+			if metrics.BytesPercent > 0 {
+				metrics.TimePercent = metrics.BytesPercent
+			} else if metrics.FilesPercent > 0 {
+				metrics.TimePercent = metrics.FilesPercent
+			}
+		}
+	}
+
+	// Calculate overall percentage as simple average of the three
+	metrics.OverallPercent = (metrics.FilesPercent + metrics.BytesPercent + metrics.TimePercent) / NumProgressDimensions
+
+	return metrics
+}
+
+// calculateRates calculates total and per-worker transfer rates.
+func (s *Status) calculateRates(metrics *WorkerMetrics, totalBytes int64, totalDuration time.Duration) {
+	if totalDuration <= 0 {
+		return
+	}
+
+	metrics.TotalRate = float64(totalBytes) / totalDuration.Seconds()
+
+	// Calculate average workers across samples
+	avgWorkers := s.calculateAverageWorkers(metrics.RecentSamples)
+	if avgWorkers > 0 {
+		metrics.PerWorkerRate = metrics.TotalRate / avgWorkers
+	}
+}
+
+// calculateRollingWindowMetrics calculates worker metrics from recent samples.
+func (s *Status) calculateRollingWindowMetrics(metrics *WorkerMetrics) {
+	var totalBytes int64
+	var totalReadTime time.Duration
+	var totalWriteTime time.Duration
+	var totalDuration time.Duration
+
+	for index, sample := range metrics.RecentSamples {
+		totalBytes += sample.BytesTransferred
+		totalReadTime += sample.ReadTime
+		totalWriteTime += sample.WriteTime
+
+		// Calculate duration between samples
+		if index > 0 {
+			totalDuration += sample.Timestamp.Sub(metrics.RecentSamples[index-1].Timestamp)
+		}
+	}
+
+	// Calculate read/write percentages
+	totalIOTime := totalReadTime + totalWriteTime
+	if totalIOTime > 0 {
+		metrics.ReadPercent = (float64(totalReadTime) / float64(totalIOTime)) * ProgressPercentageScale
+		metrics.WritePercent = (float64(totalWriteTime) / float64(totalIOTime)) * ProgressPercentageScale
+	}
+
+	// Calculate transfer rates
+	s.calculateRates(metrics, totalBytes, totalDuration)
+}
+
+// calculateWorkerMetrics computes worker performance metrics using rolling window.
+func (s *Status) calculateWorkerMetrics() WorkerMetrics {
+	metrics := WorkerMetrics{}
+
+	// Copy the recent samples for the UI
+	metrics.RecentSamples = make([]RateSample, len(s.Workers.RecentSamples))
+	copy(metrics.RecentSamples, s.Workers.RecentSamples)
+
+	// If no samples yet, fall back to cumulative metrics
+	if len(metrics.RecentSamples) == 0 {
+		s.calculateCumulativeWorkerMetrics(&metrics)
+
+		return metrics
+	}
+
+	// Calculate metrics from rolling window samples
+	s.calculateRollingWindowMetrics(&metrics)
+
+	return metrics
 }
 
 // unexported constants.

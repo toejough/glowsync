@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -338,7 +339,7 @@ func TestEngineEnableFileLogging(t *testing.T) {
 	wrapper.ExpectReturnedValuesShould(Not(BeNil()))
 }
 
-//nolint:gocognit,funlen,cyclop,noinlineerr,modernize // Integration test with comprehensive scenarios
+//nolint:gocognit,funlen,cyclop,noinlineerr // Integration test with comprehensive scenarios
 func TestEngineFilePatternFilter(t *testing.T) {
 	t.Parallel()
 
@@ -501,13 +502,7 @@ func TestEngineFilePatternFilter(t *testing.T) {
 
 			// Verify files that shouldn't match were NOT synced
 			for _, createdFile := range testCase.createFiles {
-				isExpected := false
-				for _, expected := range testCase.expectedMatches {
-					if createdFile == expected {
-						isExpected = true
-						break
-					}
-				}
+				isExpected := slices.Contains(testCase.expectedMatches, createdFile)
 
 				if !isExpected {
 					destPath := filepath.Join(destDir, createdFile)
