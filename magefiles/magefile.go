@@ -92,8 +92,15 @@ func CheckCoverage(c context.Context) error {
 	linesAndCoverage := []lineAndCoverage{}
 
 	for _, line := range lines {
-		percentString := regexp.MustCompile(`\d+\.\d`).FindString(line)
+		// Match percentage at end of line (e.g., "100.0%")
+		// This avoids matching version numbers in filenames like "2.5_confirmation.go"
+		percentString := regexp.MustCompile(`\d+\.\d+%`).FindString(line)
+		if percentString == "" {
+			continue // Skip lines without a percentage
+		}
 
+		// Remove the % sign before parsing
+		percentString = strings.TrimSuffix(percentString, "%")
 		percent, err := strconv.ParseFloat(percentString, 64)
 		if err != nil {
 			return err
