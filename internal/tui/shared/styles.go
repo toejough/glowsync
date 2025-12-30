@@ -218,8 +218,31 @@ func PromptArrow() string {
 }
 
 // RenderBox renders content in a box with consistent styling
-func RenderBox(content string) string {
-	return BoxStyle().Render(content)
+// If width and height are provided, the box will fill the terminal (useful for full-screen layouts)
+// Usage: RenderBox(content) or RenderBox(content, width) or RenderBox(content, width, height)
+func RenderBox(content string, dimensions ...int) string {
+	style := BoxStyle()
+
+	// BoxStyle has borders and padding that need to be accounted for
+	// Empirically determined to fit terminal perfectly
+	const (
+		widthOverhead  = 2 // Border width overhead (left + right borders)
+		heightOverhead = 2 // Border height overhead (top + bottom borders)
+	)
+
+	// If width is provided and > 0, set it explicitly to fill the terminal horizontally
+	// Subtract overhead to account for borders and padding
+	if len(dimensions) > 0 && dimensions[0] > widthOverhead {
+		style = style.Width(dimensions[0] - widthOverhead)
+	}
+
+	// If height is provided and > 0, set it explicitly to fill the terminal vertically
+	// Subtract overhead to account for borders and padding
+	if len(dimensions) > 1 && dimensions[1] > heightOverhead {
+		style = style.Height(dimensions[1] - heightOverhead)
+	}
+
+	return style.Render(content)
 }
 
 // RenderDim renders dimmed text with consistent styling
