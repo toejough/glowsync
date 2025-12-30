@@ -199,7 +199,7 @@ func TestRenderStatistics(t *testing.T) {
 	screen.renderStatistics(&builder)
 	result := builder.String()
 	g.Expect(result).Should(ContainSubstring("Workers"))
-	g.Expect(result).Should(ContainSubstring("Elapsed"))
+	// Elapsed/ETA removed - moved to time progress line instead
 }
 
 func TestRenderSyncingErrors(t *testing.T) {
@@ -422,7 +422,7 @@ func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
 
 	// Verify statistics are present
 	g.Expect(result).Should(ContainSubstring("Workers:"))
-	g.Expect(result).Should(ContainSubstring("Elapsed:"))
+	// Elapsed/ETA removed - moved to time progress line instead
 
 	// Verify file list is present
 	g.Expect(result).Should(ContainSubstring("Recent Files:"))
