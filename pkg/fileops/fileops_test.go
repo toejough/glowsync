@@ -215,7 +215,7 @@ func TestCopyFileWithStats(t *testing.T) {
 
 	// We can't actually test this without filesystem access, so we just verify
 	// that calling it with invalid paths returns an error
-	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, nil)
+	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, nil, nil)
 
 	// Should return an error for nonexistent file
 	// Note: CopyFileWithStats returns a non-nil stats struct even on error
@@ -234,7 +234,7 @@ func TestCopyFileWithStatsCancel(t *testing.T) {
 
 	// Use imptest wrapper
 	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
-	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, cancelChan)
+	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", nil, cancelChan, nil)
 
 	// Should get an error (either cancellation or file not found)
 	// Note: CopyFileWithStats returns a non-nil stats struct even on error
@@ -257,7 +257,7 @@ func TestCopyFileWithStatsProgress(t *testing.T) {
 
 	// Use imptest wrapper
 	wrapper := fileops.NewCopyFileWithStatsImp(t, fileops.CopyFileWithStats)
-	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", progressCallback, nil)
+	wrapper.Start("/nonexistent/source.txt", "/nonexistent/dest.txt", progressCallback, nil, nil)
 
 	// Should return an error for nonexistent file
 	// Note: CopyFileWithStats returns a non-nil stats struct even on error

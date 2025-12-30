@@ -214,7 +214,7 @@ func TestFileOpsCopyFileWithStats(t *testing.T) {
 	}
 
 	ops := fileops.NewRealFileOps()
-	stats, err := ops.CopyFileWithStats(srcFile, dstFile, nil, nil)
+	stats, err := ops.CopyFileWithStats(srcFile, dstFile, nil, nil, nil)
 
 	g := NewWithT(t)
 	g.Expect(err).ShouldNot(HaveOccurred())
