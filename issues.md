@@ -32,3 +32,15 @@ A simple md issue tracker.
    - status: open
 3. there's no border around the app in the analysis screen
    - status: open
+4. fix impgen V1 deprecation warnings in mage check
+   - status: open
+   - created: 2025-12-30 23:36 EST
+   - description: Update impgen directives to use V2 syntax
+   - affected files:
+     - internal/config/config.go - V1 callable wrapper
+     - internal/syncengine/sync.go - V1 callable wrapper
+     - internal/syncengine/sync_test.go - V1 interface mock
+     - pkg/fileops/fileops_di.go - V1 callable wrapper
+     - pkg/fileops/fileops_di_test.go - V1 interface mock
+     - pkg/filesystem/filesystem_test.go - V1 interface mock
+   - migration: Use --target flag for callable wrappers, --dependency flag for interface mocks
