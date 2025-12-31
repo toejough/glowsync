@@ -142,6 +142,7 @@ A simple md issue tracker.
 10. the per worker speed seems to fluctuate wildly. we should use a smoother average.
     - status: done
     - started: 2025-12-31 14:10 EST
+    - completed: 2025-12-31 15:05 EST
     - description: Per-worker speed uses raw point-to-point comparison causing wild fluctuations
     - solution: Use existing rolling window infrastructure (5-sample average) for scaling decisions
     - updates:
@@ -152,6 +153,14 @@ A simple md issue tracker.
        - 2025-12-31 14:20 EST: AUDIT PASS - Clean integration, proper fallback, excellent logging
        - 2025-12-31 14:22 EST: Committed (3d99238) - Rolling window integration complete
        - 2025-12-31 14:22 EST: Issue #10 COMPLETE - Per-worker speed now uses 5-sample smoothed average
+       - 2025-12-31 14:28 EST: REFINEMENT - User feedback: still fluctuating, switch to time-based (10s window, 5s eval)
+       - 2025-12-31 14:30 EST: Plan approved - Switch rolling window to 10s, evaluation to every 5s (from file-count based)
+       - 2025-12-31 14:55 EST: RED phase - 4 tests written for time-based evaluation (file-count check, time check, interval constant, integration test)
+       - 2025-12-31 14:58 EST: GREEN phase - Implementation complete (time-based evaluation every 5s, all tests pass)
+       - 2025-12-31 15:01 EST: AUDIT phase - Routing to auditor for quality review
+       - 2025-12-31 15:03 EST: AUDIT PASS - Clean implementation, integrates correctly with 10s rolling window, all tests pass
+       - 2025-12-31 15:05 EST: Committed (a6d28e6) - Fully time-based adaptive scaling complete
+       - 2025-12-31 15:05 EST: Issue #10 COMPLETE - Adaptive scaling now evaluates every 5s using 10s rolling window
 11. SFTP seems to be very slow, and constrainted to a single worker
     - status: done
     - started: 2025-12-31 02:32 EST
