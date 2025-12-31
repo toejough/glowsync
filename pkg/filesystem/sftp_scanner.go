@@ -118,3 +118,51 @@ func newSFTPScanner(client *sftp.Client, root string) *sftpScanner {
 		index:  -1,
 	}
 }
+
+// newSFTPScannerWithError creates a scanner in an error state.
+func newSFTPScannerWithError(err error) *sftpScanner {
+	return &sftpScanner{
+		err:     err,
+		scanned: true,
+		files:   make([]FileInfo, 0),
+		index:   -1,
+	}
+}
+
+// pooledSFTPScanner wraps an sftpScanner and automatically releases
+// the SFTP client back to the pool after scanning completes.
+type pooledSFTPScanner struct {
+	scanner *sftpScanner
+	client  *sftp.Client
+	pool    clientPool
+	done    bool
+}
+
+// newPooledSFTPScanner creates a new pooled scanner.
+func newPooledSFTPScanner(client *sftp.Client, root string, pool clientPool) *pooledSFTPScanner {
+	return &pooledSFTPScanner{
+		scanner: newSFTPScanner(client, root),
+		client:  client,
+		pool:    pool,
+		done:    false,
+	}
+}
+
+// Err returns any error that occurred during scanning.
+func (s *pooledSFTPScanner) Err() error {
+	return s.scanner.Err()
+}
+
+// Next advances to the next file and returns its info.
+// Automatically releases the client back to the pool when scanning is complete.
+func (s *pooledSFTPScanner) Next() (FileInfo, bool) {
+	info, hasNext := s.scanner.Next()
+
+	// If we're done scanning and haven't released yet, release the client
+	if !hasNext && !s.done {
+		s.done = true
+		s.pool.Release(s.client)
+	}
+
+	return info, hasNext
+}
