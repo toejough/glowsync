@@ -15,6 +15,39 @@ import (
 	"github.com/joe/copy-files/pkg/filesystem"
 )
 
+// TestFileOps_BufferSize_Is64KB verifies that FileOps uses 64KB buffer size.
+// This test will FAIL until Phase 1.1 increases BufferSize to 64KB.
+func TestFileOps_BufferSize_Is64KB(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Verify BufferSize constant is 64KB
+	expectedBufferSize := 64 * 1024
+	g.Expect(fileops.BufferSize).Should(Equal(expectedBufferSize),
+		"BufferSize should be 64KB for improved FileOps performance")
+
+	// The copyLoop (line 449) and simpleCopyLoop (line 503) in fileops_di.go
+	// both allocate: buf := make([]byte, BufferSize)
+	// This ensures the buffer allocation uses 64KB
+}
+
+// TestFileOps_CompareFilesBytes_Uses64KBBuffer verifies buffer allocation in comparison.
+// This test will FAIL until Phase 1.1 increases BufferSize to 64KB.
+func TestFileOps_CompareFilesBytes_Uses64KBBuffer(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Verify BufferSize constant is 64KB
+	expectedBufferSize := 64 * 1024
+	g.Expect(fileops.BufferSize).Should(Equal(expectedBufferSize),
+		"BufferSize should be 64KB for compareFileContents (line 413-414 in fileops_di.go)")
+
+	// The compareFileContents method allocates two buffers:
+	// buf1 := make([]byte, BufferSize)
+	// buf2 := make([]byte, BufferSize)
+	// This test verifies they use 64KB
+}
+
 func TestCountFiles(t *testing.T) {
 	t.Parallel()
 

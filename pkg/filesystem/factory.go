@@ -29,7 +29,7 @@ func CreateFileSystem(pathStr string) (FileSystem, string, func(), error) {
 
 	fs := NewSFTPFileSystem(conn)
 	closer := func() {
-		conn.Close()
+		_ = conn.Close()
 	}
 
 	return fs, parsed.Path, closer, nil

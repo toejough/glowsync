@@ -50,7 +50,7 @@ func Connect(host string, port int, user string) (*SFTPConnection, error) {
 	// Open SFTP session
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
-		sshClient.Close()
+		_ = sshClient.Close()
 		return nil, fmt.Errorf("SFTP session creation failed: %w", err)
 	}
 

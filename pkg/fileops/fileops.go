@@ -14,8 +14,8 @@ import (
 
 // Exported constants.
 const (
-	// BufferSize is the size of the buffer used for file copy operations (32KB)
-	BufferSize = 32 * 1024
+	// BufferSize is the size of the buffer used for file copy operations (64KB)
+	BufferSize = 64 * 1024
 	// DefaultDirPermissions is the default permission mode for created directories
 	DefaultDirPermissions = 0o750
 )
