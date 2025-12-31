@@ -316,9 +316,23 @@ func (fo *FileOps) countFilesWithProgressFS(fs filesystem.FileSystem, rootPath s
 	return count, nil
 }
 
-// Remove removes a file or empty directory
+// Remove removes a file or empty directory.
+// Uses fo.FS for single-filesystem operations, or fo.getSourceFS() for dual-filesystem.
 func (fo *FileOps) Remove(path string) error {
-	err := fo.FS.Remove(path)
+	fs := fo.getSourceFS()
+	err := fs.Remove(path)
+	if err != nil {
+		return fmt.Errorf("failed to remove %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// RemoveFromDest removes a file or empty directory from the destination filesystem.
+// Used for dual-filesystem operations where source and dest are different.
+func (fo *FileOps) RemoveFromDest(path string) error {
+	fs := fo.getDestFS()
+	err := fs.Remove(path)
 	if err != nil {
 		return fmt.Errorf("failed to remove %s: %w", path, err)
 	}

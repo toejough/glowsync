@@ -692,7 +692,7 @@ func (e *Engine) deleteDirectory(relPath string, deletedCount int) error {
 		e.logAnalysis(fmt.Sprintf("  → Deleting directory: %s (not in source)", relPath))
 	}
 
-	err := e.FileOps.Remove(dstPath)
+	err := e.FileOps.RemoveFromDest(dstPath)
 	if err != nil {
 		// Track error instead of failing
 		e.Status.mu.Lock()
@@ -725,7 +725,7 @@ func (e *Engine) deleteFile(relPath string, deletedCount int) error {
 		e.logAnalysis(fmt.Sprintf("  → Deleting: %s (not in source)", relPath))
 	}
 
-	err := e.FileOps.Remove(dstPath)
+	err := e.FileOps.RemoveFromDest(dstPath)
 	if err != nil {
 		// Track error instead of failing
 		e.Status.mu.Lock()
