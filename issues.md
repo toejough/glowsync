@@ -102,5 +102,9 @@ A simple md issue tracker.
      - 2025-12-31 00:43 EST: RED phase - wrote 3 failing tests for scale-down behavior
      - 2025-12-31 00:46 EST: GREEN phase - implementing MakeScalingDecision scale-down and worker CAS exit
      - 2025-12-31 00:50 EST: All tests passing, implementation complete
+     - 2025-12-31 01:00 EST: Tested working in production - confirmed workers scale down
+     - 2025-12-31 01:03 EST: Committed (9445ca5)
 9. when cancelling a sync, the TUI reports the sync _failed_ and shows error messages
    - status: backlog
+10. the per worker speed seems to fluctuate wildly. we should use a smoother average.
+    - status: backlog
