@@ -31,6 +31,14 @@ type ProgressMetrics struct {
 	// OverallPercent is the average of FilesPercent, BytesPercent, and TimePercent.
 	// This provides a unified progress metric that balances all three dimensions.
 	OverallPercent float64
+
+	// IsCounting indicates whether we're still in the initial counting/scanning phase.
+	// When true, progress percentages may not be meaningful yet.
+	IsCounting bool
+
+	// EstimatedTimeRemaining is the estimated time remaining for the operation.
+	// This is calculated based on current rate and remaining work.
+	EstimatedTimeRemaining time.Duration
 }
 
 // RateSample represents a point-in-time performance measurement.

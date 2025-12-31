@@ -1973,16 +1973,6 @@ func (e *Engine) worker(wg *sync.WaitGroup, jobs <-chan *FileToSync, errors chan
 	}
 }
 
-// ProgressMetrics represents calculated progress metrics for analysis
-type ProgressMetrics struct {
-	FilesPercent           float64
-	BytesPercent           float64
-	TimePercent            float64
-	OverallPercent         float64
-	IsCounting             bool
-	EstimatedTimeRemaining time.Duration
-}
-
 // FileError represents an error that occurred while syncing a file
 type FileError struct {
 	FilePath string
