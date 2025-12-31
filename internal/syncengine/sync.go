@@ -688,6 +688,8 @@ func (e *Engine) createProgressCallback(fileToSync *FileToSync) func(int64, int6
 	var (
 		previousBytes  int64
 		lastNotifyTime time.Time
+		lastSampleTime time.Time // Zero value means first callback will add sample immediately
+		sampleBytes    int64
 	)
 
 	return func(bytesTransferred, _ int64, _ string) {
@@ -712,6 +714,28 @@ func (e *Engine) createProgressCallback(fileToSync *FileToSync) func(int64, int6
 		// Only acquire lock every 100ms to reduce contention
 		now := time.Now()
 		throttled := now.Sub(lastNotifyTime) < 100*time.Millisecond //nolint:mnd // Throttle interval
+
+		// Add rate sample every 1 second during transfer
+		if now.Sub(lastSampleTime) >= 1*time.Second {
+			sampleBytes += delta
+
+			sample := RateSample{
+				Timestamp:        now,
+				BytesTransferred: sampleBytes,
+				ReadTime:         0, // Not available during transfer
+				WriteTime:        0, // Not available during transfer
+				ActiveWorkers:    int(atomic.LoadInt32(&e.Status.ActiveWorkers)),
+			}
+
+			e.Status.mu.Lock()
+			e.Status.addRateSample(sample)
+			e.Status.mu.Unlock()
+
+			lastSampleTime = now
+			sampleBytes = 0 // Reset for next sample
+		} else {
+			sampleBytes += delta // Accumulate bytes for next sample
+		}
 
 		// Verbose instrumentation: log every progress callback
 		if e.Verbose {
@@ -1550,7 +1574,7 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 					continue
 				}
 
-				const evaluationInterval = 5 * time.Second
+				const evaluationInterval = 10 * time.Second
 
 				// Check if enough time has elapsed since last evaluation
 				if time.Since(state.LastCheckTime) >= evaluationInterval {
