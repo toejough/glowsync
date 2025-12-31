@@ -120,6 +120,13 @@ func trySSHAgent() ssh.AuthMethod {
 	}
 
 	agentClient := agent.NewClient(conn)
+
+	// Check if agent has any keys before using it
+	signers, err := agentClient.Signers()
+	if err != nil || len(signers) == 0 {
+		return nil
+	}
+
 	return ssh.PublicKeysCallback(agentClient.Signers)
 }
 

@@ -15,7 +15,7 @@ A simple md issue tracker.
 ## Issues
 
 1. try to use SSH/SFTP to sync files
-   - status: review (tests passing, ready for integration testing)
+   - status: review (ready for integration testing)
    - started: 2025-12-30
    - implementation: All core features implemented
      - SFTP connection management with SSH agent/key auth
@@ -28,6 +28,7 @@ A simple md issue tracker.
      - 2025-12-30 23:20 EST: Running mage check, fixing test compilation issues
      - 2025-12-30 23:25 EST: Added mustNewEngine helper, fixing syncengine tests
      - 2025-12-30 23:33 EST: All tests passing, fixed redeclaration errors in screen tests
+     - 2025-12-30 23:49 EST: Fixed SSH agent auth bug - now checks for keys before using agent
 2. create a way to ignore files on the server side from deletion during sync
    - status: open
 3. there's no border around the app in the analysis screen
