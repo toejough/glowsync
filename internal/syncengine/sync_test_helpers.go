@@ -15,8 +15,8 @@ func (e *Engine) GetDesiredWorkers() int32 {
 }
 
 // SetDesiredWorkers sets the desired worker count (test helper)
-func (e *Engine) SetDesiredWorkers(count int32) {
-	atomic.StoreInt32(&e.desiredWorkers, count)
+func (e *Engine) SetDesiredWorkers(count int) {
+	atomic.StoreInt32(&e.desiredWorkers, int32(count))
 }
 
 // TestWorker exposes the worker function for testing

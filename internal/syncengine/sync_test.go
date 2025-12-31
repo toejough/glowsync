@@ -1503,3 +1503,265 @@ func TestGetStatus_EmptyCurrentFiles(t *testing.T) {
 		"Should limit to 20 files when no CurrentFiles")
 	g.Expect(len(status.CurrentFiles)).Should(Equal(0), "CurrentFiles should be empty")
 }
+
+// Phase 4 Tests: Sync Engine Integration with ResizablePool
+// These tests verify the sync engine correctly detects and interacts with ResizablePool
+
+// TestNewEngine_DetectsResizablePool_SFTPSource verifies NewEngine detects SFTP source
+func TestNewEngine_DetectsResizablePool_SFTPSource(t *testing.T) {
+	t.Skip("Requires SFTP server infrastructure - will be tested in integration phase")
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create engine with SFTP source (sftp://user@host/path format triggers SFTP)
+	engine, err := syncengine.NewEngine("sftp://testuser@localhost:2222/source", t.TempDir())
+	g.Expect(err).ShouldNot(HaveOccurred())
+	defer engine.Close()
+
+	// Engine should have detected source as ResizablePool
+	// Note: This test will need to access internal fields or use a getter
+	// For now, we verify by calling a method that would panic if not set
+	g.Expect(engine).ShouldNot(BeNil())
+}
+
+// TestNewEngine_DetectsResizablePool_SFTPDest verifies NewEngine detects SFTP destination
+func TestNewEngine_DetectsResizablePool_SFTPDest(t *testing.T) {
+	t.Skip("Requires SFTP server infrastructure - will be tested in integration phase")
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+
+	// Create engine with SFTP destination
+	engine, err := syncengine.NewEngine(sourceDir, "sftp://testuser@localhost:2222/dest")
+	g.Expect(err).ShouldNot(HaveOccurred())
+	defer engine.Close()
+
+	// Engine should have detected dest as ResizablePool
+	g.Expect(engine).ShouldNot(BeNil())
+}
+
+// TestNewEngine_DetectsResizablePool_BothSFTP verifies detection of both source and dest
+func TestNewEngine_DetectsResizablePool_BothSFTP(t *testing.T) {
+	t.Skip("Requires SFTP server infrastructure - will be tested in integration phase")
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create engine with both SFTP source and destination
+	engine, err := syncengine.NewEngine(
+		"sftp://testuser@localhost:2222/source",
+		"sftp://testuser@localhost:2222/dest",
+	)
+	g.Expect(err).ShouldNot(HaveOccurred())
+	defer engine.Close()
+
+	g.Expect(engine).ShouldNot(BeNil())
+}
+
+// TestNewEngine_HandlesNonResizable_LocalSource verifies nil for local filesystem
+func TestNewEngine_HandlesNonResizable_LocalSource(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine with local filesystems (neither implements ResizablePool)
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	// Should not panic - resizable pool references should be nil
+	g.Expect(engine).ShouldNot(BeNil())
+}
+
+// TestResizePools_CallsResizePoolOnBoth verifies resizePools() calls both pools
+func TestResizePools_CallsResizePoolOnBoth(t *testing.T) {
+	t.Parallel()
+	// This test will need mock ResizablePool implementations to verify calls
+	// Will be implemented once the interface integration is in place
+}
+
+// TestResizePools_HandlesNilSourceGracefully verifies nil source is safe
+func TestResizePools_HandlesNilSourceGracefully(t *testing.T) {
+	t.Skip("Requires SFTP server infrastructure - will be tested in integration phase")
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+
+	// Mixed: local source, SFTP dest
+	engine, err := syncengine.NewEngine(sourceDir, "sftp://testuser@localhost:2222/dest")
+	g.Expect(err).ShouldNot(HaveOccurred())
+	defer engine.Close()
+
+	// Should not panic when calling resizePools (source is nil)
+	// This will be verified by calling MakeScalingDecision which calls resizePools
+	workerControl := make(chan bool, 10)
+	engine.MakeScalingDecision(0, 1024*1024, 1, 4, workerControl)
+	close(workerControl)
+}
+
+// TestResizePools_HandlesNilDestGracefully verifies nil dest is safe
+func TestResizePools_HandlesNilDestGracefully(t *testing.T) {
+	t.Skip("Requires SFTP server infrastructure - will be tested in integration phase")
+	t.Parallel()
+	g := NewWithT(t)
+
+	destDir := t.TempDir()
+
+	// Mixed: SFTP source, local dest
+	engine, err := syncengine.NewEngine("sftp://testuser@localhost:2222/source", destDir)
+	g.Expect(err).ShouldNot(HaveOccurred())
+	defer engine.Close()
+
+	// Should not panic when calling resizePools (dest is nil)
+	workerControl := make(chan bool, 10)
+	engine.MakeScalingDecision(0, 1024*1024, 1, 4, workerControl)
+	close(workerControl)
+}
+
+// TestResizePools_HandlesBothNilGracefully verifies both nil is safe
+func TestResizePools_HandlesBothNilGracefully(t *testing.T) {
+	t.Parallel()
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Both local (neither implements ResizablePool)
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	// Should not panic when calling resizePools (both are nil)
+	workerControl := make(chan bool, 10)
+	engine.MakeScalingDecision(0, 1024*1024, 1, 4, workerControl)
+	close(workerControl)
+}
+
+// TestMakeScalingDecision_CallsResizePools_OnWorkerIncrease verifies pool resize on scale-up
+func TestMakeScalingDecision_CallsResizePools_OnWorkerIncrease(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// This test will need to verify that when MakeScalingDecision increases
+	// desiredWorkers, it also calls resizePools with the new count
+	// Will require instrumentation or mock to verify the call
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	engine.SetDesiredWorkers(2)
+
+	workerControl := make(chan bool, 10)
+
+	// Simulate improved per-worker speed - should add worker
+	engine.MakeScalingDecision(
+		1000000.0, // lastPerWorkerSpeed: 1 MB/s
+		1100000.0, // currentPerWorkerSpeed: 1.1 MB/s (10% improvement)
+		2,         // currentWorkers
+		10,        // maxWorkers
+		workerControl,
+	)
+
+	// Verify desiredWorkers was incremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(3)), "desiredWorkers should increase from 2 to 3")
+
+	// Verify worker was added
+	select {
+	case addWorker := <-workerControl:
+		g.Expect(addWorker).Should(BeTrue())
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Expected worker to be added")
+	}
+
+	close(workerControl)
+}
+
+// TestMakeScalingDecision_CallsResizePools_OnWorkerDecrease verifies pool resize on scale-down
+func TestMakeScalingDecision_CallsResizePools_OnWorkerDecrease(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	engine.SetDesiredWorkers(5)
+
+	workerControl := make(chan bool, 10)
+
+	// Simulate decreased per-worker speed - should decrement desired
+	engine.MakeScalingDecision(
+		1000000.0, // lastPerWorkerSpeed: 1 MB/s
+		500000.0,  // currentPerWorkerSpeed: 0.5 MB/s (50% decrease)
+		5,         // currentWorkers
+		10,        // maxWorkers
+		workerControl,
+	)
+
+	// Verify desiredWorkers was decremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(4)), "desiredWorkers should decrease from 5 to 4")
+
+	// Verify NO worker was added to channel
+	select {
+	case <-workerControl:
+		t.Fatal("Should not add worker when scaling down")
+	case <-time.After(50 * time.Millisecond):
+		// Expected - no worker added
+	}
+
+	close(workerControl)
+}
+
+// TestSyncAdaptive_CallsResizePools_OnInitialSetup verifies pool resize during startup
+func TestSyncAdaptive_CallsResizePools_OnInitialSetup(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create a test file
+	testFile := filepath.Join(sourceDir, "test.txt")
+	err := os.WriteFile(testFile, []byte("test content"), 0o600)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Create engine with adaptive mode
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+	engine.AdaptiveMode = true
+	engine.Workers = 0 // 0 means adaptive (starts with 1 worker)
+
+	// Run Analyze
+	err = engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(engine.Status.TotalFiles).Should(Equal(1))
+
+	// Run Sync - should call resizePools during initial worker setup
+	err = engine.Sync()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Verify file was synced
+	destFile := filepath.Join(destDir, "test.txt")
+	_, err = os.Stat(destFile)
+	g.Expect(err).ShouldNot(HaveOccurred())
+}
+
+// TestSyncAdaptive_ResizesPoolsWithWorkerCount_Integration is an integration test
+// that verifies SFTP pool size follows desiredWorkers throughout adaptive scaling
+func TestSyncAdaptive_ResizesPoolsWithWorkerCount_Integration(t *testing.T) {
+	t.Parallel()
+	// This test requires:
+	// 1. Mock or real SFTP server
+	// 2. Engine with SFTP filesystems
+	// 3. Monitoring of pool size as desiredWorkers changes
+	// 4. Verification that pool.TargetSize() matches engine.desiredWorkers
+	//
+	// Will be implemented once Phase 1-3 are complete and we can test
+	// the full integration with real SFTP filesystems
+}

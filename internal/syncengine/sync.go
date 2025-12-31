@@ -85,6 +85,8 @@ type Engine struct {
 	logMu           sync.Mutex    // Mutex for log file writes
 	closeFunc       func()        // Function to close SFTP connections (if any)
 	desiredWorkers  int32         // Target worker count for adaptive scaling (atomic)
+	sourceResizable filesystem.ResizablePool
+	destResizable   filesystem.ResizablePool
 }
 
 // NewEngine creates a new sync engine.
@@ -98,12 +100,12 @@ func NewEngine(source, dest string) (*Engine, error) {
 		return nil, fmt.Errorf("failed to create filesystems: %w", err)
 	}
 
-	return &Engine{
+	engine := &Engine{
 		SourcePath:   srcPath,
 		DestPath:     dstPath,
 		TimeProvider: &RealTimeProvider{},
-		Workers:      config.DefaultMaxWorkers,            // Default to 4 concurrent workers
-		ChangeType:   config.MonotonicCount,               // Default to monotonic count
+		Workers:      config.DefaultMaxWorkers,                 // Default to 4 concurrent workers
+		ChangeType:   config.MonotonicCount,                    // Default to monotonic count
 		FileOps:      fileops.NewDualFileOps(sourceFS, destFS), // Support cross-filesystem operations
 		Status: &Status{
 			StartTime: time.Now(),
@@ -111,7 +113,17 @@ func NewEngine(source, dest string) (*Engine, error) {
 		statusCallbacks: make([]func(*Status), 0),
 		cancelChan:      make(chan struct{}),
 		closeFunc:       closer, // Store closer to clean up SFTP connections
-	}, nil
+	}
+
+	// Detect if filesystems implement ResizablePool
+	if resizable, ok := sourceFS.(filesystem.ResizablePool); ok {
+		engine.sourceResizable = resizable
+	}
+	if resizable, ok := destFS.(filesystem.ResizablePool); ok {
+		engine.destResizable = resizable
+	}
+
+	return engine, nil
 }
 
 // Analyze scans source and destination to determine what needs to be synced
@@ -388,7 +400,8 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 	// First measurement - add a worker to test
 	if lastPerWorkerSpeed == 0 {
 		if currentWorkers < maxWorkers {
-			atomic.AddInt32(&e.desiredWorkers, 1)
+			newDesired := atomic.AddInt32(&e.desiredWorkers, 1)
+			e.resizePools(int(newDesired))
 			workerControl <- true
 
 			e.logToFile(fmt.Sprintf("Adaptive: First measurement complete, adding worker (%d -> %d)",
@@ -409,6 +422,7 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 			atomic.StoreInt32(&e.desiredWorkers, 1)
 			newDesired = 1
 		}
+		e.resizePools(int(newDesired))
 
 		e.logToFile(fmt.Sprintf("Adaptive: ↓ Per-worker speed decreased (-%.1f%%), removing worker (%d -> %d)",
 			(1-speedRatio)*PercentageScale, currentWorkers, newDesired))
@@ -421,7 +435,8 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 		return
 	}
 
-	atomic.AddInt32(&e.desiredWorkers, 1)
+	newDesired := atomic.AddInt32(&e.desiredWorkers, 1)
+	e.resizePools(int(newDesired))
 	workerControl <- true
 
 	if speedRatio >= AdaptiveScalingHighThreshold {
@@ -448,6 +463,16 @@ func (e *Engine) Sync() error {
 	}
 
 	return e.syncFixed()
+}
+
+// resizePools calls ResizePool on source and dest if they implement ResizablePool
+func (e *Engine) resizePools(targetSize int) {
+	if e.sourceResizable != nil {
+		e.sourceResizable.ResizePool(targetSize)
+	}
+	if e.destResizable != nil {
+		e.destResizable.ResizePool(targetSize)
+	}
 }
 
 // applyFileFilter applies the file pattern filter to the given files
@@ -1631,6 +1656,7 @@ func (e *Engine) syncAdaptive() error {
 
 	// Initialize desired worker count for adaptive scaling
 	atomic.StoreInt32(&e.desiredWorkers, int32(activeWorkers))
+	e.resizePools(activeWorkers)
 
 	// Start background goroutines for adaptive scaling, worker control, and job distribution
 	e.startAdaptiveScaling(done, jobs, workerControl)
