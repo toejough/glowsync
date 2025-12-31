@@ -140,7 +140,18 @@ A simple md issue tracker.
 9. when cancelling a sync, the TUI reports the sync _failed_ and shows error messages
    - status: backlog
 10. the per worker speed seems to fluctuate wildly. we should use a smoother average.
-    - status: backlog
+    - status: done
+    - started: 2025-12-31 14:10 EST
+    - description: Per-worker speed uses raw point-to-point comparison causing wild fluctuations
+    - solution: Use existing rolling window infrastructure (5-sample average) for scaling decisions
+    - updates:
+       - 2025-12-31 14:10 EST: PLANNING phase - Explored adaptive scaling system, found rolling window not used for decisions
+       - 2025-12-31 14:12 EST: Plan approved - Use WorkerMetrics.PerWorkerRate, widen thresholds to 0.90/1.10
+       - 2025-12-31 14:15 EST: RED phase - 3 tests written (smoothed rate, cold-start, widened thresholds)
+       - 2025-12-31 14:18 EST: GREEN phase - Implementation complete (rolling window integration, 0.90/1.10 thresholds, all tests pass)
+       - 2025-12-31 14:20 EST: AUDIT PASS - Clean integration, proper fallback, excellent logging
+       - 2025-12-31 14:22 EST: Committed (3d99238) - Rolling window integration complete
+       - 2025-12-31 14:22 EST: Issue #10 COMPLETE - Per-worker speed now uses 5-sample smoothed average
 11. SFTP seems to be very slow, and constrainted to a single worker
     - status: done
     - started: 2025-12-31 02:32 EST
