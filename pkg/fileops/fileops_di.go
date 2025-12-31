@@ -17,13 +17,27 @@ import (
 
 // FileOps provides file operations with dependency injection for filesystem access.
 // This allows for testing without actual filesystem I/O.
+// Supports dual filesystems for cross-filesystem operations (e.g., local to SFTP).
 type FileOps struct {
-	FS filesystem.FileSystem
+	FS filesystem.FileSystem // Legacy single filesystem field
+
+	// Dual filesystem support (optional)
+	SourceFS filesystem.FileSystem // Source filesystem for copy operations
+	DestFS   filesystem.FileSystem // Destination filesystem for copy operations
 }
 
 // NewFileOps creates a new FileOps instance with the given filesystem.
 func NewFileOps(fs filesystem.FileSystem) *FileOps {
 	return &FileOps{FS: fs}
+}
+
+// NewDualFileOps creates a new FileOps instance with separate source and destination filesystems.
+func NewDualFileOps(sourceFS, destFS filesystem.FileSystem) *FileOps {
+	return &FileOps{
+		FS:       sourceFS, // Default to source for backward compatibility
+		SourceFS: sourceFS,
+		DestFS:   destFS,
+	}
 }
 
 // NewRealFileOps creates a new FileOps instance using the real filesystem.
@@ -108,7 +122,11 @@ func (fo *FileOps) ComputeFileHash(filePath string) (string, error) {
 }
 
 func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, error) {
-	sourceFile, err := fo.FS.Open(src)
+	// Get source and destination filesystems
+	srcFS := fo.getSourceFS()
+	dstFS := fo.getDestFS()
+
+	sourceFile, err := srcFS.Open(src)
 	if err != nil {
 		return 0, fmt.Errorf("failed to open source file %s: %w", src, err)
 	}
@@ -126,13 +144,13 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
 
-	err = fo.FS.MkdirAll(dstDir, DefaultDirPermissions)
+	err = dstFS.MkdirAll(dstDir, DefaultDirPermissions)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create destination directory %s: %w", dstDir, err)
 	}
 
 	// Create destination file
-	destFile, err := fo.FS.Create(dst)
+	destFile, err := dstFS.Create(dst)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create destination file %s: %w", dst, err)
 	}
@@ -148,12 +166,28 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 	}
 
 	// Preserve modification time
-	err = fo.FS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	err = dstFS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
 	if err != nil {
 		return written, fmt.Errorf("failed to preserve modification time for %s: %w", dst, err)
 	}
 
 	return written, nil
+}
+
+// getSourceFS returns the source filesystem, falling back to FS if SourceFS is not set.
+func (fo *FileOps) getSourceFS() filesystem.FileSystem {
+	if fo.SourceFS != nil {
+		return fo.SourceFS
+	}
+	return fo.FS
+}
+
+// getDestFS returns the destination filesystem, falling back to FS if DestFS is not set.
+func (fo *FileOps) getDestFS() filesystem.FileSystem {
+	if fo.DestFS != nil {
+		return fo.DestFS
+	}
+	return fo.FS
 }
 
 // CopyFileWithStats copies a file and returns detailed timing statistics.
@@ -164,7 +198,11 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback, cancelChan <-chan struct{}, onDataComplete func()) (*CopyStats, error) {
 	stats := &CopyStats{}
 
-	sourceFile, err := fo.FS.Open(src)
+	// Get source and destination filesystems
+	srcFS := fo.getSourceFS()
+	dstFS := fo.getDestFS()
+
+	sourceFile, err := srcFS.Open(src)
 	if err != nil {
 		return stats, fmt.Errorf("failed to open source file %s: %w", src, err)
 	}
@@ -182,13 +220,13 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
 
-	err = fo.FS.MkdirAll(dstDir, DefaultDirPermissions)
+	err = dstFS.MkdirAll(dstDir, DefaultDirPermissions)
 	if err != nil {
 		return stats, fmt.Errorf("failed to create destination directory %s: %w", dstDir, err)
 	}
 
 	// Create destination file
-	destFile, err := fo.FS.Create(dst)
+	destFile, err := dstFS.Create(dst)
 	if err != nil {
 		return stats, fmt.Errorf("failed to create destination file %s: %w", dst, err)
 	}
@@ -200,7 +238,7 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 		_ = destFile.Close()
 		// If copy was cancelled or failed, delete the partial file
 		if !copyCompleted {
-			_ = fo.FS.Remove(dst)
+			_ = dstFS.Remove(dst)
 		}
 	}()
 
@@ -225,7 +263,7 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 	}
 
 	// Preserve modification time
-	err = fo.FS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
+	err = dstFS.Chtimes(dst, sourceInfo.ModTime(), sourceInfo.ModTime())
 	if err != nil {
 		return stats, fmt.Errorf("failed to preserve modification time for %s: %w", dst, err)
 	}
