@@ -75,9 +75,19 @@ func parseSFTPURL(sftpURL string) (*ParsedPath, error) {
 	}
 
 	// Extract path
+	// SFTP path convention:
+	//   sftp://user@host/path  → relative to home directory (strip leading /)
+	//   sftp://user@host//path → absolute path /path (strip one /)
+	//   sftp://user@host       → home directory (.)
 	remotePath := u.Path
-	if remotePath == "" {
-		remotePath = "/"
+	if remotePath == "" || remotePath == "/" {
+		remotePath = "."
+	} else if strings.HasPrefix(remotePath, "//") {
+		// Absolute path: strip one /
+		remotePath = remotePath[1:]
+	} else {
+		// Relative to home: strip leading /
+		remotePath = strings.TrimPrefix(remotePath, "/")
 	}
 
 	return &ParsedPath{

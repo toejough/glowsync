@@ -29,6 +29,7 @@ A simple md issue tracker.
      - 2025-12-30 23:25 EST: Added mustNewEngine helper, fixing syncengine tests
      - 2025-12-30 23:33 EST: All tests passing, fixed redeclaration errors in screen tests
      - 2025-12-30 23:49 EST: Fixed SSH agent auth bug - now checks for keys before using agent
+     - 2025-12-30 23:55 EST: Fixed SFTP path handling - single slash now relative to home directory
 2. create a way to ignore files on the server side from deletion during sync
    - status: open
 3. there's no border around the app in the analysis screen
