@@ -227,8 +227,9 @@ A simple md issue tracker.
       - 2025-12-31 12:25 EST: User tested - Phase 2 working successfully, adaptive scaling enabled
       - 2025-12-31 12:25 EST: Issue complete - Performance goal achieved (10-30x improvement)
 12. implement adaptive SFTP pool sizing
-   - status: backlog
+   - status: in progress
    - created: 2025-12-31 12:25 EST
+   - started: 2025-12-31 13:36 EST
    - description: Dynamically adjust SFTP client pool size based on workload instead of fixed 8 clients
    - current behavior: Pool size hardcoded to 8 clients in sftp_filesystem.go:18
    - desired behavior: Auto-tune pool size based on:
@@ -240,6 +241,17 @@ A simple md issue tracker.
      - Prevent over-subscription on resource-constrained systems
      - Scale up for large multi-file transfers
    - related: Issue #11 (Phase 3.4 from original optimization plan)
+   - updates:
+      - 2025-12-31 13:36 EST: PLANNING phase - Explored pool implementation and sync engine adaptive scaling
+      - 2025-12-31 13:36 EST: Plan approved - Pool will follow sync engine's desiredWorkers count
+      - 2025-12-31 13:36 EST: Design: 4 phases (Pool Core, Interface, FileSystem Integration, Engine Integration)
+      - 2025-12-31 13:39 EST: RED phase - Phase 1 tests written (5 tests for Resize, scale-up/down, bounds)
+      - 2025-12-31 13:45 EST: GREEN phase - Phase 1 implementation complete (all tests passing with -race)
+      - 2025-12-31 13:48 EST: AUDIT phase - Reviewing Phase 1 code quality
+      - 2025-12-31 13:48 EST: AUDIT PASS - Thread-safe, resource management correct, linter clean
+      - 2025-12-31 13:48 EST: Phase 1 committed (3ae0417) - Pool core with Resize(), scale-up/down
+      - 2025-12-31 13:49 EST: Phase 2 complete - ResizablePool interface defined
+      - 2025-12-31 13:49 EST: Phase 2 committed (deeef2d) - ResizablePool interface
 13. add SSH compression support for SFTP transfers
    - status: backlog
    - priority: low (future optimization)
@@ -276,3 +288,12 @@ A simple md issue tracker.
      - Marginal benefit on local networks
      - May require server-side tuning
    - related: Issue #11 (Phase 3.3 from original optimization plan)
+16. Fix stale 'copy-files' reference in documentation
+   - status: in progress
+   - priority: low
+   - created: 2025-12-31
+   - description: Remaining reference to old 'copy-files' repository name that needs updating to 'glowsync'
+   - acceptance: All documentation uses correct repository name
+   - effort: Trivial
+   - migrated_from: imptest issues.md #14
+   - linear: TOE-87
