@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -47,8 +48,11 @@ func Connect(host string, port int, user string) (*SFTPConnection, error) {
 		return nil, fmt.Errorf("SSH connection failed: %w", err)
 	}
 
-	// Open SFTP session
-	sftpClient, err := sftp.NewClient(sshClient)
+	// Open SFTP session with concurrent writes enabled for better performance.
+	// Note: Concurrent writes can create "holes" if writes fail mid-transfer.
+	// Our error handling in CopyFileWithStats() mitigates this by deleting
+	// partial files on error (see pkg/fileops/fileops.go:213-218).
+	sftpClient, err := sftp.NewClient(sshClient, sftp.UseConcurrentWrites(true))
 	if err != nil {
 		_ = sshClient.Close()
 		return nil, fmt.Errorf("SFTP session creation failed: %w", err)
@@ -171,4 +175,19 @@ func tryDefaultSSHKeys() ([]ssh.AuthMethod, error) {
 	}
 
 	return authMethods, nil
+}
+
+// ReadSourceFileForTesting returns the contents of sftp_connection.go for test verification.
+// This is used by tests to verify configuration options are set correctly in the source code.
+func ReadSourceFileForTesting() string {
+	// Get the current file's path
+	_, filename, _, _ := runtime.Caller(0)
+
+	// Read this file
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return ""
+	}
+
+	return string(content)
 }
