@@ -15,14 +15,21 @@ A simple md issue tracker.
 ## Issues
 
 1. try to use SSH/SFTP to sync files
-   - status: review (ready for integration testing)
+   - status: done
    - started: 2025-12-30
-   - implementation: All core features implemented
+   - completed: 2025-12-31
+   - implementation: All core features implemented and tested
      - SFTP connection management with SSH agent/key auth
      - URL parser for sftp://user@host:port/path format
      - Dual filesystem support (local-to-SFTP, SFTP-to-local, SFTP-to-SFTP)
      - Integration with sync engine and TUI
-   - usage: glowsync -s sftp://user@host/remote/path -d /local/path
+   - usage:
+     - Local to SFTP: glowsync -s /local/path -d sftp://user@host/remote/path
+     - SFTP to local: glowsync -s sftp://user@host/remote/path -d /local/path
+     - SFTP to SFTP: glowsync -s sftp://user@host1/path1 -d sftp://user@host2/path2
+   - path conventions:
+     - Single slash (relative to home): sftp://user@host/Pictures → ~/Pictures
+     - Double slash (absolute): sftp://user@host//var/log → /var/log
    - updates:
      - 2025-12-30 23:15 EST: Implementation complete, committed in 9 logical commits
      - 2025-12-30 23:20 EST: Running mage check, fixing test compilation issues
@@ -32,6 +39,7 @@ A simple md issue tracker.
      - 2025-12-30 23:55 EST: Fixed SFTP path handling - single slash now relative to home directory
      - 2025-12-31 00:06 EST: Fixed dual filesystem bug - dest scans now use correct filesystem
      - 2025-12-31 00:08 EST: Fixed file deletion bug - dest file removes now use correct filesystem
+     - 2025-12-31 00:22 EST: Verified working end-to-end, marking as complete (16 commits total)
 2. create a way to ignore files on the server side from deletion during sync
    - status: open
 3. there's no border around the app in the analysis screen
