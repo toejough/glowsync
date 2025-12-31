@@ -84,6 +84,7 @@ type Engine struct {
 	logFile         *os.File      // Optional log file for debugging
 	logMu           sync.Mutex    // Mutex for log file writes
 	closeFunc       func()        // Function to close SFTP connections (if any)
+	desiredWorkers  int32         // Target worker count for adaptive scaling (atomic)
 }
 
 // NewEngine creates a new sync engine.
@@ -295,7 +296,7 @@ func (e *Engine) GetStatus() *Status {
 		ScannedFiles:       e.Status.ScannedFiles,
 		TotalFilesToScan:   e.Status.TotalFilesToScan,
 		CurrentPath:        e.Status.CurrentPath,
-		ActiveWorkers:      e.Status.ActiveWorkers,
+		ActiveWorkers:      atomic.LoadInt32(&e.Status.ActiveWorkers),
 		MaxWorkers:         e.Status.MaxWorkers,
 		AdaptiveMode:       e.Status.AdaptiveMode,
 		TotalReadTime:      e.Status.TotalReadTime,
@@ -363,6 +364,7 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 	// First measurement - add a worker to test
 	if lastPerWorkerSpeed == 0 {
 		if currentWorkers < maxWorkers {
+			atomic.AddInt32(&e.desiredWorkers, 1)
 			workerControl <- true
 
 			e.logToFile(fmt.Sprintf("Adaptive: First measurement complete, adding worker (%d -> %d)",
@@ -374,10 +376,18 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 
 	speedRatio := currentPerWorkerSpeed / lastPerWorkerSpeed
 
-	// Per-worker speed decreased - don't add workers
+	// Per-worker speed decreased - remove a worker
 	if speedRatio < AdaptiveScalingLowThreshold {
-		e.logToFile(fmt.Sprintf("Adaptive: ↓ Per-worker speed decreased (-%.1f%%), not adding workers - will re-evaluate at %d workers",
-			(1-speedRatio)*PercentageScale, currentWorkers))
+		// Decrement desired worker count (workers will self-terminate)
+		newDesired := atomic.AddInt32(&e.desiredWorkers, -1)
+		if newDesired < 1 {
+			// Don't go below 1 worker
+			atomic.StoreInt32(&e.desiredWorkers, 1)
+			newDesired = 1
+		}
+
+		e.logToFile(fmt.Sprintf("Adaptive: ↓ Per-worker speed decreased (-%.1f%%), removing worker (%d -> %d)",
+			(1-speedRatio)*PercentageScale, currentWorkers, newDesired))
 
 		return
 	}
@@ -387,6 +397,7 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 		return
 	}
 
+	atomic.AddInt32(&e.desiredWorkers, 1)
 	workerControl <- true
 
 	if speedRatio >= AdaptiveScalingHighThreshold {
@@ -978,7 +989,7 @@ func (e *Engine) handleCopyResult(fileToSync *FileToSync, stats *fileops.CopySta
 			BytesTransferred: stats.BytesCopied,
 			ReadTime:         stats.ReadTime,
 			WriteTime:        stats.WriteTime,
-			ActiveWorkers:    e.Status.ActiveWorkers,
+			ActiveWorkers:    int(atomic.LoadInt32(&e.Status.ActiveWorkers)),
 		}
 		e.Status.addRateSample(sample)
 	}
@@ -1467,7 +1478,7 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 			case <-ticker.C():
 				e.Status.mu.RLock()
 				currentProcessedFiles := e.Status.ProcessedFiles
-				currentWorkers := e.Status.ActiveWorkers
+				currentWorkers := int(atomic.LoadInt32(&e.Status.ActiveWorkers))
 				e.Status.mu.RUnlock()
 				currentBytes := atomic.LoadInt64(&e.Status.TransferredBytes)
 
@@ -1529,9 +1540,9 @@ func (e *Engine) startWorkerControl(wg *sync.WaitGroup, jobs <-chan *FileToSync,
 
 				e.Status.mu.Lock()
 
-				e.Status.ActiveWorkers++
-				if e.Status.ActiveWorkers > e.Status.MaxWorkers {
-					e.Status.MaxWorkers = e.Status.ActiveWorkers
+				newActive := atomic.AddInt32(&e.Status.ActiveWorkers, 1)
+				if int(newActive) > e.Status.MaxWorkers {
+					e.Status.MaxWorkers = int(newActive)
 				}
 
 				e.Status.mu.Unlock()
@@ -1589,10 +1600,13 @@ func (e *Engine) syncAdaptive() error {
 	}
 
 	e.Status.mu.Lock()
-	e.Status.ActiveWorkers = activeWorkers
+	atomic.StoreInt32(&e.Status.ActiveWorkers, int32(activeWorkers))
 	e.Status.MaxWorkers = activeWorkers
 	e.Status.mu.Unlock()
 	e.notifyStatusUpdate()
+
+	// Initialize desired worker count for adaptive scaling
+	atomic.StoreInt32(&e.desiredWorkers, int32(activeWorkers))
 
 	// Start background goroutines for adaptive scaling, worker control, and job distribution
 	e.startAdaptiveScaling(done, jobs, workerControl)
@@ -1706,7 +1720,7 @@ func (e *Engine) syncFixed() error {
 	numWorkers = max(numWorkers, 1)
 
 	e.Status.mu.Lock()
-	e.Status.ActiveWorkers = numWorkers
+	atomic.StoreInt32(&e.Status.ActiveWorkers, int32(numWorkers))
 	e.Status.MaxWorkers = numWorkers
 	e.Status.mu.Unlock()
 
@@ -1991,6 +2005,27 @@ func (e *Engine) worker(wg *sync.WaitGroup, jobs <-chan *FileToSync, errors chan
 				return
 			}
 		}
+
+		// Check if we should scale down (CAS-based worker removal)
+		// This prevents stampede - only one worker wins the CAS and exits
+		for {
+			currentActive := atomic.LoadInt32(&e.Status.ActiveWorkers)
+			desired := atomic.LoadInt32(&e.desiredWorkers)
+
+			if currentActive <= desired {
+				// At or below target, keep working
+				break
+			}
+
+			// Try to atomically decrement activeWorkers
+			if atomic.CompareAndSwapInt32(&e.Status.ActiveWorkers, currentActive, currentActive-1) {
+				// Success: We won the race to decrement
+				// This worker should exit
+				e.logToFile(fmt.Sprintf("Worker exiting: scaled down %d -> %d", currentActive, currentActive-1))
+				return
+			}
+			// CAS failed: Another worker already decremented, retry the check
+		}
 	}
 }
 
@@ -2124,9 +2159,9 @@ type Status struct {
 	AnalysisRate      float64   // Items per second (rolling)
 
 	// Concurrency tracking
-	ActiveWorkers int  // Current number of active workers
-	MaxWorkers    int  // Maximum workers reached
-	AdaptiveMode  bool // Whether adaptive concurrency is enabled
+	ActiveWorkers int32 // Current number of active workers (atomic)
+	MaxWorkers    int   // Maximum workers reached
+	AdaptiveMode  bool  // Whether adaptive concurrency is enabled
 
 	// Performance tracking (for bottleneck detection)
 	TotalReadTime  time.Duration // Total time spent reading from source
@@ -2192,8 +2227,9 @@ func (s *Status) calculateCumulativeRates(metrics *WorkerMetrics) {
 	totalBytes := atomic.LoadInt64(&s.TransferredBytes)
 	metrics.TotalRate = float64(totalBytes) / elapsed.Seconds()
 
-	if s.ActiveWorkers > 0 {
-		metrics.PerWorkerRate = metrics.TotalRate / float64(s.ActiveWorkers)
+	activeWorkers := atomic.LoadInt32(&s.ActiveWorkers)
+	if activeWorkers > 0 {
+		metrics.PerWorkerRate = metrics.TotalRate / float64(activeWorkers)
 	}
 }
 

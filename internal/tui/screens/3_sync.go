@@ -312,7 +312,7 @@ func (s SyncScreen) renderCancellationProgress() string {
 	// Show active worker count
 	activeWorkers := 0
 	if s.status != nil {
-		activeWorkers = s.status.ActiveWorkers
+		activeWorkers = int(s.status.ActiveWorkers)
 	}
 
 	fmt.Fprintf(&builder, "Active workers: %d\n\n", activeWorkers)

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1213,4 +1215,154 @@ func TestCalculateAnalysisProgress_ProgressionAccuracy(t *testing.T) {
 
 	g.Expect(progress.FilesPercent).Should(Equal(50.0))
 	g.Expect(progress.BytesPercent).Should(Equal(50.0))
+}
+
+func TestAdaptiveScalingDecrementsDesiredWorkers(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Initialize desiredWorkers to 5
+	engine.SetDesiredWorkers(5)
+
+	// Create a worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Call MakeScalingDecision with decreased per-worker speed
+	engine.MakeScalingDecision(
+		1000000.0, // lastPerWorkerSpeed: 1 MB/s per worker
+		50000.0,   // currentPerWorkerSpeed: 0.05 MB/s per worker (much lower)
+		5,         // currentWorkers
+		10,        // maxWorkers
+		workerControl,
+	)
+
+	// Verify that desiredWorkers was decremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(4)), "desiredWorkers should decrement from 5 to 4 when speed drops")
+
+	// Verify that NO worker was added (channel should be empty)
+	select {
+	case <-workerControl:
+		t.Fatal("Should not add worker when per-worker speed decreased")
+	case <-time.After(50 * time.Millisecond):
+		// Expected - no worker added
+	}
+}
+
+func TestWorkerExitsWhenOverDesiredCount(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create some test files to sync
+	for i := 1; i <= 3; i++ {
+		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
+		err := os.WriteFile(testFile, []byte(fmt.Sprintf("content %d", i)), 0o600)
+		g.Expect(err).ShouldNot(HaveOccurred())
+	}
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+	engine.AdaptiveMode = true
+
+	// Run analysis to populate FilesToSync
+	err := engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(engine.Status.TotalFiles).Should(Equal(3))
+
+	// Set up initial state: 5 active workers, but desired is only 2
+	atomic.StoreInt32(&engine.Status.ActiveWorkers, 5)
+	engine.SetDesiredWorkers(2)
+
+	// Create channels
+	jobs := make(chan *syncengine.FileToSync, 10)
+	errors := make(chan error, 10)
+	var wg sync.WaitGroup
+
+	// Start 5 workers
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+
+		go engine.TestWorker(&wg, jobs, errors)
+	}
+
+	// Send enough jobs for all workers to process and check CAS
+	for _, file := range engine.Status.FilesToSync {
+		jobs <- file
+	}
+
+	// Close jobs channel
+	close(jobs)
+
+	// Wait for workers to finish
+	wg.Wait()
+
+	// Verify that activeWorkers decreased to desiredWorkers (2)
+	// Three workers should have exited via CAS
+	finalActive := atomic.LoadInt32(&engine.Status.ActiveWorkers)
+	g.Expect(finalActive).Should(Equal(int32(2)), "activeWorkers should decrease from 5 to 2")
+}
+
+func TestWorkerCASPreventsStampede(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create test files
+	for i := 1; i <= 10; i++ {
+		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
+		err := os.WriteFile(testFile, []byte(fmt.Sprintf("content %d", i)), 0o600)
+		g.Expect(err).ShouldNot(HaveOccurred())
+	}
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+	engine.AdaptiveMode = true
+
+	// Run analysis
+	err := engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(engine.Status.TotalFiles).Should(Equal(10))
+
+	// Simulate scenario: 10 workers active, desired is 7 (need to remove 3)
+	atomic.StoreInt32(&engine.Status.ActiveWorkers, 10)
+	engine.SetDesiredWorkers(7)
+
+	// Create channels
+	jobs := make(chan *syncengine.FileToSync, 10)
+	errors := make(chan error, 10)
+	var wg sync.WaitGroup
+
+	// Add all jobs to channel
+	for _, file := range engine.Status.FilesToSync {
+		jobs <- file
+	}
+	close(jobs)
+
+	// Start 10 workers - they'll all try to exit at similar times
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+
+		go engine.TestWorker(&wg, jobs, errors)
+	}
+
+	// Wait for all workers to finish
+	wg.Wait()
+
+	// Verify exactly 3 workers exited (activeWorkers should be 7)
+	finalActive := atomic.LoadInt32(&engine.Status.ActiveWorkers)
+	g.Expect(finalActive).Should(Equal(int32(7)), "CAS should prevent stampede - exactly 3 workers should exit")
 }

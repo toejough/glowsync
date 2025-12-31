@@ -41,11 +41,11 @@ A simple md issue tracker.
      - 2025-12-31 00:08 EST: Fixed file deletion bug - dest file removes now use correct filesystem
      - 2025-12-31 00:22 EST: Verified working end-to-end, marking as complete (16 commits total)
 2. create a way to ignore files on the server side from deletion during sync
-   - status: open
+   - status: backlog
 3. there's no border around the app in the analysis screen
-   - status: open
+   - status: backlog
 4. fix impgen V1 deprecation warnings in mage check
-   - status: open
+   - status: backlog
    - created: 2025-12-30 23:36 EST
    - description: Update impgen directives to use V2 syntax
    - affected files:
@@ -57,12 +57,12 @@ A simple md issue tracker.
      - pkg/filesystem/filesystem_test.go - V1 interface mock
    - migration: Use --target flag for callable wrappers, --dependency flag for interface mocks
 5. add SFTP documentation to help text
-   - status: open
+   - status: backlog
    - created: 2025-12-30 23:39 EST
    - description: Document SFTP support in CLI help and README
    - required content:
      - Path format: sftp://user@host:port/path (port optional, defaults to 22)
-     - Authentication: SSH agent and key files (~/.ssh/id_*)
+     - Authentication: SSH agent and key files (~/.ssh/id\_\*)
      - Usage examples:
        - Local to remote: glowsync -s /local/path -d sftp://user@server/remote/path
        - Remote to local: glowsync -s sftp://user@server/remote/path -d /local/path
@@ -71,3 +71,36 @@ A simple md issue tracker.
    - files to update:
      - CLI help text (--help flag output)
      - README.md with SFTP usage section
+6. there's a duplicate (less precise) percentage after the file progress bars `22% (22.5%)`
+   - status: backlog
+   - description: Remove redundant percentage display in file progress bars. I'd like to keep the second one, and remove
+     the first.
+7. the file progress bars section frequently shows a higher number of workers than files being synced
+   - status: backlog
+   - description: I would expect that if we have 5 workers, we should be syncing 5 files at a time, most of the time.
+     However, frequently I see that we have more workers than files being synced, e.g. 5 workers, but only 2 files
+     being synced.
+8. adaptive worker count never seems to go down
+   - status: done
+   - started: 2025-12-31 00:41 EST
+   - completed: 2025-12-31 00:50 EST
+   - description: The adaptive worker count seems to only ever go up, never down. I would expect that if the system
+     is under load, the worker count would go down to reduce load.
+   - root cause identified: Three problems found:
+     1. MakeScalingDecision (sync.go:362) only adds workers, never decrements desiredWorkers when speed drops
+     2. startWorkerControl (sync.go:1523) only handles add=true, never implements worker removal
+     3. worker() function (sync.go:1965) has no mechanism to gracefully exit for scale-down
+   - solution implemented: Atomic CAS-based worker scale-down:
+     - Added desiredWorkers int32 field to Engine (atomic)
+     - MakeScalingDecision decrements desiredWorkers when per-worker speed decreases (speedRatio < 0.9)
+     - Workers check desiredWorkers vs activeWorkers after each job using CAS loop
+     - Winner of CAS race decrements activeWorkers and exits, losers retry - prevents stampede
+     - Changed ActiveWorkers from int to int32 for atomic operations
+   - testing: Full TDD approach - RED (3 failing tests), GREEN (all passing), all tests pass
+   - updates:
+     - 2025-12-31 00:41 EST: Root cause analysis complete, started TDD implementation
+     - 2025-12-31 00:43 EST: RED phase - wrote 3 failing tests for scale-down behavior
+     - 2025-12-31 00:46 EST: GREEN phase - implementing MakeScalingDecision scale-down and worker CAS exit
+     - 2025-12-31 00:50 EST: All tests passing, implementation complete
+9. when cancelling a sync, the TUI reports the sync _failed_ and shows error messages
+   - status: backlog
