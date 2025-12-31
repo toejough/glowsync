@@ -1310,7 +1310,7 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 	e.notifyStatusUpdate()
 
 	// Scan destination directory with progress
-	destFiles, err := e.FileOps.ScanDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int, fileSize int64) {
+	destFiles, err := e.FileOps.ScanDestDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int, fileSize int64) {
 		e.Status.mu.Lock()
 		e.Status.CurrentPath = path
 		e.Status.ScannedFiles = scannedCount
@@ -1851,7 +1851,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	e.logAnalysis("Accessing destination...")
 	e.notifyStatusUpdate()
 
-	destCount, err := e.FileOps.CountFilesWithProgress(e.DestPath, func(path string, count int) {
+	destCount, err := e.FileOps.CountDestFilesWithProgress(e.DestPath, func(path string, count int) {
 		e.Status.mu.Lock()
 		e.Status.ScannedFiles = count
 		e.Status.CurrentPath = path

@@ -280,8 +280,22 @@ func (fo *FileOps) CountFiles(rootPath string) (int, error) {
 }
 
 // CountFilesWithProgress counts files with progress reporting.
+// Uses fo.FS for single-filesystem operations, or fo.getSourceFS() for dual-filesystem.
 func (fo *FileOps) CountFilesWithProgress(rootPath string, progressCallback CountProgressCallback) (int, error) {
-	scanner := fo.FS.Scan(rootPath)
+	fs := fo.getSourceFS()
+	return fo.countFilesWithProgressFS(fs, rootPath, progressCallback)
+}
+
+// CountDestFilesWithProgress counts destination files with progress reporting.
+// Used for dual-filesystem operations where source and dest are different.
+func (fo *FileOps) CountDestFilesWithProgress(rootPath string, progressCallback CountProgressCallback) (int, error) {
+	fs := fo.getDestFS()
+	return fo.countFilesWithProgressFS(fs, rootPath, progressCallback)
+}
+
+// countFilesWithProgressFS counts files using the specified filesystem.
+func (fo *FileOps) countFilesWithProgressFS(fs filesystem.FileSystem, rootPath string, progressCallback CountProgressCallback) (int, error) {
+	scanner := fs.Scan(rootPath)
 	count := 0
 
 	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
@@ -318,14 +332,29 @@ func (fo *FileOps) ScanDirectory(rootPath string) (map[string]*FileInfo, error) 
 }
 
 // ScanDirectoryWithProgress recursively scans a directory with progress reporting.
-// This now scans only once, collecting files and reporting progress as we go.
+// Uses fo.FS for single-filesystem operations, or fo.getSourceFS() for dual-filesystem.
 //
 //nolint:lll // Long function signature with callback parameter
 func (fo *FileOps) ScanDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
+	fs := fo.getSourceFS()
+	return fo.scanDirectoryWithProgressFS(fs, rootPath, progressCallback)
+}
+
+// ScanDestDirectoryWithProgress recursively scans destination directory with progress reporting.
+// Used for dual-filesystem operations where source and dest are different.
+//
+//nolint:lll // Long function signature with callback parameter
+func (fo *FileOps) ScanDestDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
+	fs := fo.getDestFS()
+	return fo.scanDirectoryWithProgressFS(fs, rootPath, progressCallback)
+}
+
+// scanDirectoryWithProgressFS scans a directory using the specified filesystem.
+func (fo *FileOps) scanDirectoryWithProgressFS(fs filesystem.FileSystem, rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
 	files := make(map[string]*FileInfo)
 	fileCount := 0
 
-	scanner := fo.FS.Scan(rootPath)
+	scanner := fs.Scan(rootPath)
 	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
 		path := filepath.Join(rootPath, info.RelativePath)
 
