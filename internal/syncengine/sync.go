@@ -1527,9 +1527,8 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 		ticker := e.TimeProvider.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
-		// Files-per-worker based scaling algorithm - continuously dynamic
+		// Time-based scaling algorithm - continuously dynamic
 		state := &AdaptiveScalingState{}
-		targetFilesPerWorker := 5
 		maxWorkers := len(e.Status.FilesToSync) // Cap at total files
 
 		e.logToFile("Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency")
@@ -1551,11 +1550,10 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 					continue
 				}
 
-				// Calculate how many files have been processed since last check
-				filesSinceLastCheck := currentProcessedFiles - state.FilesAtLastCheck
+				const evaluationInterval = 5 * time.Second
 
-				// Check if we've processed enough files to evaluate (targetFilesPerWorker files per worker)
-				if filesSinceLastCheck >= currentWorkers*targetFilesPerWorker {
+				// Check if enough time has elapsed since last evaluation
+				if time.Since(state.LastCheckTime) >= evaluationInterval {
 					e.EvaluateAndScale(state, currentProcessedFiles, currentWorkers, currentBytes, maxWorkers, workerControl)
 				}
 			}
@@ -2250,17 +2248,22 @@ func (s *Status) ComputeProgressMetrics() {
 	s.Workers = s.calculateWorkerMetrics()
 }
 
-// addRateSample adds a new sample to the rolling window, keeping only the most recent samples.
+// addRateSample adds a new sample to the rolling window, keeping only samples from the last 10 seconds.
 // Must be called with the Status mutex already locked.
 func (s *Status) addRateSample(sample RateSample) {
-	const maxSamples = 5 // Keep last 5 file completion samples
+	const windowDuration = 10 * time.Second // Keep samples from last 10 seconds
 
 	s.Workers.RecentSamples = append(s.Workers.RecentSamples, sample)
 
-	// Keep only the most recent samples
-	if len(s.Workers.RecentSamples) > maxSamples {
-		s.Workers.RecentSamples = s.Workers.RecentSamples[len(s.Workers.RecentSamples)-maxSamples:]
+	// Prune samples older than windowDuration
+	cutoffTime := sample.Timestamp.Add(-windowDuration)
+	filtered := s.Workers.RecentSamples[:0] // Reuse underlying array
+	for _, samp := range s.Workers.RecentSamples {
+		if !samp.Timestamp.Before(cutoffTime) {
+			filtered = append(filtered, samp)
+		}
 	}
+	s.Workers.RecentSamples = filtered
 }
 
 // calculateAverageWorkers calculates the average number of active workers across samples.

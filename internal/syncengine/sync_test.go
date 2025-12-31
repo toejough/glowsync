@@ -1831,6 +1831,195 @@ func TestEvaluateAndScale_UsesSmoothedRate(t *testing.T) {
 	// Once implemented, add assertions here to verify the smoothed rate is used.
 }
 
+// TestSyncAdaptive_TimeBasedEvaluation_FileCountCheck verifies the OLD behavior:
+// current implementation uses file-count to trigger evaluation.
+// This test documents the CURRENT behavior that needs to change.
+func TestSyncAdaptive_TimeBasedEvaluation_FileCountCheck(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	baseTime := time.Now()
+
+	//  Current implementation (line 1558 in sync.go):
+	// if filesSinceLastCheck >= currentWorkers*targetFilesPerWorker {
+	//     e.EvaluateAndScale(...)
+	// }
+
+	state := &syncengine.AdaptiveScalingState{
+		FilesAtLastCheck: 10,
+		LastCheckTime:    baseTime,
+	}
+
+	currentProcessedFiles := 20 // 10 files processed since last check
+	currentWorkers := 2
+	targetFilesPerWorker := 5
+
+	filesSinceLastCheck := currentProcessedFiles - state.FilesAtLastCheck
+
+	// OLD logic (current implementation)
+	shouldEvaluateFileCount := filesSinceLastCheck >= currentWorkers*targetFilesPerWorker
+	g.Expect(shouldEvaluateFileCount).Should(BeTrue(),
+		"Current file-count logic: 10 files >= 2*5=10 threshold → should evaluate")
+
+	// This test passes with CURRENT implementation
+	// After Change 2, this logic should be REMOVED and replaced with time-based check
+}
+
+// TestSyncAdaptive_TimeBasedEvaluation_TimeCheck verifies the NEW behavior:
+// evaluation should trigger based on time elapsed (5 seconds), not file count.
+// This test will FAIL until Change 2 is implemented.
+func TestSyncAdaptive_TimeBasedEvaluation_TimeCheck(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	baseTime := time.Now()
+	const evaluationInterval = 5 * time.Second
+
+	// Target implementation (should replace line 1558 in sync.go):
+	// if time.Since(state.LastCheckTime) >= evaluationInterval {
+	//     e.EvaluateAndScale(...)
+	// }
+
+	// Scenario 1: 5 seconds elapsed, few files processed → SHOULD evaluate (time-based)
+	state1 := &syncengine.AdaptiveScalingState{
+		FilesAtLastCheck: 10,
+		LastCheckTime:    baseTime,
+	}
+	currentTime1 := baseTime.Add(5 * time.Second)
+	currentProcessedFiles1 := 12 // Only 2 files processed
+	currentWorkers1 := 2
+	targetFilesPerWorker := 5
+
+	filesSinceLastCheck1 := currentProcessedFiles1 - state1.FilesAtLastCheck
+
+	// OLD logic (current): Would NOT evaluate (2 files < 10 threshold)
+	shouldEvaluateFileCount1 := filesSinceLastCheck1 >= currentWorkers1*targetFilesPerWorker
+	g.Expect(shouldEvaluateFileCount1).Should(BeFalse(),
+		"File-count logic: 2 files < 10 threshold → would NOT evaluate")
+
+	// NEW logic (time-based): SHOULD evaluate (5 seconds elapsed)
+	shouldEvaluateTime1 := currentTime1.Sub(state1.LastCheckTime) >= evaluationInterval
+	g.Expect(shouldEvaluateTime1).Should(BeTrue(),
+		"Time-based logic: 5 seconds elapsed → SHOULD evaluate (this is the NEW behavior)")
+
+	// Scenario 2: Only 3 seconds elapsed, many files processed → should NOT evaluate (time-based)
+	state2 := &syncengine.AdaptiveScalingState{
+		FilesAtLastCheck: 10,
+		LastCheckTime:    baseTime,
+	}
+	currentTime2 := baseTime.Add(3 * time.Second)
+	currentProcessedFiles2 := 100 // 90 files processed (way more than threshold)
+	currentWorkers2 := 2
+
+	filesSinceLastCheck2 := currentProcessedFiles2 - state2.FilesAtLastCheck
+
+	// OLD logic (current): WOULD evaluate (90 files >= 10 threshold)
+	shouldEvaluateFileCount2 := filesSinceLastCheck2 >= currentWorkers2*targetFilesPerWorker
+	g.Expect(shouldEvaluateFileCount2).Should(BeTrue(),
+		"File-count logic: 90 files >= 10 threshold → would evaluate")
+
+	// NEW logic (time-based): should NOT evaluate (only 3 seconds < 5 second threshold)
+	shouldEvaluateTime2 := currentTime2.Sub(state2.LastCheckTime) >= evaluationInterval
+	g.Expect(shouldEvaluateTime2).Should(BeFalse(),
+		"Time-based logic: 3 seconds < 5 second threshold → should NOT evaluate (this is the NEW behavior)")
+
+	// The implementer should:
+	// 1. Remove the file-count check at line 1558: if filesSinceLastCheck >= currentWorkers*targetFilesPerWorker
+	// 2. Replace with time-based check: if time.Since(state.LastCheckTime) >= evaluationInterval
+	// 3. Add const evaluationInterval = 5 * time.Second
+}
+
+// TestSyncAdaptive_TimeBasedEvaluation_IntervalConstant verifies that the evaluation
+// interval is always 5 seconds, regardless of worker count or file count.
+func TestSyncAdaptive_TimeBasedEvaluation_IntervalConstant(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	const evaluationInterval = 5 * time.Second
+	baseTime := time.Now()
+
+	// The interval should be a CONSTANT (5 seconds), not dependent on:
+	// - worker count (currentWorkers)
+	// - target files per worker (targetFilesPerWorker)
+	// - files processed (filesSinceLastCheck)
+
+	// Test at exactly 5.0 seconds - should evaluate
+	state1 := &syncengine.AdaptiveScalingState{LastCheckTime: baseTime}
+	currentTime1 := baseTime.Add(5000 * time.Millisecond)
+	g.Expect(currentTime1.Sub(state1.LastCheckTime) >= evaluationInterval).Should(BeTrue(),
+		"Should evaluate at exactly 5.0 seconds")
+
+	// Test at 4.9 seconds - should NOT evaluate
+	state2 := &syncengine.AdaptiveScalingState{LastCheckTime: baseTime}
+	currentTime2 := baseTime.Add(4900 * time.Millisecond)
+	g.Expect(currentTime2.Sub(state2.LastCheckTime) >= evaluationInterval).Should(BeFalse(),
+		"Should NOT evaluate at 4.9 seconds (below threshold)")
+
+	// Test at 10 seconds - should evaluate (10 >= 5)
+	state3 := &syncengine.AdaptiveScalingState{LastCheckTime: baseTime}
+	currentTime3 := baseTime.Add(10 * time.Second)
+	g.Expect(currentTime3.Sub(state3.LastCheckTime) >= evaluationInterval).Should(BeTrue(),
+		"Should evaluate at 10 seconds (well past threshold)")
+
+	// Verify interval is independent of worker count
+	// 1 worker or 100 workers - same 5 second interval
+	g.Expect(evaluationInterval).Should(Equal(5*time.Second),
+		"Evaluation interval must be constant 5 seconds, not derived from worker/file counts")
+}
+
+// TestSyncAdaptive_ActualTimeBehavior_Integration verifies the actual code change in startAdaptiveScaling.
+// This is an integration test that will FAIL until the implementation is changed from file-count to time-based.
+//
+// Expected changes in sync.go around line 1558:
+// OLD: if filesSinceLastCheck >= currentWorkers*targetFilesPerWorker {
+// NEW: const evaluationInterval = 5 * time.Second
+//      if time.Since(state.LastCheckTime) >= evaluationInterval {
+func TestSyncAdaptive_ActualTimeBehavior_Integration(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create exactly 3 small test files (below the file-count threshold)
+	for i := 0; i < 3; i++ {
+		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
+		err := os.WriteFile(testFile, []byte("small content"), 0o600)
+		g.Expect(err).ShouldNot(HaveOccurred())
+	}
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+	engine.AdaptiveMode = true
+	engine.Workers = 0 // Adaptive mode starts with 1 worker
+
+	// Run Analyze
+	err := engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(engine.Status.TotalFiles).Should(Equal(3))
+
+	// Record initial desired workers
+	initialDesired := engine.GetDesiredWorkers()
+
+	// Run Sync
+	err = engine.Sync()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// After implementation change to time-based evaluation:
+	// - Evaluation should happen after 5 seconds (not based on file count)
+	// - With only 3 files and 1 worker, file-count logic would NOT trigger evaluation
+	//   (3 files < 1 worker * 5 targetFilesPerWorker = 5)
+	// - But time-based logic SHOULD trigger evaluation after 5 seconds
+	// - desiredWorkers should have been adjusted at least once
+
+	finalDesired := engine.GetDesiredWorkers()
+
+	// This assertion will PASS once time-based evaluation is implemented
+	// (evaluation happens after 5 seconds regardless of file count)
+	g.Expect(finalDesired).Should(BeNumerically(">", initialDesired),
+		"After time-based implementation, evaluation should occur based on time (5s), not file count")
+}
+
 // TestEvaluateAndScale_ColdStart verifies behavior with < 2 samples.
 // With insufficient samples, scaling decisions should be conservative (baseline behavior).
 //
