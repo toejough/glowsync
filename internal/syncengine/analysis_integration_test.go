@@ -10,7 +10,6 @@ import (
 
 	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
-	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/pkg/fileops"
 )
 
@@ -43,7 +42,7 @@ func TestAnalysisProgressIntegration_FullFlow(t *testing.T) {
 	}
 
 	// Create engine
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	// Verify initial state - should be in counting phase
@@ -77,7 +76,7 @@ func TestAnalysisProgressIntegration_EmptySource(t *testing.T) {
 	sourceDir := t.TempDir()
 	destDir := t.TempDir()
 
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	err := engine.Analyze()
@@ -103,7 +102,7 @@ func TestAnalysisProgressIntegration_EmptyDestination(t *testing.T) {
 	err := os.WriteFile(filepath.Join(sourceDir, "test.txt"), []byte("test"), 0o600)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	err = engine.Analyze()
@@ -123,7 +122,7 @@ func TestAnalysisProgressIntegration_DivisionByZeroSafety(t *testing.T) {
 	sourceDir := t.TempDir()
 	destDir := t.TempDir()
 
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	// Create empty file (zero bytes)
@@ -162,7 +161,7 @@ func TestAnalysisProgressIntegration_PerformanceOverhead(t *testing.T) {
 	}
 
 	// Baseline: Analysis without progress tracking (use old engine or disable tracking)
-	engineBaseline := syncengine.NewEngine(sourceDir, destDir)
+	engineBaseline := mustNewEngine(t, sourceDir, destDir)
 	engineBaseline.FileOps = fileops.NewRealFileOps()
 
 	startBaseline := time.Now()
@@ -171,7 +170,7 @@ func TestAnalysisProgressIntegration_PerformanceOverhead(t *testing.T) {
 	baselineDuration := time.Since(startBaseline)
 
 	// With progress tracking
-	engineWithTracking := syncengine.NewEngine(sourceDir, destDir)
+	engineWithTracking := mustNewEngine(t, sourceDir, destDir)
 	engineWithTracking.FileOps = fileops.NewRealFileOps()
 
 	startTracking := time.Now()
@@ -199,7 +198,7 @@ func TestAnalysisProgressIntegration_PhaseTransitions(t *testing.T) {
 	err := os.WriteFile(filepath.Join(sourceDir, "test.txt"), []byte("content"), 0o600)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	// Before analysis: counting phase (TotalBytesToScan = 0)

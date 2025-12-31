@@ -19,7 +19,7 @@ func TestSummaryScreenCtrlCQuitsApp(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	// Press Ctrl+C key
@@ -39,7 +39,7 @@ func TestSummaryScreenDisplaysActionableDiskSpaceError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Create disk space error that should be enriched
 	diskErr := errors.New("write /dest/file.txt: no space left on device")
@@ -63,7 +63,7 @@ func TestSummaryScreenDisplaysActionablePathError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Create path error that should be enriched
 	pathErr := errors.New("stat /missing/path: no such file or directory")
@@ -89,7 +89,7 @@ func TestSummaryScreenDisplaysActionablePermissionError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Create permission error that should be enriched
 	permErr := errors.New("open /home/user/file.txt: permission denied")
@@ -113,7 +113,7 @@ func TestSummaryScreenDisplaysLogPath(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	logPath := "/tmp/test-debug.log"
 
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, logPath)
@@ -128,7 +128,7 @@ func TestSummaryScreenDisplaysMultipleSuggestionsFormatted(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Create error that generates multiple suggestions
 	err := errors.New("permission denied")
@@ -149,7 +149,7 @@ func TestSummaryScreenEscReturnsToInput(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	// Press Esc key - should return to InputScreen
@@ -168,7 +168,7 @@ func TestSummaryScreenNewCancelled(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateCancelled, nil, "")
 
 	g.Expect(screen).ShouldNot(BeNil())
@@ -178,7 +178,7 @@ func TestSummaryScreenNewComplete(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	g.Expect(screen).ShouldNot(BeNil())
@@ -192,7 +192,7 @@ func TestSummaryScreenNewError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("test error"), "")
 
 	g.Expect(screen).ShouldNot(BeNil())
@@ -210,7 +210,7 @@ func TestSummaryScreenNewNilEngine(t *testing.T) {
 func TestSummaryScreenUpdate(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	// Test WindowSizeMsg
@@ -238,7 +238,7 @@ func TestSummaryScreenUsesErrorSymbol(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Test error state which will display ErrorSymbol in the title
 	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
@@ -252,7 +252,7 @@ func TestSummaryScreenUsesSuccessSymbol(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
 
 	view := screen.View()
@@ -265,7 +265,7 @@ func TestSummaryScreenViewCancelled(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Set up engine with some status data
 	status := engine.GetStatus()
@@ -284,7 +284,7 @@ func TestSummaryScreenViewCancelledAdaptive(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Set up adaptive mode for cancelled state
 	status := engine.GetStatus()
@@ -304,7 +304,7 @@ func TestSummaryScreenViewCancelledWithErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Set up engine with errors
 	status := engine.GetStatus()
@@ -323,7 +323,7 @@ func TestSummaryScreenViewComplete(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Set up engine with some status data
 	status := engine.GetStatus()
@@ -345,7 +345,7 @@ func TestSummaryScreenViewCompleteWithAlreadySynced(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
@@ -358,7 +358,7 @@ func TestSummaryScreenViewCompleteWithErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")
@@ -371,7 +371,7 @@ func TestSummaryScreenViewCompleteWithZeroFiles(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Set up engine with zero files synced (all already up-to-date)
 	status := engine.GetStatus()
@@ -402,7 +402,7 @@ func TestSummaryScreenViewError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
 
@@ -415,7 +415,7 @@ func TestSummaryScreenViewErrorWithAdditionalErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
 	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
@@ -428,7 +428,7 @@ func TestSummaryScreenViewErrorWithPartialProgress(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
 	screen := screens.NewSummaryScreen(engine, shared.StateError, errors.New("fatal error"), "")
@@ -441,7 +441,7 @@ func TestSummaryScreenViewWithAdaptiveMode(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Set up adaptive mode stats
 	status := engine.GetStatus()
@@ -463,7 +463,7 @@ func TestSummaryScreenViewWithRecentlyCompleted(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Note: We can't easily set internal status, so just verify the view renders
 	screen := screens.NewSummaryScreen(engine, shared.StateComplete, nil, "")

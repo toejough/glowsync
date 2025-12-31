@@ -13,6 +13,16 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+	return engine
+}
+
 func TestAppModelStoresLogPath(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -24,7 +34,7 @@ func TestAppModelStoresLogPath(t *testing.T) {
 	model := tui.NewAppModel(cfg)
 
 	// Create an engine for the transition
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Send TransitionToSyncMsg with log path
 	msg := shared.TransitionToSyncMsg{
@@ -84,7 +94,7 @@ func TestAppModelTransitionToConfirmation(t *testing.T) {
 	model := tui.NewAppModel(cfg)
 
 	// Create a test engine
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	logPath := "/tmp/test-debug.log"
 
 	// Send TransitionToConfirmationMsg
@@ -154,7 +164,7 @@ func TestAppModelTransitionToSummary(t *testing.T) {
 	model := tui.NewAppModel(cfg)
 
 	// Create an engine first
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Send TransitionToSyncMsg first to set the engine
 	syncMsg := shared.TransitionToSyncMsg{
@@ -198,7 +208,7 @@ func TestAppModelTransitionToSync(t *testing.T) {
 	model := tui.NewAppModel(cfg)
 
 	// Create an engine for the transition
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Send TransitionToSyncMsg to trigger transition
 	msg := shared.TransitionToSyncMsg{

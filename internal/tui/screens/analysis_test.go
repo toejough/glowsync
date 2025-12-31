@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/gomega"                 //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/config"
-	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/screens"
 	"github.com/joe/copy-files/internal/tui/shared"
 )
@@ -69,7 +68,7 @@ func TestAnalysisScreenEngineInitialized(t *testing.T) {
 	screen := screens.NewAnalysisScreen(cfg)
 
 	// Create an engine
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Send EngineInitializedMsg
 	msg := shared.EngineInitializedMsg{
@@ -161,7 +160,7 @@ func TestAnalysisScreenRenderingWithStatus(t *testing.T) {
 	screen := screens.NewAnalysisScreen(cfg)
 
 	// Initialize with engine
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	initMsg := shared.EngineInitializedMsg{Engine: engine}
 	updatedModel, _ := screen.Update(initMsg)
 
@@ -208,7 +207,7 @@ func TestAnalysisScreenTickMsg(t *testing.T) {
 	screen := screens.NewAnalysisScreen(cfg)
 
 	// Initialize the screen with an engine first
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	initMsg := shared.EngineInitializedMsg{Engine: engine}
 	updatedModel, _ := screen.Update(initMsg)
 

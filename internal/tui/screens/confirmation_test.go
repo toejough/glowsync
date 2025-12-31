@@ -13,12 +13,22 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+	return engine
+}
+
 func TestConfirmationScreen_Update_CtrlCKey(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
 	// Create test engine and screen
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	logPath := "/tmp/test-debug.log"
 	screen := screens.NewConfirmationScreen(engine, logPath)
 
@@ -40,7 +50,7 @@ func TestConfirmationScreen_Update_EnterKey(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create test engine and screen
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	logPath := "/tmp/test-debug.log"
 	screen := screens.NewConfirmationScreen(engine, logPath)
 
@@ -62,7 +72,7 @@ func TestConfirmationScreen_Update_EscapeKey(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create test engine and screen
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	logPath := "/tmp/test-debug.log"
 	screen := screens.NewConfirmationScreen(engine, logPath)
 
@@ -84,7 +94,7 @@ func TestConfirmationScreen_View(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create a test engine
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	logPath := "/tmp/test-debug.log"
 
 	// Create confirmation screen
@@ -104,7 +114,7 @@ func TestConfirmationScreen_View_EmptyNoFilter(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create engine with no filter and no files (source empty or already synced)
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	engine.FilePattern = ""
 	engine.Status.TotalFiles = 0
 	engine.Status.TotalBytes = 0
@@ -128,7 +138,7 @@ func TestConfirmationScreen_View_EmptyState_PreservesControls(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create engine with no files
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	engine.Status.TotalFiles = 0
 
 	logPath := "/tmp/test-debug.log"
@@ -148,7 +158,7 @@ func TestConfirmationScreen_View_EmptyWithFilter(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create engine with filter applied but no matching files
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	engine.FilePattern = "*.mov"
 	engine.Status.TotalFiles = 0
 	engine.Status.TotalBytes = 0
@@ -170,7 +180,7 @@ func TestConfirmationScreen_View_ErrorDisplayLimit(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create a test engine with more than 3 errors
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 
 	// Simulate 6 errors during analysis
 	// Need to modify engine.Status.Errors directly (not the copy from GetStatus())
@@ -208,7 +218,7 @@ func TestConfirmationScreen_View_WithErrors(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create a test engine with errors from analysis phase
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 
 	// Simulate errors that occurred during analysis
 	// Need to modify engine.Status.Errors directly (not the copy from GetStatus())
@@ -232,7 +242,7 @@ func TestNewConfirmationScreen(t *testing.T) {
 	g := NewWithT(t)
 
 	// Create a test engine
-	engine := syncengine.NewEngine("/test/source", "/test/dest")
+	engine := mustNewEngine(t, "/test/source", "/test/dest")
 	logPath := "/tmp/test-debug.log"
 
 	// Create confirmation screen

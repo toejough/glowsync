@@ -10,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"   //nolint:depguard // Needed for TUI testing
 	. "github.com/onsi/gomega"                 //nolint:revive // Dot import is idiomatic for Gomega matchers
 
-	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/screens"
 	"github.com/joe/copy-files/internal/tui/shared"
 )
@@ -18,7 +17,7 @@ import (
 func TestSyncScreenCancelled(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Cancel the sync
@@ -44,7 +43,7 @@ func TestSyncScreenCtrlCQuitsApp(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Press Ctrl+C key
@@ -63,7 +62,7 @@ func TestSyncScreenCtrlCQuitsApp(t *testing.T) {
 func TestSyncScreenError(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Send ErrorMsg
@@ -82,7 +81,7 @@ func TestSyncScreenEscCancelsAndTransitionsToSummary(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Press Esc key - should cancel and mark as cancelled
@@ -111,7 +110,7 @@ func TestSyncScreenEscCancelsAndTransitionsToSummary(t *testing.T) {
 func TestSyncScreenKeyMsg(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Test Ctrl+C
@@ -131,7 +130,7 @@ func TestSyncScreenNew(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	g.Expect(screen).ShouldNot(BeNil())
@@ -145,7 +144,7 @@ func TestSyncScreenRenderCancellationProgress(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Cancel the sync
@@ -167,7 +166,7 @@ func TestSyncScreenRenderCancellationProgressEdgeCases(t *testing.T) {
 		t.Parallel()
 		g := NewWithT(t)
 
-		engine := syncengine.NewEngine("/source", "/dest")
+		engine := mustNewEngine(t, "/source", "/dest")
 		screen := screens.NewSyncScreen(engine)
 
 		// Cancel without any status
@@ -188,7 +187,7 @@ func TestSyncScreenRenderCancellationProgressEdgeCases(t *testing.T) {
 		t.Parallel()
 		g := NewWithT(t)
 
-		engine := syncengine.NewEngine("/source", "/dest")
+		engine := mustNewEngine(t, "/source", "/dest")
 		screen := screens.NewSyncScreen(engine)
 
 		// Cancel the sync
@@ -209,7 +208,7 @@ func TestSyncScreenRenderCancellationProgressShowsCurrentFiles(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Cancel the sync
@@ -229,7 +228,7 @@ func TestSyncScreenRenderCancellationProgressShowsForceQuitHint(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Cancel the sync
@@ -249,7 +248,7 @@ func TestSyncScreenRenderCancellationProgressShowsWorkerCount(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Cancel the sync
@@ -269,7 +268,7 @@ func TestSyncScreenRenderCancellationProgressWithSpinner(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Initialize the screen to start spinner
@@ -298,7 +297,7 @@ func TestSyncScreenRenderCancellationProgressWithSpinner(t *testing.T) {
 func TestSyncScreenSpinnerTick(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Send spinner.TickMsg
@@ -316,7 +315,7 @@ func TestSyncScreenSpinnerTick(t *testing.T) {
 func TestSyncScreenSyncComplete(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Send SyncCompleteMsg
@@ -332,7 +331,7 @@ func TestSyncScreenSyncComplete(t *testing.T) {
 func TestSyncScreenUpdate(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Test with nil message
@@ -357,7 +356,7 @@ func TestSyncScreenView(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Test View rendering
@@ -369,7 +368,7 @@ func TestSyncScreenViewSwitchesFromNormalToCancellationView(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Initialize and set window size
@@ -402,7 +401,7 @@ func TestSyncScreenViewSwitchesFromNormalToCancellationView(t *testing.T) {
 func TestSyncScreenViewWithStatus(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Initialize to trigger status updates
@@ -427,7 +426,7 @@ func TestSyncScreenViewWithStatus(t *testing.T) {
 func TestSyncScreenWindowSize(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := screens.NewSyncScreen(engine)
 
 	// Send WindowSizeMsg

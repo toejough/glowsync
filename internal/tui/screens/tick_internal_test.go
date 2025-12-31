@@ -10,6 +10,16 @@ import (
 	"github.com/joe/copy-files/internal/syncengine"
 )
 
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+	return engine
+}
+
 func TestAnalysisHandleTick(t *testing.T) {
 	t.Parallel()
 	gomega := NewWithT(t)
@@ -24,7 +34,7 @@ func TestAnalysisHandleTick(t *testing.T) {
 	}
 
 	// Initialize with engine first
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen.engine = engine
 	screen.status = engine.GetStatus()
 
@@ -59,7 +69,7 @@ func TestSyncHandleTick(t *testing.T) {
 	t.Parallel()
 	gomega := NewWithT(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	screen := &SyncScreen{
 		engine:     engine,
 		lastUpdate: time.Now().Add(-1 * time.Second),

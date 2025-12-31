@@ -18,6 +18,16 @@ import (
 	"github.com/joe/copy-files/pkg/filesystem"
 )
 
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+	return engine
+}
+
 func TestAdaptiveScalingWithMockedTime(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -96,7 +106,7 @@ func TestEngineAdaptiveScaling(t *testing.T) { //nolint:paralleltest // Don't ru
 	}
 
 	// Create engine with adaptive mode enabled
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.AdaptiveMode = true
 	engine.Workers = 0 // 0 means adaptive (starts with 1 worker)
 	engine.FileOps = fileops.NewRealFileOps()
@@ -141,7 +151,7 @@ func TestEngineAnalyze(t *testing.T) {
 	fsImp := NewFileSystemImp(t)
 	scannerImp := NewFileScannerImp(t)
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	engine.FileOps = fileops.NewFileOps(fsImp.Mock)
 
 	// Set up expectations in a goroutine
@@ -173,7 +183,7 @@ func TestEngineAnalyze(t *testing.T) {
 func TestEngineCancel(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Use imptest wrapper for Cancel method
 	cancelWrapper := syncengine.NewEngineCancel(t, engine.Cancel)
@@ -189,7 +199,7 @@ func TestEngineCancel(t *testing.T) {
 func TestEngineCloseLog(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Use imptest wrapper for CloseLog method
 	wrapper := syncengine.NewEngineCloseLog(t, engine.CloseLog)
@@ -236,7 +246,7 @@ func TestEngineDeleteOrphanedDirectories(t *testing.T) {
 	}
 
 	// Create engine
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	// Run Analyze - this will delete orphaned directories
@@ -283,7 +293,7 @@ func TestEngineDeleteOrphanedFiles(t *testing.T) {
 	}
 
 	// Create engine
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	// Run Analyze - this will delete orphaned files
@@ -304,7 +314,7 @@ func TestEngineDeviousContentMode(t *testing.T) {
 	sourceDir, destDir, destFile := setupSameSizeModtimeTest(t)
 
 	// Create engine with DeviousContent mode
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.ChangeType = config.DeviousContent
 	engine.FileOps = fileops.NewRealFileOps()
 
@@ -329,7 +339,7 @@ func TestEngineDeviousContentMode(t *testing.T) {
 func TestEngineEnableFileLogging(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Use imptest wrapper for EnableFileLogging method
 	wrapper := syncengine.NewEngineEnableFileLogging(t, engine.EnableFileLogging)
@@ -465,7 +475,7 @@ func TestEngineFilePatternFilter(t *testing.T) {
 			}
 
 			// Create engine with file pattern
-			engine := syncengine.NewEngine(sourceDir, destDir)
+			engine := mustNewEngine(t, sourceDir, destDir)
 			engine.FilePattern = testCase.pattern
 
 			// Run analysis
@@ -518,7 +528,7 @@ func TestEngineFilePatternFilter(t *testing.T) {
 func TestEngineGetStatus(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	status := engine.GetStatus()
 
@@ -548,7 +558,7 @@ func TestEngineMarkFileCompleteWithoutCopy(t *testing.T) {
 	g.Expect(err).ShouldNot(HaveOccurred())
 
 	// Create engine with Content mode (enables hash optimization)
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.ChangeType = config.Content
 	engine.FileOps = fileops.NewRealFileOps()
 
@@ -604,7 +614,7 @@ func TestEngineParanoidMode(t *testing.T) {
 	sourceDir, destDir, destFile := setupSameSizeModtimeTest(t)
 
 	// Create engine with Paranoid mode
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.ChangeType = config.Paranoid
 	engine.FileOps = fileops.NewRealFileOps()
 
@@ -629,7 +639,7 @@ func TestEngineParanoidMode(t *testing.T) {
 func TestEngineRegisterStatusCallback(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	callbackCalled := false
 	callback := func(_ *syncengine.Status) {
@@ -648,7 +658,7 @@ func TestEngineRegisterStatusCallback(t *testing.T) {
 func TestEngineSync(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	// Call Sync with no files to sync (should return immediately)
 	err := engine.Sync()
@@ -661,7 +671,7 @@ func TestEngineSync(t *testing.T) {
 func TestEngineSyncAdaptive(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 	engine.AdaptiveMode = true
 
 	// Call Sync with no files to sync (should return immediately)
@@ -692,7 +702,7 @@ func TestEngineSyncWithFile(t *testing.T) {
 	}
 
 	// Create engine
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 
 	// Run Analyze to populate FilesToSync
 	err = engine.Analyze()
@@ -722,7 +732,7 @@ func TestEvaluateAndScaleDirectly(t *testing.T) {
 	destDir := t.TempDir()
 
 	// Create engine
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 
 	// Create mocked TimeProvider
 	timeImp := NewTimeProviderImp(t)
@@ -795,7 +805,7 @@ func TestHandleCopyError(t *testing.T) {
 	}
 
 	// Create engine with real FileOps for Analyze
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
 	// Run Analyze to populate FilesToSync
@@ -843,7 +853,7 @@ func TestMakeScalingDecisionDirectly(t *testing.T) {
 	destDir := t.TempDir()
 
 	// Create engine
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine := mustNewEngine(t, sourceDir, destDir)
 
 	// Create a worker control channel
 	workerControl := make(chan bool, 10)
@@ -908,7 +918,7 @@ func TestMockTicker(t *testing.T) {
 func TestNewEngine(t *testing.T) {
 	t.Parallel()
 
-	engine := syncengine.NewEngine("/source", "/dest")
+	engine := mustNewEngine(t, "/source", "/dest")
 
 	if engine == nil {
 		t.Error("NewEngine should return non-nil engine")
@@ -1027,7 +1037,10 @@ func runMockTimeProvider(timeImp *TimeProviderImp, tickerChan chan time.Time, do
 
 // setupAdaptiveEngine creates and configures an engine with adaptive mode
 func setupAdaptiveEngine(sourceDir, destDir string, timeImp *TimeProviderImp) *syncengine.Engine {
-	engine := syncengine.NewEngine(sourceDir, destDir)
+	engine, err := syncengine.NewEngine(sourceDir, destDir)
+	if err != nil {
+		panic(fmt.Sprintf("NewEngine failed: %v", err))
+	}
 	engine.Workers = 0 // 0 means adaptive mode
 	engine.AdaptiveMode = true
 	engine.FileOps = fileops.NewRealFileOps()
