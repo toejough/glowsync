@@ -44,3 +44,18 @@ A simple md issue tracker.
      - pkg/fileops/fileops_di_test.go - V1 interface mock
      - pkg/filesystem/filesystem_test.go - V1 interface mock
    - migration: Use --target flag for callable wrappers, --dependency flag for interface mocks
+5. add SFTP documentation to help text
+   - status: open
+   - created: 2025-12-30 23:39 EST
+   - description: Document SFTP support in CLI help and README
+   - required content:
+     - Path format: sftp://user@host:port/path (port optional, defaults to 22)
+     - Authentication: SSH agent and key files (~/.ssh/id_*)
+     - Usage examples:
+       - Local to remote: glowsync -s /local/path -d sftp://user@server/remote/path
+       - Remote to local: glowsync -s sftp://user@server/remote/path -d /local/path
+       - Remote to remote: glowsync -s sftp://user@server1/path -d sftp://user@server2/path
+     - Note about SSH key setup and agent configuration
+   - files to update:
+     - CLI help text (--help flag output)
+     - README.md with SFTP usage section
