@@ -6,24 +6,58 @@ import (
 	"time"
 )
 
+// PoolConfig configures the SFTP client pool size limits.
+type PoolConfig struct {
+	InitialSize int
+	MinSize     int
+	MaxSize     int
+}
+
+// DefaultPoolConfig returns the default pool configuration.
+func DefaultPoolConfig() *PoolConfig {
+	return &PoolConfig{
+		InitialSize: 4,
+		MinSize:     1,
+		MaxSize:     16,
+	}
+}
+
 // SFTPFileSystem implements FileSystem for SFTP connections.
 type SFTPFileSystem struct {
-	conn *SFTPConnection
 	pool *SFTPClientPool
 }
 
 // NewSFTPFileSystem creates a new SFTP filesystem using an established connection.
-func NewSFTPFileSystem(conn *SFTPConnection) (*SFTPFileSystem, error) {
-	// Create SFTP client pool with 8 concurrent clients
-	const poolSize = 8
+// If config is nil, DefaultPoolConfig() is used.
+func NewSFTPFileSystem(conn *SFTPConnection, config *PoolConfig) (*SFTPFileSystem, error) {
+	// Use default config if none provided
+	if config == nil {
+		config = DefaultPoolConfig()
+	}
 
-	pool, err := NewSFTPClientPool(conn.SSHClient(), poolSize)
+	// Validate config
+	if config.MinSize <= 0 {
+		return nil, fmt.Errorf("minSize must be greater than 0, got %d", config.MinSize)
+	}
+	if config.InitialSize < config.MinSize {
+		return nil, fmt.Errorf("initialSize (%d) must be >= minSize (%d)", config.InitialSize, config.MinSize)
+	}
+	if config.InitialSize > config.MaxSize {
+		return nil, fmt.Errorf("initialSize (%d) must be <= maxSize (%d)", config.InitialSize, config.MaxSize)
+	}
+
+	// Create SFTP client pool with configured limits
+	pool, err := NewSFTPClientPoolWithLimits(
+		conn.SSHClient(),
+		config.InitialSize,
+		config.MinSize,
+		config.MaxSize,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SFTP client pool: %w", err)
 	}
 
 	return &SFTPFileSystem{
-		conn: conn,
 		pool: pool,
 	}, nil
 }
@@ -160,4 +194,30 @@ func (fs *SFTPFileSystem) Close() error {
 	}
 
 	return nil
+}
+
+// ResizePool sets the target pool size.
+// Delegates to the underlying pool's Resize method.
+func (fs *SFTPFileSystem) ResizePool(targetSize int) {
+	fs.pool.Resize(targetSize)
+}
+
+// PoolSize returns the current actual number of connections in the pool.
+func (fs *SFTPFileSystem) PoolSize() int {
+	return fs.pool.Size()
+}
+
+// PoolTargetSize returns the current target pool size.
+func (fs *SFTPFileSystem) PoolTargetSize() int {
+	return fs.pool.TargetSize()
+}
+
+// PoolMinSize returns the minimum allowed pool size.
+func (fs *SFTPFileSystem) PoolMinSize() int {
+	return fs.pool.MinSize()
+}
+
+// PoolMaxSize returns the maximum allowed pool size.
+func (fs *SFTPFileSystem) PoolMaxSize() int {
+	return fs.pool.MaxSize()
 }

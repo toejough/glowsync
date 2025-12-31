@@ -27,7 +27,7 @@ func CreateFileSystem(pathStr string) (FileSystem, string, func(), error) {
 			parsed.User, parsed.Host, parsed.Port, err)
 	}
 
-	fs, err := NewSFTPFileSystem(conn)
+	fs, err := NewSFTPFileSystem(conn, nil)
 	if err != nil {
 		_ = conn.Close()
 		return nil, "", nil, fmt.Errorf("failed to create SFTP filesystem: %w", err)
