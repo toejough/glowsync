@@ -96,7 +96,10 @@ func (Config) Description() string {
 	return "A fast file synchronization CLI tool with a rich Terminal UI"
 }
 
-// ValidatePaths validates that source and destination paths are valid
+// ValidatePaths validates that source and destination paths are valid.
+// Supports both local paths and SFTP URLs (sftp://user@host:port/path).
+// For SFTP URLs, basic URL parsing is validated, but remote existence cannot be
+// checked until connection time.
 func (cfg Config) ValidatePaths() error {
 	// Check source path is provided
 	if cfg.SourcePath == "" {
@@ -108,32 +111,68 @@ func (cfg Config) ValidatePaths() error {
 		return ErrDestPathRequired
 	}
 
-	// Check if source exists and is a directory
-	sourceInfo, err := os.Stat(cfg.SourcePath)
+	// Check if source is an SFTP URL
+	if strings.HasPrefix(cfg.SourcePath, "sftp://") {
+		// Validate SFTP URL format
+		if err := validateSFTPURL(cfg.SourcePath); err != nil {
+			return fmt.Errorf("invalid source SFTP URL: %w", err)
+		}
+		// Cannot validate remote paths until connection - will be validated during engine init
+	} else {
+		// Validate local source path
+		if err := validateLocalPath(cfg.SourcePath, "source"); err != nil {
+			return err
+		}
+	}
+
+	// Check if destination is an SFTP URL
+	if strings.HasPrefix(cfg.DestPath, "sftp://") {
+		// Validate SFTP URL format
+		if err := validateSFTPURL(cfg.DestPath); err != nil {
+			return fmt.Errorf("invalid destination SFTP URL: %w", err)
+		}
+		// Cannot validate remote paths until connection - will be validated during engine init
+	} else {
+		// Validate local destination path
+		if err := validateLocalPath(cfg.DestPath, "destination"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateSFTPURL validates basic SFTP URL format
+func validateSFTPURL(sftpURL string) error {
+	// Basic validation - just check it has required components
+	if !strings.Contains(sftpURL, "@") {
+		return errors.New("SFTP URL must include username (sftp://user@host/path)")
+	}
+	if !strings.Contains(sftpURL, "/") || strings.Count(sftpURL, "/") < 3 {
+		return errors.New("SFTP URL must include path (sftp://user@host/path)")
+	}
+	return nil
+}
+
+// validateLocalPath validates that a local path exists and is a directory
+func validateLocalPath(path, pathType string) error {
+	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("%w: %s", ErrSourcePathNotExist, cfg.SourcePath)
+		if pathType == "source" {
+			return fmt.Errorf("%w: %s", ErrSourcePathNotExist, path)
+		}
+		return fmt.Errorf("%w: %s", ErrDestPathNotExist, path)
 	}
 
 	if err != nil {
-		return fmt.Errorf("cannot access source path: %w", err)
+		return fmt.Errorf("cannot access %s path: %w", pathType, err)
 	}
 
-	if !sourceInfo.IsDir() {
-		return fmt.Errorf("%w: %s", ErrSourcePathNotDirectory, cfg.SourcePath)
-	}
-
-	// Check if destination exists and is a directory
-	destInfo, err := os.Stat(cfg.DestPath)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("%w: %s", ErrDestPathNotExist, cfg.DestPath)
-	}
-
-	if err != nil {
-		return fmt.Errorf("cannot access destination path: %w", err)
-	}
-
-	if !destInfo.IsDir() {
-		return fmt.Errorf("%w: %s", ErrDestPathNotDirectory, cfg.DestPath)
+	if !info.IsDir() {
+		if pathType == "source" {
+			return fmt.Errorf("%w: %s", ErrSourcePathNotDirectory, path)
+		}
+		return fmt.Errorf("%w: %s", ErrDestPathNotDirectory, path)
 	}
 
 	return nil
