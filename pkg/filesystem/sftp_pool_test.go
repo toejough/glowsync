@@ -556,3 +556,268 @@ func TestSFTPClientPool_Documentation_Examples(t *testing.T) {
 	//     }()
 	// }
 }
+
+// ============================================================================
+// Phase 1: Adaptive SFTP Pool Sizing Tests
+// ============================================================================
+
+// TestSFTPClientPool_Resize_ScalesUpToTarget tests eager scale-up behavior.
+// This test will FAIL until Phase 1 implements:
+// - NewSFTPClientPoolWithLimits(sshClient, initialSize, minSize, maxSize)
+// - Resize(newSize int) method
+// - TargetSize() int method
+// - Size() int method
+//
+// Expected behavior:
+// - Pool starts with initialSize clients
+// - Resize(5) sets targetSize=5 and creates new clients immediately (eager)
+// - Can acquire 5 clients successfully
+func TestSFTPClientPool_Resize_ScalesUpToTarget(t *testing.T) {
+	t.Skip("Will FAIL until Phase 1 implements adaptive sizing: " +
+		"NewSFTPClientPoolWithLimits, Resize, Size, TargetSize methods")
+
+	// When implemented:
+	// conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	// if err != nil {
+	//     t.Skip("Requires SSH connection for integration test")
+	// }
+	// defer conn.Close()
+	//
+	// // Create pool with initial=2, min=1, max=10
+	// pool, err := filesystem.NewSFTPClientPoolWithLimits(conn.SSHClient(), 2, 1, 10)
+	// require.NoError(t, err, "Creating pool should succeed")
+	// require.NotNil(t, pool, "Pool should be created")
+	// defer pool.Close()
+	//
+	// // Verify initial size is 2
+	// assert.Equal(t, 2, pool.Size(), "Initial size should be 2")
+	// assert.Equal(t, 2, pool.TargetSize(), "Initial target size should be 2")
+	//
+	// // Scale up to 5 (eager - should create clients immediately)
+	// err = pool.Resize(5)
+	// require.NoError(t, err, "Resize should succeed")
+	//
+	// // Verify target size updated
+	// assert.Equal(t, 5, pool.TargetSize(), "Target size should be 5 after resize")
+	//
+	// // Acquire 5 clients to verify pool scaled up
+	// clients := make([]*sftp.Client, 5)
+	// for i := 0; i < 5; i++ {
+	//     client, err := pool.Acquire()
+	//     require.NoError(t, err, "Should acquire client %d", i+1)
+	//     require.NotNil(t, client, "Client %d should not be nil", i+1)
+	//     clients[i] = client
+	// }
+	//
+	// // Verify actual size reached 5
+	// assert.Equal(t, 5, pool.Size(), "Actual size should be 5 after acquiring all clients")
+	//
+	// // Release all clients
+	// for _, client := range clients {
+	//     pool.Release(client)
+	// }
+}
+
+// TestSFTPClientPool_Resize_ClampedToMaxSize tests max size clamping.
+// This test will FAIL until Phase 1 implements Resize() with max clamping.
+//
+// Expected behavior:
+// - Resize(20) should be clamped to maxSize=8
+// - Can only acquire 8 clients, not 20
+func TestSFTPClientPool_Resize_ClampedToMaxSize(t *testing.T) {
+	t.Skip("Will FAIL until Phase 1 implements Resize with max size clamping")
+
+	// When implemented:
+	// conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	// if err != nil {
+	//     t.Skip("Requires SSH connection")
+	// }
+	// defer conn.Close()
+	//
+	// // Create pool with initial=2, min=1, max=8
+	// pool, err := filesystem.NewSFTPClientPoolWithLimits(conn.SSHClient(), 2, 1, 8)
+	// require.NoError(t, err)
+	// defer pool.Close()
+	//
+	// // Try to resize to 20 (exceeds max)
+	// err = pool.Resize(20)
+	// require.NoError(t, err, "Resize should not error, just clamp")
+	//
+	// // Verify clamped to max=8
+	// assert.Equal(t, 8, pool.TargetSize(), "Target size should be clamped to max=8, not 20")
+	//
+	// // Verify can acquire exactly 8 clients (not 20)
+	// clients := make([]*sftp.Client, 8)
+	// for i := 0; i < 8; i++ {
+	//     client, err := pool.Acquire()
+	//     require.NoError(t, err, "Should acquire client %d", i+1)
+	//     clients[i] = client
+	// }
+	//
+	// // Verify size is 8
+	// assert.Equal(t, 8, pool.Size(), "Pool size should be 8, not 20")
+	//
+	// // Release all
+	// for _, client := range clients {
+	//     pool.Release(client)
+	// }
+}
+
+// TestSFTPClientPool_Resize_ScalesDownOnRelease tests lazy scale-down behavior.
+// This test will FAIL until Phase 1 implements lazy scale-down in Release().
+//
+// Expected behavior:
+// - Pool starts with 6 clients
+// - Resize(2) sets target to 2
+// - As clients are released, extra clients are closed (lazy)
+// - Final size reaches 2
+func TestSFTPClientPool_Resize_ScalesDownOnRelease(t *testing.T) {
+	t.Skip("Will FAIL until Phase 1 implements lazy scale-down on Release")
+
+	// When implemented:
+	// conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	// if err != nil {
+	//     t.Skip("Requires SSH connection")
+	// }
+	// defer conn.Close()
+	//
+	// // Create pool with initial=6, min=1, max=10
+	// pool, err := filesystem.NewSFTPClientPoolWithLimits(conn.SSHClient(), 6, 1, 10)
+	// require.NoError(t, err)
+	// defer pool.Close()
+	//
+	// // Verify initial size
+	// assert.Equal(t, 6, pool.Size(), "Initial size should be 6")
+	//
+	// // Acquire 4 clients
+	// clients := make([]*sftp.Client, 4)
+	// for i := 0; i < 4; i++ {
+	//     client, err := pool.Acquire()
+	//     require.NoError(t, err)
+	//     clients[i] = client
+	// }
+	//
+	// // Resize down to 2 (shrink from 6 to 2)
+	// err = pool.Resize(2)
+	// require.NoError(t, err)
+	// assert.Equal(t, 2, pool.TargetSize(), "Target size should be 2")
+	//
+	// // Size should still be 6 (haven't released yet - lazy)
+	// assert.Equal(t, 6, pool.Size(), "Size should still be 6 before releasing clients")
+	//
+	// // Release all 4 clients
+	// for _, client := range clients {
+	//     pool.Release(client)
+	// }
+	//
+	// // Now size should have scaled down to 2 (lazy scale-down on release)
+	// assert.Equal(t, 2, pool.Size(), "Size should be 2 after releasing excess clients")
+	//
+	// // Verify we can still acquire 2 clients
+	// client1, err := pool.Acquire()
+	// require.NoError(t, err)
+	// client2, err := pool.Acquire()
+	// require.NoError(t, err)
+	//
+	// pool.Release(client1)
+	// pool.Release(client2)
+}
+
+// TestSFTPClientPool_Resize_ClampedToMinSize tests min size clamping.
+// This test will FAIL until Phase 1 implements Resize() with min clamping.
+//
+// Expected behavior:
+// - Resize(0) should be clamped to minSize=2
+// - Pool never scales below 2
+func TestSFTPClientPool_Resize_ClampedToMinSize(t *testing.T) {
+	t.Skip("Will FAIL until Phase 1 implements Resize with min size clamping")
+
+	// When implemented:
+	// conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	// if err != nil {
+	//     t.Skip("Requires SSH connection")
+	// }
+	// defer conn.Close()
+	//
+	// // Create pool with initial=4, min=2, max=10
+	// pool, err := filesystem.NewSFTPClientPoolWithLimits(conn.SSHClient(), 4, 2, 10)
+	// require.NoError(t, err)
+	// defer pool.Close()
+	//
+	// // Try to resize to 0 (below min)
+	// err = pool.Resize(0)
+	// require.NoError(t, err, "Resize should not error, just clamp")
+	//
+	// // Verify clamped to min=2
+	// assert.Equal(t, 2, pool.TargetSize(), "Target size should be clamped to min=2, not 0")
+	//
+	// // Acquire all clients and release to trigger lazy scale-down
+	// clients := make([]*sftp.Client, 4)
+	// for i := 0; i < 4; i++ {
+	//     client, err := pool.Acquire()
+	//     require.NoError(t, err)
+	//     clients[i] = client
+	// }
+	// for _, client := range clients {
+	//     pool.Release(client)
+	// }
+	//
+	// // Verify size is 2 (never went below min)
+	// assert.Equal(t, 2, pool.Size(), "Pool should not scale below min=2")
+}
+
+// TestSFTPClientPool_Resize_ConcurrentScaleDown tests concurrent scale-down safety.
+// This test will FAIL until Phase 1 implements race-free scale-down using CAS.
+//
+// Expected behavior:
+// - Pool with 6 clients resizes to 2
+// - 6 clients released concurrently
+// - CAS prevents over-shrinking (no race conditions)
+// - Final size is exactly 2
+// Run with: go test -race ./pkg/filesystem -run TestSFTPClientPool_Resize_ConcurrentScaleDown
+func TestSFTPClientPool_Resize_ConcurrentScaleDown(t *testing.T) {
+	t.Skip("Will FAIL until Phase 1 implements race-free concurrent scale-down with CAS")
+
+	// When implemented:
+	// conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	// if err != nil {
+	//     t.Skip("Requires SSH connection")
+	// }
+	// defer conn.Close()
+	//
+	// // Create pool with initial=6, min=1, max=10
+	// pool, err := filesystem.NewSFTPClientPoolWithLimits(conn.SSHClient(), 6, 1, 10)
+	// require.NoError(t, err)
+	// defer pool.Close()
+	//
+	// // Acquire all 6 clients
+	// clients := make([]*sftp.Client, 6)
+	// for i := 0; i < 6; i++ {
+	//     client, err := pool.Acquire()
+	//     require.NoError(t, err)
+	//     clients[i] = client
+	// }
+	//
+	// // Resize to 2 while clients are held
+	// err = pool.Resize(2)
+	// require.NoError(t, err)
+	//
+	// // Release all 6 clients concurrently
+	// var wg sync.WaitGroup
+	// for _, client := range clients {
+	//     wg.Add(1)
+	//     go func(c *sftp.Client) {
+	//         defer wg.Done()
+	//         pool.Release(c)
+	//     }(client)
+	// }
+	// wg.Wait()
+	//
+	// // Verify final size is exactly 2 (CAS prevents over-shrinking)
+	// assert.Equal(t, 2, pool.Size(), "Size should be exactly 2 after concurrent releases")
+	//
+	// // Verify pool still functional
+	// client, err := pool.Acquire()
+	// require.NoError(t, err)
+	// pool.Release(client)
+}
