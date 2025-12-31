@@ -251,7 +251,11 @@ func (s AnalysisScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.
 
 func (s AnalysisScreen) initializeEngine() tea.Cmd {
 	return func() tea.Msg {
-		engine := syncengine.NewEngine(s.config.SourcePath, s.config.DestPath)
+		engine, err := syncengine.NewEngine(s.config.SourcePath, s.config.DestPath)
+		if err != nil {
+			return shared.ErrorMsg{Err: fmt.Errorf("failed to initialize engine: %w", err)}
+		}
+
 		engine.FilePattern = s.config.FilePattern
 		engine.Verbose = s.config.Verbose
 

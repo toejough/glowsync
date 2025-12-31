@@ -18,6 +18,7 @@ import (
 
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/pkg/fileops"
+	"github.com/joe/copy-files/pkg/filesystem"
 	"github.com/joe/copy-files/pkg/formatters"
 )
 
@@ -82,23 +83,34 @@ type Engine struct {
 	cancelOnce      sync.Once     // Ensure Cancel() is only called once
 	logFile         *os.File      // Optional log file for debugging
 	logMu           sync.Mutex    // Mutex for log file writes
+	closeFunc       func()        // Function to close SFTP connections (if any)
 }
 
-// NewEngine creates a new sync engine
-func NewEngine(source, dest string) *Engine {
+// NewEngine creates a new sync engine.
+// Supports both local paths and SFTP URLs (sftp://user@host:port/path).
+// Returns (*Engine, error) where error indicates filesystem setup failure.
+func NewEngine(source, dest string) (*Engine, error) {
+	// Create filesystems for source and destination
+	// Returns: sourceFS, destFS, srcPath, dstPath, closer, err
+	sourceFS, destFS, srcPath, dstPath, closer, err := filesystem.CreateFileSystemPair(source, dest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create filesystems: %w", err)
+	}
+
 	return &Engine{
-		SourcePath:   source,
-		DestPath:     dest,
+		SourcePath:   srcPath,
+		DestPath:     dstPath,
 		TimeProvider: &RealTimeProvider{},
-		Workers:      config.DefaultMaxWorkers, // Default to 4 concurrent workers
-		ChangeType:   config.MonotonicCount,    // Default to monotonic count
-		FileOps:      fileops.NewRealFileOps(), // Use real filesystem by default
+		Workers:      config.DefaultMaxWorkers,            // Default to 4 concurrent workers
+		ChangeType:   config.MonotonicCount,               // Default to monotonic count
+		FileOps:      fileops.NewDualFileOps(sourceFS, destFS), // Support cross-filesystem operations
 		Status: &Status{
 			StartTime: time.Now(),
 		},
 		statusCallbacks: make([]func(*Status), 0),
 		cancelChan:      make(chan struct{}),
-	}
+		closeFunc:       closer, // Store closer to clean up SFTP connections
+	}, nil
 }
 
 // Analyze scans source and destination to determine what needs to be synced
@@ -174,6 +186,15 @@ func (e *Engine) CloseLog() {
 		e.logToFile(fmt.Sprintf("\n=== Sync Log Ended: %s ===", time.Now().Format(time.RFC3339)))
 		_ = e.logFile.Close()
 		e.logFile = nil
+	}
+}
+
+// Close cleans up resources, including SFTP connections if any.
+// Should be called when done with the engine.
+func (e *Engine) Close() {
+	e.CloseLog()
+	if e.closeFunc != nil {
+		e.closeFunc()
 	}
 }
 
