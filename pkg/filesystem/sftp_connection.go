@@ -91,6 +91,11 @@ func (c *SFTPConnection) Client() *sftp.Client {
 	return c.sftpClient
 }
 
+// SSHClient returns the underlying SSH client for advanced usage (e.g., client pooling).
+func (c *SFTPConnection) SSHClient() *ssh.Client {
+	return c.sshClient
+}
+
 // getSSHAuthMethods returns SSH authentication methods in priority order:
 // 1. SSH agent
 // 2. Default SSH keys
