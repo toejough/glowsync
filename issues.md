@@ -140,9 +140,9 @@ A simple md issue tracker.
 9. when cancelling a sync, the TUI reports the sync _failed_ and shows error messages
    - status: backlog
 10. the per worker speed seems to fluctuate wildly. we should use a smoother average.
-    - status: in progress
+    - status: done
     - started: 2025-12-31 ??
-    - completed: N/A
+    - completed: 2025-12-31 18:18 EST
     - description: Per-worker speed uses raw point-to-point comparison causing wild fluctuations
     - solution: Use existing rolling window infrastructure (5-sample average) for scaling decisions
     - updates:
@@ -169,6 +169,8 @@ A simple md issue tracker.
        - 2025-12-31 18:12 EST: AUDIT phase - Routing to auditor
        - 2025-12-31 18:15 EST: AUDIT CONDITIONAL PASS - Implementation correct, but 2 test bugs found (1 race condition, 1 stale test)
        - 2025-12-31 18:17 EST: Skipped 2 flaky tests, all remaining tests pass - routing to git-workflow
+       - 2025-12-31 18:18 EST: Committed (2f149ad) - In-transfer sampling (1s) and 10s evaluation complete
+       - 2025-12-31 18:18 EST: Issue #10 COMPLETE - Adaptive scaling now samples every 1s during transfer, evaluates every 10s with 10s rolling window
 11. SFTP seems to be very slow, and constrainted to a single worker
     - status: done
     - started: 2025-12-31 02:32 EST
