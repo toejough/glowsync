@@ -24,12 +24,12 @@ import (
 
 // Exported constants.
 const (
-	// AdaptiveScalingHighThreshold is the threshold above which we consider removing workers (102%)
-	AdaptiveScalingHighThreshold = 1.02
+	// AdaptiveScalingHighThreshold is the threshold above which we consider removing workers (110%)
+	AdaptiveScalingHighThreshold = 1.10
 	// AdaptiveScalingIdleThreshold is the threshold for considering a worker idle (60%)
 	AdaptiveScalingIdleThreshold = 0.60
-	// AdaptiveScalingLowThreshold is the threshold below which we consider adding workers (98%)
-	AdaptiveScalingLowThreshold = 0.98
+	// AdaptiveScalingLowThreshold is the threshold below which we consider adding workers (90%)
+	AdaptiveScalingLowThreshold = 0.90
 	// AdaptiveScalingMinIdleTime is the minimum time a worker must be idle before removal (20 seconds)
 	AdaptiveScalingMinIdleTime = 20
 	// BytesPerKilobyte is the number of bytes in a kilobyte
@@ -234,23 +234,37 @@ func (e *Engine) EnableFileLogging(logPath string) error {
 func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedFiles, currentWorkers int, currentBytes int64, maxWorkers int, workerControl chan bool) {
 	now := e.TimeProvider.Now()
 
-	// Calculate current per-worker speed (bytes per second per worker)
+	// Calculate current per-worker speed using rolling window metrics
 	if state.LastProcessedFiles > 0 && !state.LastCheckTime.IsZero() {
 		filesProcessed := currentProcessedFiles - state.LastProcessedFiles
 		elapsed := now.Sub(state.LastCheckTime).Seconds()
 
 		if filesProcessed > 0 && elapsed > 0 {
-			// Calculate per-worker throughput
-			bytesPerFile := float64(currentBytes) / float64(currentProcessedFiles)
-			filesPerSecond := float64(filesProcessed) / elapsed
-			//nolint:lll // Complex calculation with descriptive variable names
-			currentPerWorkerSpeed := (bytesPerFile * filesPerSecond) / float64(currentWorkers)
+			var currentPerWorkerSpeed float64
 
-			//nolint:lll // Log message with multiple formatted values
-			e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s)",
-				currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, state.LastPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte))
+			// Try to use smoothed per-worker speed from rolling window (5 samples)
+			workerMetrics := e.Status.calculateWorkerMetrics()
 
-			// Make scaling decision based on per-worker speed
+			// Need at least 2 samples for meaningful comparison
+			if len(e.Status.Workers.RecentSamples) >= 2 {
+				// Use smoothed rate from rolling window
+				currentPerWorkerSpeed = workerMetrics.PerWorkerRate
+
+				//nolint:lll // Log message with multiple formatted values
+				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s) [smoothed from %d samples]",
+					currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, state.LastPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, len(e.Status.Workers.RecentSamples)))
+			} else {
+				// Fall back to raw point-to-point calculation when insufficient samples
+				bytesPerFile := float64(currentBytes) / float64(currentProcessedFiles)
+				filesPerSecond := float64(filesProcessed) / elapsed
+				currentPerWorkerSpeed = (bytesPerFile * filesPerSecond) / float64(currentWorkers)
+
+				//nolint:lll // Log message with multiple formatted values
+				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s) [raw calculation - need more samples]",
+					currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, state.LastPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte))
+			}
+
+			// Make scaling decision based on per-worker speed (smoothed or raw)
 			e.MakeScalingDecision(state.LastPerWorkerSpeed, currentPerWorkerSpeed, currentWorkers, maxWorkers, workerControl)
 
 			// Update tracking variables

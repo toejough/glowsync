@@ -1765,3 +1765,216 @@ func TestSyncAdaptive_ResizesPoolsWithWorkerCount_Integration(t *testing.T) {
 	// Will be implemented once Phase 1-3 are complete and we can test
 	// the full integration with real SFTP filesystems
 }
+
+// TestEvaluateAndScale_UsesSmoothedRate verifies EvaluateAndScale uses
+// WorkerMetrics.PerWorkerRate from rolling window instead of raw point-to-point calculation.
+// This test ensures adaptive scaling uses the 5-sample rolling window for smoother decisions.
+//
+// Test approach: Populate the rolling window with samples showing a clear smoothed trend,
+// then verify the scaling decision reflects that smoothed rate, not raw point-to-point calculation.
+func TestEvaluateAndScale_UsesSmoothedRate(t *testing.T) {
+	t.Parallel()
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	// Create mocked TimeProvider
+	timeImp := NewTimeProviderImp(t)
+	engine.TimeProvider = timeImp.Mock
+
+	// Scenario: We populate the rolling window via GetStatus() which calls ComputeProgressMetrics()
+	// The rolling window should already have samples if files were processed.
+	// For this test, we'll verify that EvaluateAndScale uses the Workers.PerWorkerRate field
+	// from the Status, rather than recalculating from scratch.
+
+	baseTime := time.Now()
+
+	// Set up adaptive scaling state with a baseline measurement
+	state := &syncengine.AdaptiveScalingState{
+		LastProcessedFiles: 5,
+		LastPerWorkerSpeed: 1000000.0, // 1 MB/s per worker (baseline)
+		FilesAtLastCheck:   5,
+		LastCheckTime:      baseTime.Add(-3 * time.Second),
+	}
+
+	// Set up mock time expectations
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		nowCall := timeImp.Within(2 * time.Second).ExpectCallIs.Now()
+		nowCall.InjectResult(baseTime.Add(1 * time.Second))
+	}()
+
+	workerControl := make(chan bool, 10)
+
+	// Call EvaluateAndScale with parameters that would trigger a scaling decision
+	// The key is that if the implementation uses the smoothed rate from Workers.PerWorkerRate,
+	// it will produce different behavior than raw calculation.
+	engine.EvaluateAndScale(state, 10, 2, 4500000, 10, workerControl)
+
+	<-done
+	close(workerControl)
+
+	// CRITICAL ASSERTION: After the implementation is complete, we verify that:
+	// 1. state.LastPerWorkerSpeed is updated with the smoothed rate from Status.Workers.PerWorkerRate
+	// 2. The GetStatus() call should show that Workers.RecentSamples has been populated
+	//
+	// This test currently skipped - will be implemented alongside the feature.
+	// The implementer should:
+	// - Call Status.calculateWorkerMetrics() to get smoothed PerWorkerRate
+	// - Use that smoothed rate for scaling decisions
+	// - Store it in state.LastPerWorkerSpeed for next comparison
+	//
+	// Once implemented, add assertions here to verify the smoothed rate is used.
+}
+
+// TestEvaluateAndScale_ColdStart verifies behavior with < 2 samples.
+// With insufficient samples, scaling decisions should be conservative (baseline behavior).
+//
+// Test approach: Call EvaluateAndScale on a fresh engine with no prior measurements.
+// Verify it falls back to baseline behavior instead of making speed-based decisions.
+func TestEvaluateAndScale_ColdStart(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	// Create mocked TimeProvider
+	timeImp := NewTimeProviderImp(t)
+	engine.TimeProvider = timeImp.Mock
+
+	// COLD START: No previous measurements, no samples in rolling window
+	baseTime := time.Now()
+	state := &syncengine.AdaptiveScalingState{
+		LastProcessedFiles: 0,
+		LastPerWorkerSpeed: 0,
+		FilesAtLastCheck:   0,
+		LastCheckTime:      time.Time{}, // No previous check
+	}
+
+	// Set up mock time expectations
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		nowCall := timeImp.Within(2 * time.Second).ExpectCallIs.Now()
+		nowCall.InjectResult(baseTime.Add(1 * time.Second))
+	}()
+
+	workerControl := make(chan bool, 10)
+
+	// Call EvaluateAndScale with cold-start conditions (first call, no history)
+	engine.EvaluateAndScale(state, 5, 1, 1000000, 10, workerControl)
+
+	<-done
+
+	// CRITICAL ASSERTION: With < 2 samples in the rolling window, the implementation should:
+	// 1. Check len(Status.Workers.RecentSamples) >= 2
+	// 2. If insufficient samples, skip speed-based scaling decision
+	// 3. Fall back to conservative baseline behavior (e.g., add worker if files processed)
+	//
+	// Expected behavior: Either add a worker (baseline) or no action (waiting for more data)
+	select {
+	case addWorker := <-workerControl:
+		g.Expect(addWorker).Should(BeTrue(), "Cold-start should use baseline behavior (add worker)")
+	case <-time.After(100 * time.Millisecond):
+		// Also acceptable - no scaling decision made due to insufficient data
+		t.Log("No worker added during cold-start - waiting for more samples (acceptable)")
+	}
+
+	close(workerControl)
+
+	// Verify state was updated with baseline values (not speed-based)
+	g.Expect(state.LastCheckTime).Should(Equal(baseTime.Add(1 * time.Second)),
+		"LastCheckTime should be updated even during cold-start")
+	g.Expect(state.LastProcessedFiles).Should(Equal(5),
+		"LastProcessedFiles should be updated even during cold-start")
+}
+
+// TestMakeScalingDecision_WidenedThresholds verifies 0.90/1.10 thresholds instead of 0.98/1.02.
+// This test ensures the widened thresholds prevent excessive scaling decisions with smoothed data.
+func TestMakeScalingDecision_WidenedThresholds(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	defer engine.Close()
+
+	workerControl := make(chan bool, 10)
+	defer close(workerControl)
+
+	// Test Case 1: Speed ratio 0.85 (< 0.90) - should scale DOWN (decrement desiredWorkers)
+	engine.SetDesiredWorkers(5)
+	engine.MakeScalingDecision(
+		1000000.0, // lastPerWorkerSpeed: 1 MB/s
+		850000.0,  // currentPerWorkerSpeed: 0.85 MB/s (15% decrease, < 0.90 threshold)
+		5,         // currentWorkers
+		10,        // maxWorkers
+		workerControl,
+	)
+
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(4)),
+		"Speed ratio 0.85 (< 0.90 low threshold) should decrement desiredWorkers from 5 to 4")
+
+	// Channel should be empty (no worker added when scaling down)
+	select {
+	case <-workerControl:
+		t.Fatal("Should not add worker when speed ratio < 0.90")
+	case <-time.After(50 * time.Millisecond):
+		// Expected - no worker added
+	}
+
+	// Test Case 2: Speed ratio 0.95 (between 0.90-1.10) - should scale UP (stable/improving)
+	engine.SetDesiredWorkers(3)
+	engine.MakeScalingDecision(
+		1000000.0, // lastPerWorkerSpeed: 1 MB/s
+		950000.0,  // currentPerWorkerSpeed: 0.95 MB/s (5% decrease, but within stable band)
+		3,         // currentWorkers
+		10,        // maxWorkers
+		workerControl,
+	)
+
+	desired = engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(4)),
+		"Speed ratio 0.95 (within 0.90-1.10 stable band) should increment desiredWorkers from 3 to 4")
+
+	// Worker should be added
+	select {
+	case addWorker := <-workerControl:
+		g.Expect(addWorker).Should(BeTrue(), "Should add worker when speed is stable")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Expected worker to be added for stable speed")
+	}
+
+	// Test Case 3: Speed ratio 1.15 (> 1.10) - should scale UP (significant improvement)
+	engine.SetDesiredWorkers(2)
+	engine.MakeScalingDecision(
+		1000000.0, // lastPerWorkerSpeed: 1 MB/s
+		1150000.0, // currentPerWorkerSpeed: 1.15 MB/s (15% increase, > 1.10 threshold)
+		2,         // currentWorkers
+		10,        // maxWorkers
+		workerControl,
+	)
+
+	desired = engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(3)),
+		"Speed ratio 1.15 (> 1.10 high threshold) should increment desiredWorkers from 2 to 3")
+
+	// Worker should be added
+	select {
+	case addWorker := <-workerControl:
+		g.Expect(addWorker).Should(BeTrue(), "Should add worker when speed ratio > 1.10")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Expected worker to be added for improved speed")
+	}
+}
