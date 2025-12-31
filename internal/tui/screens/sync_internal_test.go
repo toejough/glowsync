@@ -565,3 +565,67 @@ func TestTruncatePath(t *testing.T) {
 	g.Expect(result).Should(ContainSubstring("..."))
 	g.Expect(len(result)).Should(BeNumerically("<=", 20))
 }
+
+func TestRenderCurrentlyCopying_ShowsOpeningAndFinalizingFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			CurrentFiles: []string{"copying.txt", "opening.txt", "finalizing.txt"},
+			FilesToSync: []*syncengine.FileToSync{
+				{RelativePath: "copying.txt", Status: "copying", Size: 1024, Transferred: 512},
+				{RelativePath: "opening.txt", Status: "opening", Size: 2048, Transferred: 0},
+				{RelativePath: "finalizing.txt", Status: "finalizing", Size: 512, Transferred: 512},
+			},
+		},
+		height: 50,
+	}
+
+	var builder strings.Builder
+	screen.renderCurrentlyCopying(&builder, 10)
+	result := builder.String()
+
+	// Should display all three files
+	g.Expect(result).Should(ContainSubstring("copying.txt"), "should show copying file")
+	g.Expect(result).Should(ContainSubstring("opening.txt"), "should show opening file")
+	g.Expect(result).Should(ContainSubstring("finalizing.txt"), "should show finalizing file")
+
+	// Should show appropriate state indicators
+	g.Expect(result).Should(ContainSubstring("Currently Copying"))
+}
+
+func TestRenderCurrentlyCopying_CountsAllActiveFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create 5 files in different states
+	screen := &SyncScreen{
+		status: &syncengine.Status{
+			CurrentFiles: []string{"file1.txt", "file2.txt", "file3.txt", "file4.txt", "file5.txt"},
+			FilesToSync: []*syncengine.FileToSync{
+				{RelativePath: "file1.txt", Status: "copying", Size: 1024, Transferred: 512},
+				{RelativePath: "file2.txt", Status: "copying", Size: 1024, Transferred: 256},
+				{RelativePath: "file3.txt", Status: "opening", Size: 2048, Transferred: 0},
+				{RelativePath: "file4.txt", Status: "opening", Size: 3072, Transferred: 0},
+				{RelativePath: "file5.txt", Status: "finalizing", Size: 512, Transferred: 512},
+				{RelativePath: "pending.txt", Status: "pending", Size: 1024, Transferred: 0}, // Should not be shown
+			},
+		},
+		height: 50,
+	}
+
+	var builder strings.Builder
+	screen.renderCurrentlyCopying(&builder, 10)
+	result := builder.String()
+
+	// Should display 5 active files (2 copying + 2 opening + 1 finalizing)
+	g.Expect(result).Should(ContainSubstring("file1.txt"))
+	g.Expect(result).Should(ContainSubstring("file2.txt"))
+	g.Expect(result).Should(ContainSubstring("file3.txt"))
+	g.Expect(result).Should(ContainSubstring("file4.txt"))
+	g.Expect(result).Should(ContainSubstring("file5.txt"))
+
+	// Should NOT display pending file
+	g.Expect(result).ShouldNot(ContainSubstring("pending.txt"))
+}

@@ -76,10 +76,27 @@ A simple md issue tracker.
    - description: Remove redundant percentage display in file progress bars. I'd like to keep the second one, and remove
      the first.
 7. the file progress bars section frequently shows a higher number of workers than files being synced
-   - status: backlog
+   - status: in progress
+   - started: 2025-12-31 01:34 EST
    - description: I would expect that if we have 5 workers, we should be syncing 5 files at a time, most of the time.
      However, frequently I see that we have more workers than files being synced, e.g. 5 workers, but only 2 files
      being synced.
+   - investigation: Code already displays "opening" and "finalizing" files, but issue still occurring. Need debug logging to track down actual cause.
+   - hypothesis: Race condition or workers idle between jobs causing mismatch
+   - solution: Add debug logging to track worker count vs displayed file states
+   - implementation:
+     - Added debug logging in 3_sync.go to track active workers vs files by state (copying/opening/finalizing/other)
+     - Logging only enabled when -v (verbose) flag is used
+     - Logs written to /tmp/copy-files-debug.log (or COPY_FILES_LOG env var)
+     - Created comprehensive tests to verify logging works correctly
+   - next steps:
+     - User to run sync with -v flag and examine log file for mismatch patterns
+     - Analyze log data to identify root cause
+     - Implement fix based on findings
+   - updates:
+     - 2025-12-31 01:34 EST: Initial investigation - thought it was missing display states
+     - 2025-12-31 01:41 EST: Code review shows all states already displayed. Adding debug logging to find actual root cause.
+     - 2025-12-31 01:50 EST: Debug logging implemented and tested. Logs worker count vs file states every render.
 8. adaptive worker count never seems to go down
    - status: done
    - started: 2025-12-31 00:41 EST

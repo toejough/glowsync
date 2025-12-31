@@ -383,6 +383,32 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 		}
 	}
 
+	// Debug logging: Track worker vs file display mismatch (Issue #7)
+	var activeWorkers int
+	if s.status != nil {
+		activeWorkers = int(s.status.ActiveWorkers)
+	}
+
+	// Count files by state for debugging
+	var copyingCount, openingCount, finalizingCount, otherCount int
+	for _, file := range s.status.FilesToSync {
+		switch file.Status {
+		case "copying":
+			copyingCount++
+		case "opening":
+			openingCount++
+		case "finalizing":
+			finalizingCount++
+		default:
+			otherCount++
+		}
+	}
+
+	if s.engine != nil {
+		s.engine.LogVerbose(fmt.Sprintf("[DISPLAY] Workers: %d | Files to display: %d (copying:%d opening:%d finalizing:%d other:%d) | CurrentFiles: %d",
+			activeWorkers, len(s.status.FilesToSync), copyingCount, openingCount, finalizingCount, otherCount, len(s.status.CurrentFiles)))
+	}
+
 	// Display up to maxFilesToShow files
 	for _, file := range s.status.FilesToSync {
 		if file.Status == "copying" {
