@@ -330,18 +330,42 @@ func (e *Engine) GetStatus() *Status {
 	status.AnalysisRate = e.Status.AnalysisRate
 
 	// Only copy recently active files from FilesToSync to reduce lock time
-	// UI only needs to see files that are copying or recently completed
+	// PRIORITY: Always include files in CurrentFiles (actively being worked on)
+	// THEN: Fill remaining slots with recently completed files for context
 	// This prevents holding the lock for milliseconds copying 1000+ file pointers
 	status.FilesToSync = make([]*FileToSync, 0, AdaptiveScalingMinIdleTime)
-	recentCount := 0
 
-	maxRecent := AdaptiveScalingMinIdleTime // Only copy last 20 files (enough for UI display)
-	for i := len(e.Status.FilesToSync) - 1; i >= 0 && recentCount < maxRecent; i-- {
-		file := e.Status.FilesToSync[i]
-		//nolint:lll // Condition checks multiple status values for UI display filtering
-		if file.Status == fileStatusOpening || file.Status == fileStatusCopying || file.Status == fileStatusFinalizing || file.Status == fileStatusComplete || file.Status == fileStatusError {
-			status.FilesToSync = append([]*FileToSync{file}, status.FilesToSync...)
-			recentCount++
+	// Create a map of CurrentFiles for O(1) lookup
+	currentFilesMap := make(map[string]bool, len(e.Status.CurrentFiles))
+	for _, currentFile := range e.Status.CurrentFiles {
+		currentFilesMap[currentFile] = true
+	}
+
+	// Step 1: Add ALL files from CurrentFiles first (these are actively being worked on)
+	for _, file := range e.Status.FilesToSync {
+		if currentFilesMap[file.RelativePath] {
+			status.FilesToSync = append(status.FilesToSync, file)
+		}
+	}
+
+	// Step 2: Fill remaining slots (up to 20 total) with recently active files
+	maxRecent := AdaptiveScalingMinIdleTime // 20 files total
+	remainingSlots := maxRecent - len(status.FilesToSync)
+
+	if remainingSlots > 0 {
+		recentCount := 0
+		// Iterate backwards from end (most recent files)
+		for i := len(e.Status.FilesToSync) - 1; i >= 0 && recentCount < remainingSlots; i-- {
+			file := e.Status.FilesToSync[i]
+			// Skip if already added (was in CurrentFiles)
+			if currentFilesMap[file.RelativePath] {
+				continue
+			}
+			//nolint:lll // Condition checks multiple status values for UI display filtering
+			if file.Status == fileStatusOpening || file.Status == fileStatusCopying || file.Status == fileStatusFinalizing || file.Status == fileStatusComplete || file.Status == fileStatusError {
+				status.FilesToSync = append([]*FileToSync{file}, status.FilesToSync...)
+				recentCount++
+			}
 		}
 	}
 

@@ -76,27 +76,43 @@ A simple md issue tracker.
    - description: Remove redundant percentage display in file progress bars. I'd like to keep the second one, and remove
      the first.
 7. the file progress bars section frequently shows a higher number of workers than files being synced
-   - status: in progress
+   - status: done
    - started: 2025-12-31 01:34 EST
+   - completed: 2025-12-31 02:16 EST
    - description: I would expect that if we have 5 workers, we should be syncing 5 files at a time, most of the time.
      However, frequently I see that we have more workers than files being synced, e.g. 5 workers, but only 2 files
      being synced.
-   - investigation: Code already displays "opening" and "finalizing" files, but issue still occurring. Need debug logging to track down actual cause.
-   - hypothesis: Race condition or workers idle between jobs causing mismatch
-   - solution: Add debug logging to track worker count vs displayed file states
-   - implementation:
-     - Added debug logging in 3_sync.go to track active workers vs files by state (copying/opening/finalizing/other)
-     - Logging only enabled when -v (verbose) flag is used
-     - Logs written to /tmp/copy-files-debug.log (or COPY_FILES_LOG env var)
-     - Created comprehensive tests to verify logging works correctly
-   - next steps:
-     - User to run sync with -v flag and examine log file for mismatch patterns
-     - Analyze log data to identify root cause
-     - Implement fix based on findings
+   - root cause identified: GetStatus() filtering bug (sync.go:332-346)
+     - When worker starts a file, it's added to CurrentFiles and status set to "opening"
+     - GetStatus() iterates BACKWARDS from end of FilesToSync array
+     - Only includes last 20 files matching status criteria (opening/copying/finalizing/complete/error)
+     - If FilesToSync has 500+ files and worker picks up file #50:
+       * File #50 is in CurrentFiles (worker tracking)
+       * GetStatus() starts from file #500, finds last 20 active files, stops
+       * File #50 never makes it into the returned FilesToSync array
+       * UI sees 4 workers but only 2 files (those in the last 20)
+     - Log evidence: "Workers: 4 | Files to display: 20 (copying:2 ...) | CurrentFiles: 4"
+       * 4 workers active, 4 files in CurrentFiles, but only 2 have "copying" status in FilesToSync
+   - solution implemented: Priority-based GetStatus() filtering (Option 1)
+     - Step 1: Add ALL files from CurrentFiles first (actively being worked on)
+     - Step 2: Fill remaining slots (up to 20 total) with recently completed files for context
+     - Uses O(1) map lookup to avoid duplicates between steps
+   - TDD workflow:
+     - RED phase (02:08 EST): Wrote 3 failing tests
+       * TestGetStatus_IncludesAllCurrentFiles: Verifies all CurrentFiles in result
+       * TestGetStatus_PrioritizesCurrentFilesOverRecent: Verifies priority over recent files
+       * TestGetStatus_EmptyCurrentFiles: Verifies behavior when no CurrentFiles
+     - GREEN phase (02:12 EST): Implementation in sync.go:332-370
+       * Two-pass algorithm: CurrentFiles first, then recent files
+       * All 3 new tests pass + all existing tests pass
    - updates:
      - 2025-12-31 01:34 EST: Initial investigation - thought it was missing display states
      - 2025-12-31 01:41 EST: Code review shows all states already displayed. Adding debug logging to find actual root cause.
      - 2025-12-31 01:50 EST: Debug logging implemented and tested. Logs worker count vs file states every render.
+     - 2025-12-31 02:02 EST: Root cause identified via log analysis. GetStatus() doesn't include all CurrentFiles in FilesToSync.
+     - 2025-12-31 02:08 EST: RED phase - wrote 3 failing tests for GetStatus() CurrentFiles priority.
+     - 2025-12-31 02:12 EST: GREEN phase - implemented two-pass algorithm. All tests pass.
+     - 2025-12-31 02:16 EST: Fix complete. UI will now always show all actively copying files.
 8. adaptive worker count never seems to go down
    - status: done
    - started: 2025-12-31 00:41 EST

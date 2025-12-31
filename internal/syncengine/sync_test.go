@@ -1366,3 +1366,140 @@ func TestWorkerCASPreventsStampede(t *testing.T) {
 	finalActive := atomic.LoadInt32(&engine.Status.ActiveWorkers)
 	g.Expect(finalActive).Should(Equal(int32(7)), "CAS should prevent stampede - exactly 3 workers should exit")
 }
+
+func TestGetStatus_IncludesAllCurrentFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create 50 files in FilesToSync to simulate a large sync
+	engine.Status.FilesToSync = make([]*syncengine.FileToSync, 50)
+	for i := 0; i < 50; i++ {
+		engine.Status.FilesToSync[i] = &syncengine.FileToSync{
+			RelativePath: fmt.Sprintf("file%d.txt", i),
+			Status:       "complete", // Most files are complete
+			Size:         1024,
+		}
+	}
+
+	// Simulate 4 workers actively working on files early in the array (files 5, 10, 15, 20)
+	// These would be missed by the old backward iteration that only looked at last 20
+	engine.Status.CurrentFiles = []string{"file5.txt", "file10.txt", "file15.txt", "file20.txt"}
+
+	// Set these files to "copying" status
+	engine.Status.FilesToSync[5].Status = "copying"
+	engine.Status.FilesToSync[10].Status = "copying"
+	engine.Status.FilesToSync[15].Status = "copying"
+	engine.Status.FilesToSync[20].Status = "copying"
+
+	// Call GetStatus()
+	status := engine.GetStatus()
+
+	// Verify all 4 CurrentFiles are included in the returned FilesToSync
+	g.Expect(status.CurrentFiles).Should(HaveLen(4), "Should have 4 current files")
+
+	// Build a map of returned files for easy lookup
+	returnedFiles := make(map[string]*syncengine.FileToSync)
+	for _, file := range status.FilesToSync {
+		returnedFiles[file.RelativePath] = file
+	}
+
+	// Verify each CurrentFile is present with correct status
+	for _, currentFile := range status.CurrentFiles {
+		file, found := returnedFiles[currentFile]
+		g.Expect(found).Should(BeTrue(), fmt.Sprintf("CurrentFile %s should be in FilesToSync", currentFile))
+		g.Expect(file.Status).Should(Equal("copying"), fmt.Sprintf("File %s should have copying status", currentFile))
+	}
+}
+
+func TestGetStatus_PrioritizesCurrentFilesOverRecent(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create 100 files to ensure we exceed the 20-file limit
+	engine.Status.FilesToSync = make([]*syncengine.FileToSync, 100)
+	for i := 0; i < 100; i++ {
+		engine.Status.FilesToSync[i] = &syncengine.FileToSync{
+			RelativePath: fmt.Sprintf("file%d.txt", i),
+			Status:       "complete",
+			Size:         1024,
+		}
+	}
+
+	// Set last 25 files to "complete" (recently finished)
+	for i := 75; i < 100; i++ {
+		engine.Status.FilesToSync[i].Status = "complete"
+	}
+
+	// Set 4 files early in the array to "copying" (actively being worked on)
+	engine.Status.CurrentFiles = []string{"file10.txt", "file20.txt", "file30.txt", "file40.txt"}
+	for _, currentFile := range engine.Status.CurrentFiles {
+		for _, file := range engine.Status.FilesToSync {
+			if file.RelativePath == currentFile {
+				file.Status = "copying"
+				break
+			}
+		}
+	}
+
+	// Call GetStatus()
+	status := engine.GetStatus()
+
+	// Build map of returned files
+	returnedFiles := make(map[string]*syncengine.FileToSync)
+	for _, file := range status.FilesToSync {
+		returnedFiles[file.RelativePath] = file
+	}
+
+	// CRITICAL: All CurrentFiles MUST be in the returned FilesToSync
+	for _, currentFile := range status.CurrentFiles {
+		file, found := returnedFiles[currentFile]
+		g.Expect(found).Should(BeTrue(), fmt.Sprintf("CurrentFile %s MUST be in FilesToSync (priority)", currentFile))
+		g.Expect(file.Status).Should(Equal("copying"), fmt.Sprintf("File %s should have copying status", currentFile))
+	}
+
+	// Total returned files should not exceed a reasonable limit (e.g., 20 + currentFiles)
+	// At minimum, we should have all CurrentFiles
+	g.Expect(len(status.FilesToSync)).Should(BeNumerically(">=", len(status.CurrentFiles)),
+		"FilesToSync should at least include all CurrentFiles")
+}
+
+func TestGetStatus_EmptyCurrentFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create 30 complete files
+	engine.Status.FilesToSync = make([]*syncengine.FileToSync, 30)
+	for i := 0; i < 30; i++ {
+		engine.Status.FilesToSync[i] = &syncengine.FileToSync{
+			RelativePath: fmt.Sprintf("file%d.txt", i),
+			Status:       "complete",
+			Size:         1024,
+		}
+	}
+
+	// No CurrentFiles (all workers idle or finished)
+	engine.Status.CurrentFiles = []string{}
+
+	// Call GetStatus()
+	status := engine.GetStatus()
+
+	// Should return last 20 recently active files when CurrentFiles is empty
+	g.Expect(len(status.FilesToSync)).Should(BeNumerically("<=", 20),
+		"Should limit to 20 files when no CurrentFiles")
+	g.Expect(len(status.CurrentFiles)).Should(Equal(0), "CurrentFiles should be empty")
+}
