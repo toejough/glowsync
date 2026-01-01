@@ -241,44 +241,37 @@ func (e *Engine) EnableFileLogging(logPath string) error {
 func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedFiles, currentWorkers int, currentBytes int64, maxWorkers int, workerControl chan bool) {
 	now := e.TimeProvider.Now()
 
-	// Calculate current per-worker speed using rolling window metrics
+	// Calculate current total throughput using rolling window metrics (hill climbing algorithm)
 	if state.LastProcessedFiles > 0 && !state.LastCheckTime.IsZero() {
 		filesProcessed := currentProcessedFiles - state.LastProcessedFiles
 		elapsed := now.Sub(state.LastCheckTime).Seconds()
 
 		if filesProcessed > 0 && elapsed > 0 {
-			var currentPerWorkerSpeed float64
+			var currentThroughput float64
 
-			// Try to use smoothed per-worker speed from rolling window (5 samples)
+			// Try to use smoothed total throughput from rolling window
 			workerMetrics := e.Status.calculateWorkerMetrics()
 
 			// Need at least 2 samples for meaningful comparison
 			if len(e.Status.Workers.RecentSamples) >= 2 {
-				// Use smoothed rate from rolling window
-				currentPerWorkerSpeed = workerMetrics.PerWorkerRate
+				// Use smoothed total rate from rolling window
+				currentThroughput = workerMetrics.TotalRate
 
 				//nolint:lll // Log message with multiple formatted values
-				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s) [smoothed from %d samples]",
-					currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, state.LastPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, len(e.Status.Workers.RecentSamples)))
+				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - total throughput: %.2f MB/s (prev: %.2f MB/s) [smoothed from %d samples]",
+					currentWorkers, filesProcessed, elapsed, currentThroughput/BytesPerKilobyte/BytesPerKilobyte, state.LastThroughput/BytesPerKilobyte/BytesPerKilobyte, len(e.Status.Workers.RecentSamples)))
 			} else {
 				// Fall back to raw point-to-point calculation when insufficient samples
-				bytesPerFile := float64(currentBytes) / float64(currentProcessedFiles)
-				filesPerSecond := float64(filesProcessed) / elapsed
-				currentPerWorkerSpeed = (bytesPerFile * filesPerSecond) / float64(currentWorkers)
+				currentThroughput = float64(currentBytes) / elapsed
 
 				//nolint:lll // Log message with multiple formatted values
-				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - per-worker: %.2f MB/s (prev: %.2f MB/s) [raw calculation - need more samples]",
-					currentWorkers, filesProcessed, elapsed, currentPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte, state.LastPerWorkerSpeed/BytesPerKilobyte/BytesPerKilobyte))
+				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - total throughput: %.2f MB/s (prev: %.2f MB/s) [raw calculation - need more samples]",
+					currentWorkers, filesProcessed, elapsed, currentThroughput/BytesPerKilobyte/BytesPerKilobyte, state.LastThroughput/BytesPerKilobyte/BytesPerKilobyte))
 			}
 
-			// Make scaling decision based on per-worker speed (smoothed or raw)
-			e.MakeScalingDecision(state.LastPerWorkerSpeed, currentPerWorkerSpeed, currentWorkers, maxWorkers, workerControl)
-
-			// Update tracking variables
-			state.LastPerWorkerSpeed = currentPerWorkerSpeed
-			state.LastProcessedFiles = currentProcessedFiles
-			state.FilesAtLastCheck = currentProcessedFiles
-			state.LastCheckTime = now
+			// Make scaling decision using hill climbing algorithm based on total throughput
+			newState := e.HillClimbingScalingDecision(state, currentThroughput, currentWorkers, maxWorkers, workerControl)
+			*state = *newState
 		}
 	} else {
 		// First check - just record baseline
