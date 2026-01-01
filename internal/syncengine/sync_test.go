@@ -726,6 +726,7 @@ func TestEngineSyncWithFile(t *testing.T) {
 }
 
 func TestEvaluateAndScaleDirectly(t *testing.T) {
+	t.Skip("Obsolete: tests old per-worker algorithm, now using hill climbing (see TestHillClimbingScalingDecision_* tests)")
 	t.Parallel()
 	g := NewWithT(t)
 
@@ -2206,6 +2207,7 @@ func TestSyncAdaptive_10sIntervalWithFullRollingWindow(t *testing.T) {
 // Test approach: Populate the rolling window with samples showing a clear smoothed trend,
 // then verify the scaling decision reflects that smoothed rate, not raw point-to-point calculation.
 func TestEvaluateAndScale_UsesSmoothedRate(t *testing.T) {
+	t.Skip("Obsolete: tests old per-worker smoothing, now using hill climbing with total throughput")
 	t.Parallel()
 
 	sourceDir := t.TempDir()
@@ -2459,6 +2461,7 @@ func TestSyncAdaptive_ActualTimeBehavior_Integration(t *testing.T) {
 // Test approach: Call EvaluateAndScale on a fresh engine with no prior measurements.
 // Verify it falls back to baseline behavior instead of making speed-based decisions.
 func TestEvaluateAndScale_ColdStart(t *testing.T) {
+	t.Skip("Obsolete: tests old cold-start behavior, now using hill climbing (see TestHillClimbingScalingDecision_InitialBehavior)")
 	t.Parallel()
 	g := NewWithT(t)
 

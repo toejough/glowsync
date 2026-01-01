@@ -58,18 +58,11 @@ var (
 	ErrTooManyErrors     = errors.New("too many errors, aborting sync")
 )
 
-// AdaptiveScalingState holds the state for adaptive scaling algorithm
+// AdaptiveScalingState holds the state for hill climbing adaptive scaling algorithm
 type AdaptiveScalingState struct {
-	// Old fields (for EvaluateAndScale - per-worker algorithm)
-	LastProcessedFiles int
-	LastPerWorkerSpeed float64
-	FilesAtLastCheck   int
-
-	// New fields (for HillClimbingScalingDecision - total throughput algorithm)
-	LastThroughput float64   // Total bytes/sec (not per-worker)
-	LastAdjustment int       // Direction: +1 (added worker), -1 (removed), 0 (no change)
-
-	LastCheckTime  time.Time // Shared by both algorithms
+	LastThroughput float64   // Total system throughput in bytes/sec
+	LastAdjustment int       // Last direction: +1 (added worker), -1 (removed), 0 (no change)
+	LastCheckTime  time.Time // Time of last evaluation
 }
 
 // Engine handles the synchronization process
@@ -242,11 +235,10 @@ func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedF
 	now := e.TimeProvider.Now()
 
 	// Calculate current total throughput using rolling window metrics (hill climbing algorithm)
-	if state.LastProcessedFiles > 0 && !state.LastCheckTime.IsZero() {
-		filesProcessed := currentProcessedFiles - state.LastProcessedFiles
+	if !state.LastCheckTime.IsZero() {
 		elapsed := now.Sub(state.LastCheckTime).Seconds()
 
-		if filesProcessed > 0 && elapsed > 0 {
+		if elapsed > 0 {
 			var currentThroughput float64
 
 			// Try to use smoothed total throughput from rolling window
@@ -258,43 +250,27 @@ func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedF
 				currentThroughput = workerMetrics.TotalRate
 
 				//nolint:lll // Log message with multiple formatted values
-				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - total throughput: %.2f MB/s (prev: %.2f MB/s) [smoothed from %d samples]",
-					currentWorkers, filesProcessed, elapsed, currentThroughput/BytesPerKilobyte/BytesPerKilobyte, state.LastThroughput/BytesPerKilobyte/BytesPerKilobyte, len(e.Status.Workers.RecentSamples)))
+				e.logToFile(fmt.Sprintf("HillClimbing: Evaluation at %.1fs - %d workers, total throughput: %.2f MB/s (prev: %.2f MB/s) [%d samples]",
+					elapsed, currentWorkers, currentThroughput/BytesPerKilobyte/BytesPerKilobyte, state.LastThroughput/BytesPerKilobyte/BytesPerKilobyte, len(e.Status.Workers.RecentSamples)))
 			} else {
 				// Fall back to raw point-to-point calculation when insufficient samples
 				currentThroughput = float64(currentBytes) / elapsed
 
 				//nolint:lll // Log message with multiple formatted values
-				e.logToFile(fmt.Sprintf("Adaptive: Evaluated %d workers over %d files in %.1fs - total throughput: %.2f MB/s (prev: %.2f MB/s) [raw calculation - need more samples]",
-					currentWorkers, filesProcessed, elapsed, currentThroughput/BytesPerKilobyte/BytesPerKilobyte, state.LastThroughput/BytesPerKilobyte/BytesPerKilobyte))
+				e.logToFile(fmt.Sprintf("HillClimbing: Evaluation at %.1fs - %d workers, total throughput: %.2f MB/s (prev: %.2f MB/s) [raw - need more samples]",
+					elapsed, currentWorkers, currentThroughput/BytesPerKilobyte/BytesPerKilobyte, state.LastThroughput/BytesPerKilobyte/BytesPerKilobyte))
 			}
 
 			// Make scaling decision using hill climbing algorithm based on total throughput
 			newState := e.HillClimbingScalingDecision(state, currentThroughput, currentWorkers, maxWorkers, workerControl)
 
-			// Update state with new hill climbing fields
-			state.LastThroughput = newState.LastThroughput
-			state.LastAdjustment = newState.LastAdjustment
-			state.LastCheckTime = newState.LastCheckTime
-
-			// Also update the old tracking fields to prevent hitting baseline path again
-			state.LastProcessedFiles = currentProcessedFiles
-			state.FilesAtLastCheck = currentProcessedFiles
+			// Update state with new values from hill climbing
+			*state = *newState
 		}
 	} else {
-		// First check - just record baseline
-		state.LastProcessedFiles = currentProcessedFiles
-		state.FilesAtLastCheck = currentProcessedFiles
+		// First check - initialize state and let hill climbing handle it on next evaluation
 		state.LastCheckTime = now
-
-		// Add a worker to start scaling
-		if currentWorkers < maxWorkers {
-			workerControl <- true
-
-			filesSinceLastCheck := currentProcessedFiles - state.FilesAtLastCheck
-			e.logToFile(fmt.Sprintf("Adaptive: Baseline established after %d files, adding worker (%d -> %d)",
-				filesSinceLastCheck, currentWorkers, currentWorkers+1))
-		}
+		e.logToFile(fmt.Sprintf("HillClimbing: Initial baseline - starting with %d workers", currentWorkers))
 	}
 }
 
