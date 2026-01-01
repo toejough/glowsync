@@ -485,9 +485,16 @@ func (e *Engine) HillClimbingScalingDecision(
 
 		if throughputRatio > improvementThreshold {
 			// Throughput improved >5% - continue in same direction
-			adjustment = state.LastAdjustment
-			e.logToFile(fmt.Sprintf("HillClimbing: Throughput improved (+%.1f%%), continuing direction %+d",
-				(throughputRatio-1)*PercentageScale, adjustment))
+			// Special case: if last adjustment was 0 (stayed at boundary), use random perturbation
+			if state.LastAdjustment == 0 {
+				adjustment = rand.Intn(2)*2 - 1 // -1 or +1
+				e.logToFile(fmt.Sprintf("HillClimbing: Throughput improved (+%.1f%%), last was boundary hold, random %+d",
+					(throughputRatio-1)*PercentageScale, adjustment))
+			} else {
+				adjustment = state.LastAdjustment
+				e.logToFile(fmt.Sprintf("HillClimbing: Throughput improved (+%.1f%%), continuing direction %+d",
+					(throughputRatio-1)*PercentageScale, adjustment))
+			}
 		} else if throughputRatio < degradationThreshold {
 			// Throughput degraded >5% - normally reverse direction
 			// Special case: if we're at min/max boundary and were heading towards it,
@@ -500,9 +507,16 @@ func (e *Engine) HillClimbingScalingDecision(
 					(throughputRatio-1)*PercentageScale, currentDesired))
 			} else {
 				// Normal case: reverse direction
-				adjustment = -state.LastAdjustment
-				e.logToFile(fmt.Sprintf("HillClimbing: Throughput degraded (%.1f%%), reversing direction to %+d",
-					(throughputRatio-1)*PercentageScale, adjustment))
+				// Special case: if last adjustment was 0 (stayed at boundary), use random perturbation
+				if state.LastAdjustment == 0 {
+					adjustment = rand.Intn(2)*2 - 1 // -1 or +1
+					e.logToFile(fmt.Sprintf("HillClimbing: Throughput degraded (%.1f%%), last was boundary hold, random %+d",
+						(throughputRatio-1)*PercentageScale, adjustment))
+				} else {
+					adjustment = -state.LastAdjustment
+					e.logToFile(fmt.Sprintf("HillClimbing: Throughput degraded (%.1f%%), reversing direction to %+d",
+						(throughputRatio-1)*PercentageScale, adjustment))
+				}
 			}
 		} else {
 			// Throughput flat (±5%) - random perturbation
