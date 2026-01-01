@@ -45,17 +45,27 @@ A simple md issue tracker.
 3. there's no border around the app in the analysis screen
    - status: backlog
 4. fix impgen V1 deprecation warnings in mage check
-   - status: backlog
+   - status: done
    - created: 2025-12-30 23:36 EST
+   - completed: 2026-01-01 02:19 EST
    - description: Update impgen directives to use V2 syntax
+   - implementation: Complete migration from impgen V1 to V2 API
+     - Updated 10 callable wrapper directives to use --target flag
+     - Updated 6 interface mock directives to use --dependency flag
+     - Migrated all test code to V2 API (Mock* constructors, .Eventually() for concurrent code)
+     - Fixed concurrency issues in sync_test.go
+     - All tests passing, zero deprecation warnings
    - affected files:
      - internal/config/config.go - V1 callable wrapper
-     - internal/syncengine/sync.go - V1 callable wrapper
+     - internal/syncengine/sync.go - V1 callable wrapper (3 directives)
      - internal/syncengine/sync_test.go - V1 interface mock
      - pkg/fileops/fileops_di.go - V1 callable wrapper
      - pkg/fileops/fileops_di_test.go - V1 interface mock
+     - pkg/fileops/fileops_test.go - V1 callable wrapper (7 directives)
      - pkg/filesystem/filesystem_test.go - V1 interface mock
    - migration: Use --target flag for callable wrappers, --dependency flag for interface mocks
+   - updates:
+     - 2026-01-01 02:19 EST: Migration complete, all tests passing (commit 814c0c2)
 5. add SFTP documentation to help text
    - status: backlog
    - created: 2025-12-30 23:39 EST
