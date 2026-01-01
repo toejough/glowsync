@@ -10,22 +10,14 @@ import (
 	"github.com/pkg/sftp"
 )
 
-// sftpFile is an interface that abstracts sftp.File operations for testing.
-type sftpFile interface {
-	io.Reader
-	io.Writer
-	io.Closer
-	Stat() (os.FileInfo, error)
-}
-
-// clientPool is an interface that abstracts SFTP client pool operations for testing.
-type clientPool interface {
+// ClientPool is an interface that abstracts SFTP client pool operations for testing.
+type ClientPool interface {
 	Acquire() (*sftp.Client, error)
-	Release(*sftp.Client)
+	Release(client *sftp.Client)
 	Close() error
 }
 
-// PooledSFTPFile wraps an sftpFile and automatically releases the associated
+// PooledSFTPFile wraps an SftpFile and automatically releases the associated
 // SFTP client back to the pool when Close() is called.
 //
 // This ensures that pool clients are properly returned even if the caller
@@ -45,9 +37,9 @@ type clientPool interface {
 //	pooledFile := NewPooledSFTPFile(file, client, pool)
 //	defer pooledFile.Close() // Automatically releases client
 type PooledSFTPFile struct {
-	file   sftpFile
+	file   SftpFile
 	client *sftp.Client
-	pool   clientPool
+	pool   ClientPool
 	mu     sync.Mutex
 	closed bool
 }
@@ -61,17 +53,17 @@ type PooledSFTPFile struct {
 //   - pool: The pool to release the client to on Close() (must not be nil)
 //
 // Returns an error if any parameter is nil.
-func NewPooledSFTPFile(file sftpFile, client *sftp.Client, pool clientPool) (*PooledSFTPFile, error) {
+func NewPooledSFTPFile(file SftpFile, client *sftp.Client, pool ClientPool) (*PooledSFTPFile, error) {
 	if file == nil {
-		return nil, errors.New("file cannot be nil")
+		return nil, errors.New("file cannot be nil") //nolint:err113 // Simple nil check validation
 	}
 
 	if client == nil {
-		return nil, errors.New("client cannot be nil")
+		return nil, errors.New("client cannot be nil") //nolint:err113 // Simple nil check validation
 	}
 
 	if pool == nil {
-		return nil, errors.New("pool cannot be nil")
+		return nil, errors.New("pool cannot be nil") //nolint:err113 // Simple nil check validation
 	}
 
 	return &PooledSFTPFile{
@@ -80,32 +72,6 @@ func NewPooledSFTPFile(file sftpFile, client *sftp.Client, pool clientPool) (*Po
 		pool:   pool,
 		closed: false,
 	}, nil
-}
-
-// Read reads up to len(p) bytes into p from the underlying file.
-// Returns fs.ErrClosed if the file has been closed.
-func (f *PooledSFTPFile) Read(p []byte) (int, error) {
-	f.mu.Lock()
-	if f.closed {
-		f.mu.Unlock()
-		return 0, fs.ErrClosed
-	}
-	f.mu.Unlock()
-
-	return f.file.Read(p)
-}
-
-// Write writes len(p) bytes from p to the underlying file.
-// Returns fs.ErrClosed if the file has been closed.
-func (f *PooledSFTPFile) Write(p []byte) (int, error) {
-	f.mu.Lock()
-	if f.closed {
-		f.mu.Unlock()
-		return 0, fs.ErrClosed
-	}
-	f.mu.Unlock()
-
-	return f.file.Write(p)
 }
 
 // Close closes the underlying file and releases the SFTP client back to the pool.
@@ -135,7 +101,20 @@ func (f *PooledSFTPFile) Close() error {
 	f.pool.Release(f.client)
 
 	// Return file close error (if any)
-	return fileErr
+	return fileErr //nolint:wrapcheck // Interface method, caller handles wrapping
+}
+
+// Read reads up to len(p) bytes into p from the underlying file.
+// Returns fs.ErrClosed if the file has been closed.
+func (f *PooledSFTPFile) Read(p []byte) (int, error) { //nolint:varnamelen // p is idiomatic for byte slice
+	f.mu.Lock()
+	if f.closed {
+		f.mu.Unlock()
+		return 0, fs.ErrClosed
+	}
+	f.mu.Unlock()
+
+	return f.file.Read(p) //nolint:wrapcheck // Interface method, caller handles wrapping
 }
 
 // Stat returns file information for the underlying file.
@@ -148,5 +127,28 @@ func (f *PooledSFTPFile) Stat() (os.FileInfo, error) {
 	}
 	f.mu.Unlock()
 
-	return f.file.Stat()
+	return f.file.Stat() //nolint:wrapcheck // Interface method, caller handles wrapping
+}
+
+// Write writes len(p) bytes from p to the underlying file.
+// Returns fs.ErrClosed if the file has been closed.
+func (f *PooledSFTPFile) Write(p []byte) (int, error) { //nolint:varnamelen // p is idiomatic for byte slice
+	f.mu.Lock()
+	if f.closed {
+		f.mu.Unlock()
+		return 0, fs.ErrClosed
+	}
+	f.mu.Unlock()
+
+	return f.file.Write(p) //nolint:wrapcheck // Interface method, caller handles wrapping
+}
+
+// SftpFile is an interface that abstracts sftp.File operations for testing.
+//
+//nolint:iface // Intentionally separate from File for SFTP-specific mocking and type safety
+type SftpFile interface {
+	io.Reader
+	io.Writer
+	io.Closer
+	Stat() (os.FileInfo, error)
 }

@@ -1,3 +1,4 @@
+//nolint:testpackage // Internal test - needs access to unexported screen internals
 package screens
 
 import (
@@ -6,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/syncengine"
 )
 
 func TestSyncScreen_DebugLogging(t *testing.T) {
 	t.Parallel()
-	g := NewWithT(t)
+	g := NewWithT(t) //nolint:varnamelen // g is idiomatic for Gomega
 
 	// Create a temporary log file
 	logFile := filepath.Join(t.TempDir(), "debug.log")
@@ -66,7 +67,7 @@ func TestSyncScreen_DebugLogging(t *testing.T) {
 
 func TestSyncScreen_DebugLogging_NoLogWhenNotVerbose(t *testing.T) {
 	t.Parallel()
-	g := NewWithT(t)
+	g := NewWithT(t) //nolint:varnamelen // g is idiomatic for Gomega
 
 	// Create a temporary log file
 	logFile := filepath.Join(t.TempDir(), "debug.log")
@@ -103,6 +104,7 @@ func TestSyncScreen_DebugLogging_NoLogWhenNotVerbose(t *testing.T) {
 		if !strings.Contains(err.Error(), "no such file") {
 			g.Expect(err).ShouldNot(HaveOccurred())
 		}
+
 		return
 	}
 

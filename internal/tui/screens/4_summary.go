@@ -39,7 +39,6 @@ func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error, l
 // Init implements tea.Model
 func (s SummaryScreen) Init() tea.Cmd {
 	// Ring bell for successful completion (delight factor for long-running operations)
-	//nolint:goconst // State strings used for clarity
 	if s.finalState == "complete" && (s.status == nil || s.status.FailedFiles == 0) {
 		fmt.Print("\a")
 	}

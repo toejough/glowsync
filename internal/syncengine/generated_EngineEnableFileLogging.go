@@ -3,9 +3,10 @@
 package syncengine
 
 import (
-	_imptest "github.com/toejough/imptest/imptest"
 	_reflect "reflect"
 	_testing "testing"
+
+	_imptest "github.com/toejough/imptest/imptest"
 )
 
 // EngineEnableFileLogging wraps a callable function for testing.

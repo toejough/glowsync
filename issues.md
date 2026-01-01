@@ -500,3 +500,47 @@ A simple md issue tracker.
      - Status initialized to "counting" before operation actually starts
      - Status not updated when transitioning from access to counting
      - Generic "counting" status used for entire analysis phase regardless of sub-operation
+23. Code quality cleanup - eliminate manual mocks and achieve clean mage check
+   - status: blocked
+   - priority: high
+   - created: 2026-01-01 02:56 EST
+   - started: 2026-01-01 02:57 EST
+   - description: Clean up codebase to use imptest-generated mocks exclusively and pass all quality checks
+   - timeline:
+     - 2026-01-01 02:57 EST - Starting assessment: running mage check and auditing for manual mocks
+     - 2026-01-01 03:01 EST - PLAN MODE: Planning systematic migration of manual mocks to imptest-generated mocks
+     - 2026-01-01 03:04 EST - RED: Writing validation test for imptest V2 API understanding
+     - 2026-01-01 03:16 EST - GREEN: Validation test passes - imptest V2 API pattern understood. Starting systematic migration of 18 tests
+     - 2026-01-01 03:26 EST - Step 2 complete: Migrated 6 simple tests (Read, Stat, ImplementsInterface, 3 NilSafety tests). Exported SftpFile and ClientPool interfaces for testability
+     - 2026-01-01 03:44 EST - Steps 3-8 complete: All 17 pooled_file tests migrated to imptest. All manual mocks removed (~80 lines deleted)
+     - 2026-01-01 03:44 EST - validateSFTPURL coverage: 0% → 100% (8 test cases, exceeds 80% requirement)
+     - 2026-01-01 03:44 EST - Final mage check: BLOCKED by sftp_connection.go Close() at 0% coverage (needs 80%+)
+     - 2026-01-01 11:54 EST - Refactored sftp_connection.go to use SSHClientCloser and SFTPClientCloser interfaces
+     - 2026-01-01 11:54 EST - Generated imptest mocks for new interfaces
+     - 2026-01-01 11:54 EST - Added comprehensive Close() tests (5 test cases: nil clients, both succeed, SFTP fails, SSH fails, both fail)
+     - 2026-01-01 11:54 EST - sftp_connection.go Close() coverage: 0% → 100%
+     - 2026-01-01 11:54 EST - NEW BLOCKER: internal/syncengine/sync.go:234 EvaluateAndScale at 0% coverage (needs 80%+)
+     - 2026-01-01 12:23 EST - EvaluateAndScale coverage: 0% → 100% (3 test cases)
+     - 2026-01-01 12:23 EST - Client() and SSHClient() coverage: 0% → 100% (nil path tests)
+     - 2026-01-01 12:23 EST - parseSFTPURL coverage: 0% → 100% (3 test cases in url_parser_test.go)
+     - 2026-01-01 12:23 EST - Deleted dead code: sftp_file.go (completely unused), NewSFTPClientPool (unused wrapper)
+     - 2026-01-01 12:23 EST - PARTIAL SUCCESS: All manual mocks eliminated ✅, All tests passing ✅, 100% function coverage achieved ✅
+     - 2026-01-01 12:23 EST - BLOCKER: 204 pre-existing linter issues preventing clean mage check ❌
+   - requirements:
+     - Use imptest in all tests unless impossible - manually created mocks should not exist
+     - Get a passing `mage check` result (all linters, all tests passing)
+   - scope:
+     - Audit all test files for manual mock implementations
+     - Replace manual mocks with imptest-generated mocks where possible
+     - Document cases where imptest cannot be used (if any)
+     - Fix all linter violations
+     - Ensure all tests pass with `-race` flag
+   - benefits:
+     - Consistent testing patterns across codebase
+     - Reduced maintenance burden (generated code vs manual mocks)
+     - Improved code quality and reliability
+   - acceptance criteria:
+     - Zero manual mock implementations in test files
+     - `mage check` passes with zero errors/warnings
+     - All tests pass including race detector
+     - Documentation of any exceptions (where imptest cannot be used)

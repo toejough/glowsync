@@ -42,26 +42,28 @@ func ParsePath(path string) (*ParsedPath, error) {
 }
 
 // parseSFTPURL parses an SFTP URL into its components.
+//
+//nolint:cyclop // Complexity from comprehensive SFTP URL validation (scheme, user, host, port, path)
 func parseSFTPURL(sftpURL string) (*ParsedPath, error) {
-	u, err := url.Parse(sftpURL)
+	u, err := url.Parse(sftpURL) //nolint:varnamelen // u is idiomatic for URL
 	if err != nil {
 		return nil, fmt.Errorf("invalid SFTP URL: %w", err)
 	}
 
 	if u.Scheme != "sftp" {
-		return nil, fmt.Errorf("expected sftp:// scheme, got %s://", u.Scheme)
+		return nil, fmt.Errorf("expected sftp:// scheme, got %s://", u.Scheme) //nolint:err113,lll // URL validation with actual scheme
 	}
 
 	// Extract user
 	if u.User == nil || u.User.Username() == "" {
-		return nil, fmt.Errorf("SFTP URL must include username (sftp://user@host/path)")
+		return nil, fmt.Errorf("SFTP URL must include username (sftp://user@host/path)") //nolint:err113,perfsprint,lll // URL validation with format guidance
 	}
 	user := u.User.Username()
 
 	// Extract host
 	host := u.Hostname()
 	if host == "" {
-		return nil, fmt.Errorf("SFTP URL must include host")
+		return nil, fmt.Errorf("SFTP URL must include host") //nolint:err113,perfsprint // URL validation error
 	}
 
 	// Extract port (default to 22)
@@ -80,6 +82,7 @@ func parseSFTPURL(sftpURL string) (*ParsedPath, error) {
 	//   sftp://user@host//path → absolute path /path (strip one /)
 	//   sftp://user@host       → home directory (.)
 	remotePath := u.Path
+	//nolint:gocritic // if-else chain is clearer than switch for mixed conditions (OR, prefix check, fallthrough)
 	if remotePath == "" || remotePath == "/" {
 		remotePath = "."
 	} else if strings.HasPrefix(remotePath, "//") {

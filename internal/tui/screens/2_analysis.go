@@ -284,74 +284,6 @@ func (s AnalysisScreen) renderAnalysisLog(builder *strings.Builder) {
 	}
 }
 
-func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
-	var builder strings.Builder
-
-	// Show elapsed time
-	var elapsed time.Duration
-	if !status.AnalysisStartTime.IsZero() {
-		elapsed = time.Since(status.AnalysisStartTime)
-	}
-
-	// Show items found
-	builder.WriteString(fmt.Sprintf("Found: %d items", status.ScannedFiles))
-
-	// Show scan rate if available
-	if status.AnalysisRate > 0 {
-		builder.WriteString(fmt.Sprintf(" (%.1f items/s)", status.AnalysisRate))
-	}
-
-	builder.WriteString("\n")
-
-	// Show elapsed time
-	if elapsed > 0 {
-		builder.WriteString(fmt.Sprintf("Elapsed: %s\n", shared.FormatDuration(elapsed)))
-	}
-
-	builder.WriteString("\n")
-	builder.WriteString(s.spinner.View())
-	builder.WriteString(" Counting...")
-
-	return builder.String()
-}
-
-func (s AnalysisScreen) renderProcessingProgress(
-	status *syncengine.Status,
-	progress syncengine.ProgressMetrics,
-) string {
-	var builder strings.Builder
-
-	// Progress bar using overall percentage
-	builder.WriteString(s.overallProgress.ViewAs(progress.OverallPercent))
-	builder.WriteString("\n")
-
-	// Files line: "Files: 123 / 456 (27.0%)"
-	fmt.Fprintf(&builder, "Files: %d / %d (%.1f%%)\n",
-		status.ScannedFiles,
-		status.TotalFilesToScan,
-		progress.FilesPercent)
-
-	// Bytes line: "Bytes: 1.2 MB / 4.5 MB (26.7%)"
-	fmt.Fprintf(&builder, "Bytes: %s / %s (%.1f%%)\n",
-		shared.FormatBytes(status.ScannedBytes),
-		shared.FormatBytes(status.TotalBytesToScan),
-		progress.BytesPercent)
-
-	// Time line: "Time: 00:15 / 00:56 (26.8%)"
-	var elapsed time.Duration
-	if !status.AnalysisStartTime.IsZero() {
-		elapsed = time.Since(status.AnalysisStartTime)
-	}
-
-	totalTime := elapsed + progress.EstimatedTimeRemaining
-	fmt.Fprintf(&builder, "Time: %s / %s (%.1f%%)\n",
-		shared.FormatDuration(elapsed),
-		shared.FormatDuration(totalTime),
-		progress.TimePercent)
-
-	return builder.String()
-}
-
 func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 	if s.engine == nil || s.status == nil {
 		return
@@ -413,6 +345,37 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
+func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
+	var builder strings.Builder
+
+	// Show elapsed time
+	var elapsed time.Duration
+	if !status.AnalysisStartTime.IsZero() {
+		elapsed = time.Since(status.AnalysisStartTime)
+	}
+
+	// Show items found
+	builder.WriteString(fmt.Sprintf("Found: %d items", status.ScannedFiles))
+
+	// Show scan rate if available
+	if status.AnalysisRate > 0 {
+		builder.WriteString(fmt.Sprintf(" (%.1f items/s)", status.AnalysisRate))
+	}
+
+	builder.WriteString("\n")
+
+	// Show elapsed time
+	if elapsed > 0 {
+		builder.WriteString(fmt.Sprintf("Elapsed: %s\n", shared.FormatDuration(elapsed)))
+	}
+
+	builder.WriteString("\n")
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" Counting...")
+
+	return builder.String()
+}
+
 func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
 	maxWidth := shared.CalculateMaxPathWidth(s.width)
 	truncatedPath := shared.RenderPathPlain(s.status.CurrentPath, maxWidth)
@@ -440,4 +403,41 @@ func (s AnalysisScreen) renderInitializingView() string {
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
 	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+func (s AnalysisScreen) renderProcessingProgress(
+	status *syncengine.Status,
+	progress syncengine.ProgressMetrics,
+) string {
+	var builder strings.Builder
+
+	// Progress bar using overall percentage
+	builder.WriteString(s.overallProgress.ViewAs(progress.OverallPercent))
+	builder.WriteString("\n")
+
+	// Files line: "Files: 123 / 456 (27.0%)"
+	fmt.Fprintf(&builder, "Files: %d / %d (%.1f%%)\n",
+		status.ScannedFiles,
+		status.TotalFilesToScan,
+		progress.FilesPercent)
+
+	// Bytes line: "Bytes: 1.2 MB / 4.5 MB (26.7%)"
+	fmt.Fprintf(&builder, "Bytes: %s / %s (%.1f%%)\n",
+		shared.FormatBytes(status.ScannedBytes),
+		shared.FormatBytes(status.TotalBytesToScan),
+		progress.BytesPercent)
+
+	// Time line: "Time: 00:15 / 00:56 (26.8%)"
+	var elapsed time.Duration
+	if !status.AnalysisStartTime.IsZero() {
+		elapsed = time.Since(status.AnalysisStartTime)
+	}
+
+	totalTime := elapsed + progress.EstimatedTimeRemaining
+	fmt.Fprintf(&builder, "Time: %s / %s (%.1f%%)\n",
+		shared.FormatDuration(elapsed),
+		shared.FormatDuration(totalTime),
+		progress.TimePercent)
+
+	return builder.String()
 }

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner" //nolint:depguard // Needed for TUI testing
-	tea "github.com/charmbracelet/bubbletea"   //nolint:depguard // Needed for TUI testing
-	. "github.com/onsi/gomega"                 //nolint:revive // Dot import is idiomatic for Gomega matchers
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/tui/screens"

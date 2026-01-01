@@ -29,6 +29,8 @@ allow = [
 	'github.com/charmbracelet/lipgloss',
 	'github.com/joe/copy-files',
 	'github.com/magefile/mage',
+	'github.com/pkg/sftp',
+	'golang.org/x/crypto/ssh',
 ]
 
 [linters.settings.depguard.rules.test]
@@ -42,6 +44,8 @@ allow = [
 	'github.com/toejough/imptest',
 	'github.com/toejough/go-reorder',
 	'github.com/joe/copy-files',
+	'github.com/pkg/sftp',
+	'golang.org/x/crypto/ssh',
 ]
 
 [linters.settings.nlreturn]

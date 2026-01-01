@@ -10,16 +10,6 @@ import (
 	"github.com/joe/copy-files/internal/syncengine"
 )
 
-// mustNewEngine creates a new engine and fails the test if there's an error
-func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
-	t.Helper()
-	engine, err := syncengine.NewEngine(source, dest)
-	if err != nil {
-		t.Fatalf("NewEngine failed: %v", err)
-	}
-	return engine
-}
-
 func TestAnalysisHandleTick(t *testing.T) {
 	t.Parallel()
 	gomega := NewWithT(t)
@@ -96,4 +86,15 @@ func TestSyncHandleTickWithoutEngine(t *testing.T) {
 
 	gomega.Expect(updatedModel).ShouldNot(BeNil())
 	gomega.Expect(cmd).ShouldNot(BeNil())
+}
+
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+
+	return engine
 }

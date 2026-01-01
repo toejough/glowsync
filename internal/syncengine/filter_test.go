@@ -1,4 +1,3 @@
-//nolint:varnamelen // Test files use idiomatic short variable names (t, tt, etc.)
 package syncengine_test
 
 import (

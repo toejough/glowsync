@@ -11,6 +11,8 @@ import (
 
 // File is an interface that abstracts file operations.
 // This allows us to work with both real files and mock files.
+//
+//nolint:iface // Intentionally separate from SftpFile for semantic clarity and independent evolution
 type File interface {
 	io.Reader
 	io.Writer

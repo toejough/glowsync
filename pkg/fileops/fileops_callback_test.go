@@ -9,37 +9,6 @@ import (
 	"github.com/onsi/gomega"
 )
 
-// TestScanProgressCallback_NewSignature verifies the new callback signature works.
-func TestScanProgressCallback_NewSignature(t *testing.T) {
-	t.Parallel()
-	gomegaInstance := gomega.NewWithT(t)
-
-	// Test that we can create and call a callback with the new signature
-	var callbackCalled bool
-	var receivedPath string
-	var receivedScannedCount int
-	var receivedTotalCount int
-	var receivedFileSize int64
-
-	callback := func(path string, scannedCount int, totalCount int, fileSize int64) {
-		callbackCalled = true
-		receivedPath = path
-		receivedScannedCount = scannedCount
-		receivedTotalCount = totalCount
-		receivedFileSize = fileSize
-	}
-
-	// Call the callback with test data
-	callback("/test/path", 5, 10, 1024)
-
-	// Verify the callback was invoked with correct parameters
-	gomegaInstance.Expect(callbackCalled).Should(gomega.BeTrue(), "Callback should have been called")
-	gomegaInstance.Expect(receivedPath).Should(gomega.Equal("/test/path"))
-	gomegaInstance.Expect(receivedScannedCount).Should(gomega.Equal(5))
-	gomegaInstance.Expect(receivedTotalCount).Should(gomega.Equal(10))
-	gomegaInstance.Expect(receivedFileSize).Should(gomega.Equal(int64(1024)))
-}
-
 // TestScanDirectoryWithProgress_PassesFileSize verifies that ScanDirectoryWithProgress
 // passes file size information to the callback.
 func TestScanDirectoryWithProgress_PassesFileSize(t *testing.T) {
@@ -96,4 +65,35 @@ func TestScanDirectoryWithProgress_PassesFileSize(t *testing.T) {
 	// Verify scanned counts increment
 	gomegaInstance.Expect(callbacks[0].scannedCnt).Should(gomega.Equal(1))
 	gomegaInstance.Expect(callbacks[1].scannedCnt).Should(gomega.Equal(2))
+}
+
+// TestScanProgressCallback_NewSignature verifies the new callback signature works.
+func TestScanProgressCallback_NewSignature(t *testing.T) {
+	t.Parallel()
+	gomegaInstance := gomega.NewWithT(t)
+
+	// Test that we can create and call a callback with the new signature
+	var callbackCalled bool
+	var receivedPath string
+	var receivedScannedCount int
+	var receivedTotalCount int
+	var receivedFileSize int64
+
+	callback := func(path string, scannedCount int, totalCount int, fileSize int64) {
+		callbackCalled = true
+		receivedPath = path
+		receivedScannedCount = scannedCount
+		receivedTotalCount = totalCount
+		receivedFileSize = fileSize
+	}
+
+	// Call the callback with test data
+	callback("/test/path", 5, 10, 1024)
+
+	// Verify the callback was invoked with correct parameters
+	gomegaInstance.Expect(callbackCalled).Should(gomega.BeTrue(), "Callback should have been called")
+	gomegaInstance.Expect(receivedPath).Should(gomega.Equal("/test/path"))
+	gomegaInstance.Expect(receivedScannedCount).Should(gomega.Equal(5))
+	gomegaInstance.Expect(receivedTotalCount).Should(gomega.Equal(10))
+	gomegaInstance.Expect(receivedFileSize).Should(gomega.Equal(int64(1024)))
 }

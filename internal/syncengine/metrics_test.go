@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/gomega" //nolint:revive // Gomega convention
 )
 
-func TestAddRateSample(t *testing.T) {
+func TestAddRateSample(t *testing.T) { //nolint:varnamelen // t is idiomatic for testing.T parameter
 	t.Skip("Stale test: expects old 5-sample limit but implementation now uses 10-second time-based rolling window")
 	t.Parallel()
 

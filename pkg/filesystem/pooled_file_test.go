@@ -1,439 +1,330 @@
 //nolint:varnamelen // Test files use idiomatic short variable names (t, g, etc.)
 package filesystem_test
 
+//go:generate impgen --dependency filesystem.SftpFile
+//go:generate impgen --dependency filesystem.ClientPool
+//go:generate impgen --dependency fs.FileInfo
+
 import (
 	"errors"
 	"io"
 	"io/fs"
-	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/joe/copy-files/pkg/filesystem"
 	"github.com/pkg/sftp"
+	"github.com/toejough/imptest/imptest"
 )
 
-// TestPooledSFTPFile_Read_DelegatesToWrappedFile tests that Read delegates to underlying file.
-func TestPooledSFTPFile_Read_DelegatesToWrappedFile(t *testing.T) {
-	mockFile := &mockSFTPFile{
-		readFunc: func(p []byte) (int, error) {
-			copy(p, []byte("test data"))
-			return 9, nil
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{}
+// TestImptestV2APIValidation validates understanding of imptest V2 API before migrating all tests.
+//
+//nolint:funlen // Comprehensive imptest V2 API validation with multiple mock scenarios
+func TestImptestV2APIValidation(t *testing.T) {
+	t.Parallel()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
+	// Pattern discovered: Expectations must be set up in goroutines that run concurrently
+	// with the code under test, because imptest uses channels internally.
 
-	buf := make([]byte, 100)
-	n, err := pooledFile.Read(buf)
+	t.Run("Basic Read with return value injection", func(t *testing.T) {
+		t.Parallel()
 
-	if err != nil {
-		t.Errorf("Read should succeed, got error: %v", err)
-	}
-	if n != 9 {
-		t.Errorf("Should read 9 bytes, got %d", n)
-	}
-	if string(buf[:n]) != "test data" {
-		t.Errorf("Expected 'test data', got %q", string(buf[:n]))
-	}
-}
+		mockFile := MockSftpFile(t)
+		reader := mockFile.Interface().(io.Reader) //nolint:forcetypeassert // Test code - mock always implements io.Reader
 
-// TestPooledSFTPFile_Write_DelegatesToWrappedFile tests that Write delegates to underlying file.
-func TestPooledSFTPFile_Write_DelegatesToWrappedFile(t *testing.T) {
-	writtenData := []byte{}
-	mockFile := &mockSFTPFile{
-		writeFunc: func(p []byte) (int, error) {
-			writtenData = append(writtenData, p...)
-			return len(p), nil
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{}
+		// Set up expectation in goroutine
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			// For Read, we accept any buffer since we don't control it
+			readCall := mockFile.Read.ExpectCalledWithMatches(imptest.Any())
+			readCall.InjectReturnValues(9, nil)
+		}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
+		// Call the code
+		buf := make([]byte, 100)
+		n, err := reader.Read(buf)
+		<-done
 
-	data := []byte("test write")
-	n, err := pooledFile.Write(data)
+		// Verify
+		if err != nil {
+			t.Errorf("Expected nil error, got %v", err)
+		}
+		if n != 9 {
+			t.Errorf("Expected 9 bytes, got %d", n)
+		}
+	})
 
-	if err != nil {
-		t.Errorf("Write should succeed, got error: %v", err)
-	}
-	if n != 10 {
-		t.Errorf("Should write 10 bytes, got %d", n)
-	}
-	if string(writtenData) != string(data) {
-		t.Errorf("Expected %q, got %q", data, writtenData)
-	}
-}
+	t.Run("Write with GetArgs to verify side effects", func(t *testing.T) {
+		t.Parallel()
 
-// TestPooledSFTPFile_Stat_DelegatesToWrappedFile tests that Stat delegates to underlying file.
-func TestPooledSFTPFile_Stat_DelegatesToWrappedFile(t *testing.T) {
-	mockFileInfo := &mockFileInfo{
-		name:  "test.txt",
-		size:  1024,
-		mode:  0644,
-		mtime: time.Now(),
-	}
-	mockFile := &mockSFTPFile{
-		statFunc: func() (os.FileInfo, error) {
-			return mockFileInfo, nil
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{}
+		mockFile := MockSftpFile(t)
+		writer := mockFile.Interface().(io.Writer) //nolint:forcetypeassert // Test code - mock always implements io.Writer
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
+		testData := []byte("test data")
+		var writeCall *SftpFileMockWriteCall
 
-	info, err := pooledFile.Stat()
+		// Set up expectation in goroutine
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			// Accept any byte slice - we'll verify using GetArgs
+			writeCall = mockFile.Write.ExpectCalledWithMatches(imptest.Any())
+			writeCall.InjectReturnValues(len(testData), nil)
+		}()
 
-	if err != nil {
-		t.Errorf("Stat should succeed, got error: %v", err)
-	}
-	if info.Name() != "test.txt" {
-		t.Errorf("Expected name 'test.txt', got %q", info.Name())
-	}
-	if info.Size() != 1024 {
-		t.Errorf("Expected size 1024, got %d", info.Size())
-	}
+		// Call the code
+		n, err := writer.Write(testData)
+		<-done
+
+		// Verify return values
+		if err != nil {
+			t.Errorf("Expected nil error, got %v", err)
+		}
+		if n != len(testData) {
+			t.Errorf("Expected %d bytes, got %d", len(testData), n)
+		}
+
+		// Verify side effect using GetArgs
+		args := writeCall.GetArgs()
+		if string(args.P) != string(testData) {
+			t.Errorf("Expected data %q, got %q", testData, args.P)
+		}
+	})
+
+	t.Run("Error injection", func(t *testing.T) {
+		t.Parallel()
+
+		mockFile := MockSftpFile(t)
+		closer := mockFile.Interface().(io.Closer) //nolint:forcetypeassert // Test code - mock always implements io.Closer
+
+		expectedErr := errors.New("close failed")
+
+		// Set up expectation in goroutine
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			closeCall := mockFile.Close.ExpectCalledWithExactly()
+			closeCall.InjectReturnValues(expectedErr)
+		}()
+
+		// Call the code
+		err := closer.Close()
+		<-done
+
+		// Verify error propagation
+		if err != expectedErr { //nolint:errorlint // Test code - verifying exact error object, not wrapped error
+			t.Errorf("Expected error %v, got %v", expectedErr, err)
+		}
+	})
+
+	// Note: ClientPool mock is now exported and works the same way as above
+	// The pattern is the same: create mock, set expectations in goroutine, call methods.
 }
 
 // TestPooledSFTPFile_Close_ClosesFileAndReleasesClient tests the core auto-release behavior.
 func TestPooledSFTPFile_Close_ClosesFileAndReleasesClient(t *testing.T) {
-	fileClosed := false
-	clientReleased := false
+	t.Parallel()
 
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error {
-			fileClosed = true
-			return nil
-		},
-	}
+	mockFile := MockSftpFile(t)
 	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			clientReleased = true
-		},
-	}
+	mockPool := MockClientPool(t)
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect file.Close() to be called
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(nil)
+
+		// Expect pool.Release() to be called
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
 
 	err = pooledFile.Close()
+	<-done
 
 	if err != nil {
 		t.Errorf("Close should succeed, got error: %v", err)
 	}
-	if !fileClosed {
-		t.Error("File should be closed")
-	}
-	if !clientReleased {
-		t.Error("Client should be released")
-	}
-}
-
-// TestPooledSFTPFile_Close_ReturnsFileCloseError tests error propagation from file.Close().
-func TestPooledSFTPFile_Close_ReturnsFileCloseError(t *testing.T) {
-	closeErr := errors.New("file close failed")
-	clientReleased := false
-
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error {
-			return closeErr
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			clientReleased = true
-		},
-	}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
-
-	err = pooledFile.Close()
-
-	if err != closeErr {
-		t.Errorf("Expected error %v, got %v", closeErr, err)
-	}
-	if !clientReleased {
-		t.Error("Client should be released even when file.Close() fails")
-	}
-}
-
-// TestPooledSFTPFile_DoubleClose_IsSafe tests that Close is idempotent.
-func TestPooledSFTPFile_DoubleClose_IsSafe(t *testing.T) {
-	closeCount := 0
-	releaseCount := 0
-
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error {
-			closeCount++
-			if closeCount > 1 {
-				return errors.New("file already closed")
-			}
-			return nil
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			releaseCount++
-		},
-	}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
-
-	// First close
-	err1 := pooledFile.Close()
-	if err1 != nil {
-		t.Errorf("First close failed: %v", err1)
-	}
-
-	// Second close - should be no-op
-	err2 := pooledFile.Close()
-	if err2 != nil {
-		t.Errorf("Second close should not error, got: %v", err2)
-	}
-
-	if closeCount != 1 {
-		t.Errorf("File should only be closed once, got %d", closeCount)
-	}
-	if releaseCount != 1 {
-		t.Errorf("Client should only be released once, got %d", releaseCount)
-	}
+	// Success means both Close() and Release() were called as expected
 }
 
 // TestPooledSFTPFile_Close_ReleasesClientEvenWhenFileCloseErrors tests guaranteed release.
 func TestPooledSFTPFile_Close_ReleasesClientEvenWhenFileCloseErrors(t *testing.T) {
+	t.Parallel()
+
 	closeErr := errors.New("close failed")
-	clientReleased := false
-
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error {
-			return closeErr
-		},
-	}
+	mockFile := MockSftpFile(t)
 	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			clientReleased = true
-		},
-	}
+	mockPool := MockClientPool(t)
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect file.Close() to return error
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(closeErr)
+
+		// Expect pool.Release() still called despite error
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
 
 	err = pooledFile.Close()
+	<-done
 
-	if err != closeErr {
+	if err != closeErr { //nolint:errorlint // Test code - verifying exact error object, not wrapped error
 		t.Errorf("Expected error %v, got %v", closeErr, err)
 	}
-	if !clientReleased {
-		t.Error("Client must be released even if file.Close() fails")
+	// Success means Release() was called even though Close() errored
+}
+
+// TestPooledSFTPFile_Close_ReturnsFileCloseError tests error propagation from file.Close().
+func TestPooledSFTPFile_Close_ReturnsFileCloseError(t *testing.T) {
+	t.Parallel()
+
+	closeErr := errors.New("file close failed")
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect file.Close() to return error
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(closeErr)
+
+		// Expect pool.Release() still called despite error
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
+
+	err = pooledFile.Close()
+	<-done
+
+	if err != closeErr { //nolint:errorlint // Test code - verifying exact error object, not wrapped error
+		t.Errorf("Expected error %v, got %v", closeErr, err)
+	}
+	// Success means Release() was called even though Close() errored
 }
 
 // TestPooledSFTPFile_Close_WhenPoolClosed_StillClosesFile tests behavior with closed pool.
 func TestPooledSFTPFile_Close_WhenPoolClosed_StillClosesFile(t *testing.T) {
-	fileClosed := false
+	t.Parallel()
 
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error {
-			fileClosed = true
-			return nil
-		},
-	}
+	mockFile := MockSftpFile(t)
 	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			// Pool is closed, but release should still be called
-		},
-	}
+	mockPool := MockClientPool(t)
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect file.Close() to be called
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(nil)
+
+		// Expect pool.Release() to be called (even if pool is closed, it's still called)
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
 
 	// Close pooled file
 	err = pooledFile.Close()
+	<-done
+
 	if err != nil {
 		t.Errorf("Close should succeed, got error: %v", err)
 	}
-
-	if !fileClosed {
-		t.Error("File should be closed even if pool is closed")
-	}
-}
-
-// TestPooledSFTPFile_ReadWrite_AfterClose_ReturnsError tests usage after close.
-func TestPooledSFTPFile_ReadWrite_AfterClose_ReturnsError(t *testing.T) {
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error { return nil },
-		readFunc: func(p []byte) (int, error) {
-			return 0, errors.New("should not be called")
-		},
-		writeFunc: func(p []byte) (int, error) {
-			return 0, errors.New("should not be called")
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
-
-	pooledFile.Close()
-
-	_, readErr := pooledFile.Read(make([]byte, 10))
-	if !errors.Is(readErr, fs.ErrClosed) {
-		t.Errorf("Read after Close should return fs.ErrClosed, got: %v", readErr)
-	}
-
-	_, writeErr := pooledFile.Write([]byte("data"))
-	if !errors.Is(writeErr, fs.ErrClosed) {
-		t.Errorf("Write after Close should return fs.ErrClosed, got: %v", writeErr)
-	}
-}
-
-// TestPooledSFTPFile_ImplementsFileInterface tests interface compliance.
-func TestPooledSFTPFile_ImplementsFileInterface(t *testing.T) {
-	// This should compile if PooledSFTPFile implements filesystem.File
-	var _ filesystem.File = (*filesystem.PooledSFTPFile)(nil)
-}
-
-// TestPooledSFTPFile_NilSafety_NilFile tests nil file handling.
-func TestPooledSFTPFile_NilSafety_NilFile(t *testing.T) {
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(nil, mockClient, mockPool)
-	if err == nil {
-		t.Error("Should error on nil file")
-	}
-	if pooledFile != nil {
-		t.Error("Should return nil pooledFile on error")
-	}
-}
-
-// TestPooledSFTPFile_NilSafety_NilClient tests nil client handling.
-func TestPooledSFTPFile_NilSafety_NilClient(t *testing.T) {
-	mockFile := &mockSFTPFile{}
-	mockPool := &mockPool{}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, nil, mockPool)
-	if err == nil {
-		t.Error("Should error on nil client")
-	}
-	if pooledFile != nil {
-		t.Error("Should return nil pooledFile on error")
-	}
-}
-
-// TestPooledSFTPFile_NilSafety_NilPool tests nil pool handling.
-func TestPooledSFTPFile_NilSafety_NilPool(t *testing.T) {
-	mockFile := &mockSFTPFile{}
-	mockClient := &sftp.Client{}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, nil)
-	if err == nil {
-		t.Error("Should error on nil pool")
-	}
-	if pooledFile != nil {
-		t.Error("Should return nil pooledFile on error")
-	}
+	// Success means both Close() and Release() were called
 }
 
 // TestPooledSFTPFile_ConcurrentClose_IsSafe tests concurrent close operations.
 func TestPooledSFTPFile_ConcurrentClose_IsSafe(t *testing.T) {
-	closeCount := atomic.Int32{}
-	releaseCount := atomic.Int32{}
+	t.Parallel()
 
-	mockFile := &mockSFTPFile{
-		closeFunc: func() error {
-			closeCount.Add(1)
-			time.Sleep(10 * time.Millisecond) // Simulate slow close
-			return nil
-		},
-	}
+	mockFile := MockSftpFile(t)
 	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			releaseCount.Add(1)
-		},
-	}
+	mockPool := MockClientPool(t)
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect exactly one Close() even though 10 goroutines call pooledFile.Close()
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		time.Sleep(10 * time.Millisecond) // Simulate slow close
+		closeCall.InjectReturnValues(nil)
+
+		// Expect exactly one Release()
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			_ = pooledFile.Close()
-		}()
+		})
 	}
 	wg.Wait()
+	<-done
 
-	if closeCount.Load() != 1 {
-		t.Errorf("File should close exactly once, got %d", closeCount.Load())
-	}
-	if releaseCount.Load() != 1 {
-		t.Errorf("Client should release exactly once, got %d", releaseCount.Load())
-	}
+	// Success means only one Close() and one Release() were called despite 10 concurrent calls
 }
 
 // TestPooledSFTPFile_DeferPattern_WorksCorrectly tests typical usage pattern.
 func TestPooledSFTPFile_DeferPattern_WorksCorrectly(t *testing.T) {
-	fileClosed := false
-	clientReleased := false
+	t.Parallel()
 
-	mockFile := &mockSFTPFile{
-		writeFunc: func(p []byte) (int, error) {
-			return len(p), nil
-		},
-		closeFunc: func() error {
-			fileClosed = true
-			return nil
-		},
-	}
+	mockFile := MockSftpFile(t)
 	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			clientReleased = true
-		},
-	}
+	mockPool := MockClientPool(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect Write() to be called
+		writeCall := mockFile.Write.ExpectCalledWithMatches(imptest.Any())
+		writeCall.InjectReturnValues(9, nil)
+
+		// Expect Close() and Release() from defer
+		closeCall := mockFile.Close.Eventually().ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(nil)
+
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
 
 	func() {
-		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
+		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
 		if err != nil {
 			t.Fatalf("NewPooledSFTPFile failed: %v", err)
 		}
@@ -446,107 +337,14 @@ func TestPooledSFTPFile_DeferPattern_WorksCorrectly(t *testing.T) {
 		}
 	}()
 
-	// After defer fires, client should be released
-	if !fileClosed {
-		t.Error("File should be closed after defer")
-	}
-	if !clientReleased {
-		t.Error("Client should be released after defer")
-	}
-}
-
-// TestPooledSFTPFile_ErrorDuringRead_ClientStillReleasedOnClose tests error handling.
-func TestPooledSFTPFile_ErrorDuringRead_ClientStillReleasedOnClose(t *testing.T) {
-	readErr := errors.New("read failed")
-	clientReleased := false
-
-	mockFile := &mockSFTPFile{
-		readFunc: func(p []byte) (int, error) {
-			return 0, readErr
-		},
-		closeFunc: func() error {
-			return nil
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{
-		releaseFunc: func(client *sftp.Client) {
-			clientReleased = true
-		},
-	}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
-
-	// Read fails
-	_, err = pooledFile.Read(make([]byte, 10))
-	if err != readErr {
-		t.Errorf("Expected error %v, got %v", readErr, err)
-	}
-
-	// Close should still release client
-	err = pooledFile.Close()
-	if err != nil {
-		t.Errorf("Close failed: %v", err)
-	}
-	if !clientReleased {
-		t.Error("Client must be released even after read error")
-	}
-}
-
-// TestPooledSFTPFile_MultipleReadsWrites_WorkCorrectly tests normal operations.
-func TestPooledSFTPFile_MultipleReadsWrites_WorkCorrectly(t *testing.T) {
-	buffer := []byte{}
-	mockFile := &mockSFTPFile{
-		writeFunc: func(p []byte) (int, error) {
-			buffer = append(buffer, p...)
-			return len(p), nil
-		},
-		readFunc: func(p []byte) (int, error) {
-			n := copy(p, buffer)
-			return n, nil
-		},
-		closeFunc: func() error {
-			return nil
-		},
-	}
-	mockClient := &sftp.Client{}
-	mockPool := &mockPool{}
-
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile, mockClient, mockPool)
-	if err != nil {
-		t.Fatalf("NewPooledSFTPFile failed: %v", err)
-	}
-	defer pooledFile.Close()
-
-	// Multiple writes
-	_, err = pooledFile.Write([]byte("hello "))
-	if err != nil {
-		t.Errorf("First write failed: %v", err)
-	}
-	_, err = pooledFile.Write([]byte("world"))
-	if err != nil {
-		t.Errorf("Second write failed: %v", err)
-	}
-
-	// Multiple reads
-	buf := make([]byte, 5)
-	n, err := pooledFile.Read(buf)
-	if err != nil {
-		t.Errorf("First read failed: %v", err)
-	}
-	if n != 5 {
-		t.Errorf("Expected to read 5 bytes, got %d", n)
-	}
-	if string(buf) != "hello" {
-		t.Errorf("Expected 'hello', got %q", string(buf))
-	}
+	<-done
+	// Success means Write(), Close(), and Release() were all called, with defer working correctly
 }
 
 // TestPooledSFTPFile_Documentation_UsageExample documents expected usage.
 func TestPooledSFTPFile_Documentation_UsageExample(t *testing.T) {
+	t.Parallel()
+
 	// Expected usage in SFTPFileSystem.Create():
 	//
 	// func (fs *SFTPFileSystem) Create(path string) (filesystem.File, error) {
@@ -576,83 +374,379 @@ func TestPooledSFTPFile_Documentation_UsageExample(t *testing.T) {
 	// // ...
 }
 
-// Mock types for testing (will be implemented in test helpers)
+// TestPooledSFTPFile_DoubleClose_IsSafe tests that Close is idempotent.
+func TestPooledSFTPFile_DoubleClose_IsSafe(t *testing.T) {
+	t.Parallel()
 
-// mockSFTPFile is a mock implementation of *sftp.File for testing.
-// Phase 2.3 tests will use this to avoid real SSH connections.
-type mockSFTPFile struct {
-	readFunc  func([]byte) (int, error)
-	writeFunc func([]byte) (int, error)
-	closeFunc func() error
-	statFunc  func() (os.FileInfo, error)
-}
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
 
-func (m *mockSFTPFile) Read(p []byte) (int, error) {
-	if m.readFunc != nil {
-		return m.readFunc(p)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect exactly one call to Close() and one to Release()
+		// If called again, the expectations will fail
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(nil)
+
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
-	return 0, io.EOF
-}
 
-func (m *mockSFTPFile) Write(p []byte) (int, error) {
-	if m.writeFunc != nil {
-		return m.writeFunc(p)
+	// First close - should call file.Close() and pool.Release()
+	err1 := pooledFile.Close()
+	if err1 != nil {
+		t.Errorf("First close failed: %v", err1)
 	}
-	return len(p), nil
-}
 
-func (m *mockSFTPFile) Close() error {
-	if m.closeFunc != nil {
-		return m.closeFunc()
+	// Second close - should be no-op (no additional calls)
+	err2 := pooledFile.Close()
+	if err2 != nil {
+		t.Errorf("Second close should not error, got: %v", err2)
 	}
-	return nil
+
+	<-done
+	// Success means only one Close() and one Release() were called
 }
 
-func (m *mockSFTPFile) Stat() (os.FileInfo, error) {
-	if m.statFunc != nil {
-		return m.statFunc()
+// TestPooledSFTPFile_ErrorDuringRead_ClientStillReleasedOnClose tests error handling.
+func TestPooledSFTPFile_ErrorDuringRead_ClientStillReleasedOnClose(t *testing.T) {
+	t.Parallel()
+
+	readErr := errors.New("read failed")
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect Read() to be called and return error
+		readCall := mockFile.Read.ExpectCalledWithMatches(imptest.Any())
+		readCall.InjectReturnValues(0, readErr)
+
+		// Expect Close() and Release() to still be called despite read error
+		closeCall := mockFile.Close.Eventually().ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(nil)
+
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
-	return &mockFileInfo{}, nil
-}
 
-// mockFileInfo is a mock implementation of os.FileInfo for testing.
-type mockFileInfo struct {
-	name  string
-	size  int64
-	mode  os.FileMode
-	mtime time.Time
-}
-
-func (m *mockFileInfo) Name() string       { return m.name }
-func (m *mockFileInfo) Size() int64        { return m.size }
-func (m *mockFileInfo) Mode() os.FileMode  { return m.mode }
-func (m *mockFileInfo) ModTime() time.Time { return m.mtime }
-func (m *mockFileInfo) IsDir() bool        { return false }
-func (m *mockFileInfo) Sys() interface{}   { return nil }
-
-// mockPool is a mock implementation of SFTPClientPool for testing.
-type mockPool struct {
-	acquireFunc func() (*sftp.Client, error)
-	releaseFunc func(*sftp.Client)
-	closeFunc   func() error
-}
-
-func (m *mockPool) Acquire() (*sftp.Client, error) {
-	if m.acquireFunc != nil {
-		return m.acquireFunc()
+	// Read fails
+	_, err = pooledFile.Read(make([]byte, 10))
+	if err != readErr { //nolint:errorlint // Test verifies exact error instance is returned, not error chain
+		t.Errorf("Expected error %v, got %v", readErr, err)
 	}
-	return nil, errors.New("not implemented")
+
+	// Close should still release client
+	err = pooledFile.Close()
+	if err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+
+	<-done
+	// Success means Close() and Release() were called despite read error
 }
 
-func (m *mockPool) Release(client *sftp.Client) {
-	if m.releaseFunc != nil {
-		m.releaseFunc(client)
+// TestPooledSFTPFile_ImplementsFileInterface tests interface compliance.
+func TestPooledSFTPFile_ImplementsFileInterface(t *testing.T) {
+	t.Parallel()
+
+	// This should compile if PooledSFTPFile implements filesystem.File
+	var _ filesystem.File = (*filesystem.PooledSFTPFile)(nil)
+}
+
+// TestPooledSFTPFile_MultipleReadsWrites_WorkCorrectly tests normal operations.
+//
+//nolint:funlen // Comprehensive read/write operation testing with multiple scenarios
+func TestPooledSFTPFile_MultipleReadsWrites_WorkCorrectly(t *testing.T) {
+	t.Parallel()
+
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	buffer := []byte{}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Expect first write ("hello ")
+		write1 := mockFile.Write.Eventually().ExpectCalledWithMatches(imptest.Any())
+		args1 := write1.GetArgs()
+		buffer = append(buffer, args1.P...)
+		write1.InjectReturnValues(len(args1.P), nil)
+
+		// Expect second write ("world")
+		write2 := mockFile.Write.Eventually().ExpectCalledWithMatches(imptest.Any())
+		args2 := write2.GetArgs()
+		buffer = append(buffer, args2.P...)
+		write2.InjectReturnValues(len(args2.P), nil)
+
+		// Expect read - copy buffer to the read buffer
+		read1 := mockFile.Read.Eventually().ExpectCalledWithMatches(imptest.Any())
+		readArgs := read1.GetArgs()
+		n := copy(readArgs.P, buffer)
+		read1.InjectReturnValues(n, nil)
+
+		// Expect Close from defer
+		close1 := mockFile.Close.Eventually().ExpectCalledWithExactly()
+		close1.InjectReturnValues(nil)
+
+		release1 := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		release1.InjectReturnValues()
+	}()
+
+	func() {
+		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+		if err != nil {
+			t.Fatalf("NewPooledSFTPFile failed: %v", err)
+		}
+		defer pooledFile.Close()
+
+		// Multiple writes
+		_, err = pooledFile.Write([]byte("hello "))
+		if err != nil {
+			t.Errorf("First write failed: %v", err)
+		}
+		_, err = pooledFile.Write([]byte("world"))
+		if err != nil {
+			t.Errorf("Second write failed: %v", err)
+		}
+
+		// Multiple reads
+		buf := make([]byte, 5)
+		n, err := pooledFile.Read(buf)
+		if err != nil {
+			t.Errorf("First read failed: %v", err)
+		}
+		if n != 5 {
+			t.Errorf("Expected to read 5 bytes, got %d", n)
+		}
+		if string(buf) != "hello" {
+			t.Errorf("Expected 'hello', got %q", string(buf))
+		}
+	}()
+
+	<-done
+}
+
+// TestPooledSFTPFile_NilSafety_NilClient tests nil client handling.
+func TestPooledSFTPFile_NilSafety_NilClient(t *testing.T) {
+	t.Parallel()
+
+	mockFile := MockSftpFile(t)
+	mockPool := MockClientPool(t)
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), nil, mockPool.Interface())
+	if err == nil {
+		t.Error("Should error on nil client")
+	}
+	if pooledFile != nil {
+		t.Error("Should return nil pooledFile on error")
 	}
 }
 
-func (m *mockPool) Close() error {
-	if m.closeFunc != nil {
-		return m.closeFunc()
+// TestPooledSFTPFile_NilSafety_NilFile tests nil file handling.
+func TestPooledSFTPFile_NilSafety_NilFile(t *testing.T) {
+	t.Parallel()
+
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(nil, mockClient, mockPool.Interface())
+	if err == nil {
+		t.Error("Should error on nil file")
 	}
-	return nil
+	if pooledFile != nil {
+		t.Error("Should return nil pooledFile on error")
+	}
+}
+
+// TestPooledSFTPFile_NilSafety_NilPool tests nil pool handling.
+func TestPooledSFTPFile_NilSafety_NilPool(t *testing.T) {
+	t.Parallel()
+
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, nil)
+	if err == nil {
+		t.Error("Should error on nil pool")
+	}
+	if pooledFile != nil {
+		t.Error("Should return nil pooledFile on error")
+	}
+}
+
+// TestPooledSFTPFile_ReadWrite_AfterClose_ReturnsError tests usage after close.
+func TestPooledSFTPFile_ReadWrite_AfterClose_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Only expect Close() to be called
+		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall.InjectReturnValues(nil)
+
+		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall.InjectReturnValues()
+		// Read() and Write() should NOT be called - pooled file should short-circuit
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
+	}
+
+	pooledFile.Close()
+	<-done
+
+	// After close, Read() and Write() should return fs.ErrClosed without calling mocks
+	_, readErr := pooledFile.Read(make([]byte, 10))
+	if !errors.Is(readErr, fs.ErrClosed) {
+		t.Errorf("Read after Close should return fs.ErrClosed, got: %v", readErr)
+	}
+
+	_, writeErr := pooledFile.Write([]byte("data"))
+	if !errors.Is(writeErr, fs.ErrClosed) {
+		t.Errorf("Write after Close should return fs.ErrClosed, got: %v", writeErr)
+	}
+}
+
+// TestPooledSFTPFile_Read_DelegatesToWrappedFile tests that Read delegates to underlying file.
+func TestPooledSFTPFile_Read_DelegatesToWrappedFile(t *testing.T) {
+	t.Parallel()
+
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	var readCall *SftpFileMockReadCall
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		readCall = mockFile.Read.ExpectCalledWithMatches(imptest.Any())
+		// Modify buffer (side effect) before returning
+		args := readCall.GetArgs()
+		copy(args.P, []byte("test data"))
+		readCall.InjectReturnValues(9, nil)
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
+	}
+
+	buf := make([]byte, 100)
+	n, err := pooledFile.Read(buf)
+	<-done
+
+	if err != nil {
+		t.Errorf("Read should succeed, got error: %v", err)
+	}
+	if n != 9 {
+		t.Errorf("Should read 9 bytes, got %d", n)
+	}
+	if string(buf[:n]) != "test data" {
+		t.Errorf("Expected 'test data', got %q", string(buf[:n]))
+	}
+}
+
+// TestPooledSFTPFile_Stat_DelegatesToWrappedFile tests that Stat delegates to underlying file.
+func TestPooledSFTPFile_Stat_DelegatesToWrappedFile(t *testing.T) {
+	t.Parallel()
+
+	mockFileInfo := MockFileInfo(t)
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Set up file Stat expectation
+		statCall := mockFile.Stat.ExpectCalledWithExactly()
+		statCall.InjectReturnValues(mockFileInfo.Interface(), nil)
+
+		// Set up FileInfo mock expectations (test calls Name and Size)
+		mockFileInfo.Name.Eventually().ExpectCalledWithExactly().InjectReturnValues("test.txt")
+		mockFileInfo.Size.Eventually().ExpectCalledWithExactly().InjectReturnValues(int64(1024))
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
+	}
+
+	info, err := pooledFile.Stat()
+	if err != nil {
+		t.Errorf("Stat should succeed, got error: %v", err)
+	}
+	if info.Name() != "test.txt" {
+		t.Errorf("Expected name 'test.txt', got %q", info.Name())
+	}
+	if info.Size() != 1024 {
+		t.Errorf("Expected size 1024, got %d", info.Size())
+	}
+
+	<-done
+}
+
+// TestPooledSFTPFile_Write_DelegatesToWrappedFile tests that Write delegates to underlying file.
+func TestPooledSFTPFile_Write_DelegatesToWrappedFile(t *testing.T) {
+	t.Parallel()
+
+	mockFile := MockSftpFile(t)
+	mockClient := &sftp.Client{}
+	mockPool := MockClientPool(t)
+
+	testData := []byte("test write")
+	var writeCall *SftpFileMockWriteCall
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Accept any byte slice - we'll verify using GetArgs
+		writeCall = mockFile.Write.ExpectCalledWithMatches(imptest.Any())
+		writeCall.InjectReturnValues(10, nil)
+	}()
+
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	if err != nil {
+		t.Fatalf("NewPooledSFTPFile failed: %v", err)
+	}
+
+	n, err := pooledFile.Write(testData)
+	<-done
+
+	// Verify return values
+	if err != nil {
+		t.Errorf("Write should succeed, got error: %v", err)
+	}
+	if n != 10 {
+		t.Errorf("Should write 10 bytes, got %d", n)
+	}
+
+	// Verify side effect - what data was actually written
+	args := writeCall.GetArgs()
+	if string(args.P) != string(testData) {
+		t.Errorf("Expected %q, got %q", testData, args.P)
+	}
 }

@@ -3,8 +3,9 @@
 package syncengine
 
 import (
-	_imptest "github.com/toejough/imptest/imptest"
 	_testing "testing"
+
+	_imptest "github.com/toejough/imptest/imptest"
 )
 
 // EngineCancel wraps a callable function for testing.

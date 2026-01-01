@@ -1,70 +1,33 @@
+//go:generate impgen --dependency filesystem.SSHDialer
+
 //nolint:varnamelen // Test files use idiomatic short variable names (t, etc.)
 package filesystem_test
 
 import (
+	"errors"
 	"testing"
 
 	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
+	"github.com/toejough/imptest/imptest"
 
 	"github.com/joe/copy-files/pkg/filesystem"
 )
 
-// TestSFTPConnection_Connect_UsesMaxPacket64KB tests that SFTP client is created with MaxPacket option.
-// This is an integration test that verifies the SFTP connection is configured correctly.
-// This test will FAIL until Phase 1.1 adds sftp.MaxPacket(64 * 1024) to the Connect() method.
-//
-// Note: This test requires SSH connectivity to succeed. If SSH connection fails,
-// the test verifies that the connection attempt was made with proper configuration
-// by checking the error is connection-related, not configuration-related.
-func TestSFTPConnection_Connect_UsesMaxPacket64KB(t *testing.T) {
-	t.Parallel()
-
-	// Note: We can't easily test the MaxPacket option without actually connecting
-	// or using reflection to inspect the sftp.Client internal state.
-	// This test documents the expected behavior and will need manual verification
-	// or integration testing.
-	//
-	// For now, we verify that Connect can be called and returns the expected
-	// error types when connection fails (not configuration errors).
-
-	g := NewWithT(t)
-
-	// Attempt to connect to a non-existent host
-	// This should fail with a connection error, not a configuration error
-	conn, err := filesystem.Connect("nonexistent.invalid.host", 22, "testuser")
-
-	// Should get a connection error (DNS or network), not a configuration panic
-	g.Expect(conn).Should(BeNil(), "Connection should fail for invalid host")
-	g.Expect(err).Should(HaveOccurred(), "Should return error for invalid host")
-	g.Expect(err.Error()).Should(ContainSubstring("SSH connection failed"),
-		"Error should indicate SSH connection failure, not configuration error")
-
-	// If we got here without panicking, the SFTP client creation parameters are valid
-	// The actual MaxPacket option will be tested in integration tests or by examining
-	// the implementation in sftp_connection.go line 51
-}
-
-// TestSFTPConnection_Connect_ConfigurationIsValid verifies the connection attempt uses valid parameters.
-// This test will FAIL if the sftp.NewClient call has invalid options (e.g., malformed MaxPacket option).
-func TestSFTPConnection_Connect_ConfigurationIsValid(t *testing.T) {
+// TestSFTPConnection_Close_HandlesNilClientsGracefully tests that calling Close() on
+// a zero-value SFTPConnection (with nil clients) doesn't panic and returns nil.
+// This exercises the nil checks in the Close() method.
+func TestSFTPConnection_Close_HandlesNilClientsGracefully(t *testing.T) {
 	t.Parallel()
 
 	g := NewWithT(t)
 
-	// Attempt connection with valid parameters to a non-existent host
-	// Should fail with network error, not configuration/panic error
-	conn, err := filesystem.Connect("192.0.2.1", 22, "user") // TEST-NET-1 address (RFC 5737)
+	// Create a zero-value connection with nil clients
+	conn := &filesystem.SFTPConnection{}
 
-	g.Expect(conn).Should(BeNil(), "Connection should fail")
-	g.Expect(err).Should(HaveOccurred(), "Should return connection error")
+	// Close should handle nil clients gracefully without panicking
+	err := conn.Close()
 
-	// The error should be about connection failure, not about invalid configuration
-	// If MaxPacket option was malformed, we'd get a panic or different error
-	g.Expect(err.Error()).Should(Or(
-		ContainSubstring("SSH connection failed"),
-		ContainSubstring("connection"),
-		ContainSubstring("timeout"),
-	), "Error should be network-related, not configuration-related")
+	g.Expect(err).ShouldNot(HaveOccurred(), "Close should return nil when both clients are nil")
 }
 
 // TestSFTPConnection_ConcurrentWritesEnabled_IsTracked tests that concurrent writes configuration is tracked.
@@ -76,6 +39,8 @@ func TestSFTPConnection_Connect_ConfigurationIsValid(t *testing.T) {
 // This test uses a code inspection approach since we cannot directly verify the sftp.Client
 // internal configuration without reflection or a successful connection.
 func TestSFTPConnection_ConcurrentWritesEnabled_IsTracked(t *testing.T) {
+	t.Parallel()
+
 	t.Skip("This test will FAIL until Phase 1.2 implementation. " +
 		"Uncomment when ready to implement. " +
 		"Expected implementation: Add ConcurrentWritesEnabled() bool method to SFTPConnection")
@@ -96,20 +61,144 @@ func TestSFTPConnection_ConcurrentWritesEnabled_IsTracked(t *testing.T) {
 	//     "Concurrent writes should be enabled for SFTP connections")
 }
 
+// TestSFTPConnection_Connect_ConfigurationIsValid verifies the connection attempt uses valid parameters.
+// This test will FAIL if the sftp.NewClient call has invalid options (e.g., malformed MaxPacket option).
+// This test uses a mock SSH dialer to verify error handling without waiting for real network timeouts.
+// Note: Cannot use t.Parallel() because test modifies package-level defaultSSHDialer variable.
+//
+//nolint:paralleltest // Intentionally serial - modifies package-level defaultSSHDialer
+func TestSFTPConnection_Connect_ConfigurationIsValid(t *testing.T) {
+	g := NewWithT(t)
+
+	// Create mock SSH dialer
+	mockDialer := MockSSHDialer(t)
+
+	// Inject mock dialer
+	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Interface())
+	t.Cleanup(cleanup)
+
+	// Set up expectations in goroutine (imptest V2 pattern)
+	done := make(chan struct{})
+	ready := make(chan struct{})
+	go func() {
+		defer close(done)
+		close(ready) // Signal that goroutine has started
+		mockDialer.Dial.ExpectCalledWithMatches(
+			imptest.Any(), // network
+			imptest.Any(), // addr
+			imptest.Any(), // config
+		).InjectReturnValues(nil, errors.New("dial tcp 192.0.2.1:22: i/o timeout"))
+	}()
+
+	// Wait for goroutine to be ready
+	<-ready
+
+	// Attempt connection - expectation goroutine will handle the call
+	conn, err := filesystem.Connect("192.0.2.1", 22, "user") // TEST-NET-1 address (RFC 5737)
+
+	// Wait for expectations goroutine to complete
+	<-done
+
+	g.Expect(conn).Should(BeNil(), "Connection should fail")
+	g.Expect(err).Should(HaveOccurred(), "Should return connection error")
+
+	// The error should be about connection failure, not about invalid configuration
+	// If MaxPacket option was malformed, we'd get a panic or different error
+	g.Expect(err.Error()).Should(Or(
+		ContainSubstring("SSH connection failed"),
+		ContainSubstring("connection"),
+		ContainSubstring("timeout"),
+	), "Error should be network-related, not configuration-related")
+}
+
+// TestSFTPConnection_Connect_UsesMaxPacket64KB tests that SFTP client is created with MaxPacket option.
+// This is an integration test that verifies the SFTP connection is configured correctly.
+// This test will FAIL until Phase 1.1 adds sftp.MaxPacket(64 * 1024) to the Connect() method.
+//
+// This test uses a mock SSH dialer to verify error handling without waiting for real network timeouts.
+// Note: Cannot use t.Parallel() because test modifies package-level defaultSSHDialer variable.
+//
+//nolint:paralleltest // Intentionally serial - modifies package-level defaultSSHDialer
+func TestSFTPConnection_Connect_UsesMaxPacket64KB(t *testing.T) {
+	g := NewWithT(t)
+
+	// Create mock SSH dialer
+	mockDialer := MockSSHDialer(t)
+
+	// Inject mock dialer
+	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Interface())
+	t.Cleanup(cleanup)
+
+	// Set up expectations in goroutine (imptest V2 pattern)
+	done := make(chan struct{})
+	ready := make(chan struct{})
+	go func() {
+		defer close(done)
+		close(ready) // Signal that goroutine has started
+		mockDialer.Dial.ExpectCalledWithMatches(
+			imptest.Any(), // network
+			imptest.Any(), // addr
+			imptest.Any(), // config
+		).InjectReturnValues(nil, errors.New("dial tcp: lookup nonexistent.invalid.host: no such host"))
+	}()
+
+	// Wait for goroutine to be ready
+	<-ready
+
+	// Attempt to connect - expectation goroutine will handle the call
+	conn, err := filesystem.Connect("nonexistent.invalid.host", 22, "testuser")
+
+	// Wait for expectations goroutine to complete
+	<-done
+
+	// Should get a connection error, not a configuration panic
+	g.Expect(conn).Should(BeNil(), "Connection should fail for invalid host")
+	g.Expect(err).Should(HaveOccurred(), "Should return error for invalid host")
+	g.Expect(err.Error()).Should(ContainSubstring("SSH connection failed"),
+		"Error should indicate SSH connection failure, not configuration error")
+
+	// If we got here without panicking, the SFTP client creation parameters are valid
+}
+
 // TestSFTPConnection_Connect_WithConcurrentWritesOption_NoConfigurationError tests that passing
 // the UseConcurrentWrites option doesn't cause configuration errors.
 // This test will PASS once sftp.UseConcurrentWrites(true) is added to the NewClient call.
 // This is a smoke test to ensure the option is syntactically correct.
+// This test uses a mock SSH dialer to verify error handling without waiting for real network timeouts.
+// Note: Cannot use t.Parallel() because test modifies package-level defaultSSHDialer variable.
 //
-// Note: This test attempts a connection that will fail at the network level,
-// which verifies the SFTP client options are valid (no panic/config error).
+//nolint:paralleltest // Intentionally serial - modifies package-level defaultSSHDialer
 func TestSFTPConnection_Connect_WithConcurrentWritesOption_NoConfigurationError(t *testing.T) {
 	g := NewWithT(t)
 
-	// Attempt to connect to an invalid host
-	// This should fail with DNS/connection error, not configuration error
-	// Using a definitively invalid hostname that will fail fast at DNS resolution
+	// Create mock SSH dialer
+	mockDialer := MockSSHDialer(t)
+
+	// Inject mock dialer
+	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Interface())
+	t.Cleanup(cleanup)
+
+	// Set up expectations in goroutine (imptest V2 pattern)
+	done := make(chan struct{})
+	ready := make(chan struct{})
+	go func() {
+		defer close(done)
+		close(ready) // Signal that goroutine has started
+		mockDialer.Dial.ExpectCalledWithMatches(
+			imptest.Any(), // network
+			imptest.Any(), // addr
+			imptest.Any(), // config
+		).InjectReturnValues(nil, errors.New("dial tcp: lookup invalid.test: no such host"))
+	}()
+
+	// Wait for goroutine to be ready
+	<-ready
+
+	// Attempt to connect - expectation goroutine will handle the call
 	conn, err := filesystem.Connect("invalid.test", 22, "testuser")
+
+	// Wait for expectations goroutine to complete
+	<-done
 
 	// Should get a connection error, not a configuration panic
 	g.Expect(conn).Should(BeNil(), "Connection should fail for invalid host")
@@ -124,9 +213,12 @@ func TestSFTPConnection_Connect_WithConcurrentWritesOption_NoConfigurationError(
 // at sftp_connection.go line 51 uses the UseConcurrentWrites option.
 // This is a code inspection test that reads the source file directly.
 // This test will FAIL until Phase 1.2 changes line 51 from:
-//   sftpClient, err := sftp.NewClient(sshClient)
+//
+//	sftpClient, err := sftp.NewClient(sshClient)
+//
 // to:
-//   sftpClient, err := sftp.NewClient(sshClient, sftp.UseConcurrentWrites(true))
+//
+//	sftpClient, err := sftp.NewClient(sshClient, sftp.UseConcurrentWrites(true))
 func TestSFTPConnection_SourceCode_UsesConcurrentWritesOption(t *testing.T) {
 	t.Parallel()
 

@@ -7,6 +7,27 @@ import (
 	"github.com/joe/copy-files/pkg/filesystem"
 )
 
+// TestSFTPFileSystem_API_Exists tests that ResizablePool methods exist.
+// This is a compile-time check for Phase 3 implementation.
+func TestSFTPFileSystem_API_Exists(t *testing.T) {
+	t.Parallel()
+
+	// Verify the API exists by checking function signatures compile
+	_ = (*filesystem.SFTPFileSystem).Close
+	_ = (*filesystem.SFTPFileSystem).Scan
+	_ = (*filesystem.SFTPFileSystem).Open
+	_ = (*filesystem.SFTPFileSystem).Create
+
+	// Phase 3: ResizablePool methods
+	_ = (*filesystem.SFTPFileSystem).ResizePool
+	_ = (*filesystem.SFTPFileSystem).PoolSize
+	_ = (*filesystem.SFTPFileSystem).PoolTargetSize
+	_ = (*filesystem.SFTPFileSystem).PoolMinSize
+	_ = (*filesystem.SFTPFileSystem).PoolMaxSize
+
+	// Test passes if code compiles
+}
+
 // ============================================================================
 // Phase 3: SFTPFileSystem ResizablePool Interface Tests
 // ============================================================================
@@ -18,201 +39,12 @@ import (
 // - SFTPFileSystem must implement all 5 methods from ResizablePool interface
 // - Methods should delegate to the underlying pool
 func TestSFTPFileSystem_ImplementsResizablePool(t *testing.T) {
+	t.Parallel()
+
 	// Verify compile-time interface compliance:
 	var _ filesystem.ResizablePool = (*filesystem.SFTPFileSystem)(nil)
 
 	// This will fail to compile if SFTPFileSystem doesn't implement all methods
-}
-
-// TestSFTPFileSystem_ResizePool_DelegatesToPool tests that ResizePool delegates to pool's Resize.
-// This test will FAIL until Phase 3 implements:
-// - func (fs *SFTPFileSystem) ResizePool(targetSize int)
-// - Method should call fs.pool.Resize(targetSize)
-//
-// Expected behavior:
-// - ResizePool(8) should result in pool.TargetSize() == 8
-// - Delegation should be direct (no additional logic)
-func TestSFTPFileSystem_ResizePool_DelegatesToPool(t *testing.T) {
-	conn, err := filesystem.Connect("localhost", 2222, "testuser")
-	if err != nil {
-		t.Skip("Requires SSH connection for integration test")
-	}
-	defer conn.Close()
-
-	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
-	if err != nil {
-		t.Fatalf("Creating filesystem should succeed: %v", err)
-	}
-	defer fs.Close()
-
-	// Resize to 8
-	fs.ResizePool(8)
-
-	// Verify pool was resized
-	if fs.PoolTargetSize() != 8 {
-		t.Errorf("Pool target size should be 8 after ResizePool(8), got %d", fs.PoolTargetSize())
-	}
-}
-
-// TestSFTPFileSystem_PoolSize_ReturnsActualSize tests that PoolSize returns pool's actual size.
-// This test will FAIL until Phase 3 implements:
-// - func (fs *SFTPFileSystem) PoolSize() int
-// - Method should return fs.pool.Size()
-//
-// Expected behavior:
-// - PoolSize() returns the current actual number of clients
-// - Delegates directly to underlying pool
-func TestSFTPFileSystem_PoolSize_ReturnsActualSize(t *testing.T) {
-	conn, err := filesystem.Connect("localhost", 2222, "testuser")
-	if err != nil {
-		t.Skip("Requires SSH connection")
-	}
-	defer conn.Close()
-
-	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
-	if err != nil {
-		t.Fatalf("Creating filesystem should succeed: %v", err)
-	}
-	defer fs.Close()
-
-	// Get actual size
-	actualSize := fs.PoolSize()
-
-	// Should match pool's Size()
-	if actualSize <= 0 {
-		t.Errorf("Pool size should be greater than 0, got %d", actualSize)
-	}
-	if fs.PoolSize() != actualSize {
-		t.Errorf("PoolSize should return consistent value")
-	}
-}
-
-// TestSFTPFileSystem_PoolTargetSize_ReturnsTargetSize tests that PoolTargetSize delegates correctly.
-// This test will FAIL until Phase 3 implements:
-// - func (fs *SFTPFileSystem) PoolTargetSize() int
-// - Method should return fs.pool.TargetSize()
-//
-// Expected behavior:
-// - PoolTargetSize() returns the desired pool size
-// - After ResizePool(5), should return 5
-func TestSFTPFileSystem_PoolTargetSize_ReturnsTargetSize(t *testing.T) {
-	conn, err := filesystem.Connect("localhost", 2222, "testuser")
-	if err != nil {
-		t.Skip("Requires SSH connection")
-	}
-	defer conn.Close()
-
-	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
-	if err != nil {
-		t.Fatalf("Creating filesystem should succeed: %v", err)
-	}
-	defer fs.Close()
-
-	// Resize pool
-	fs.ResizePool(5)
-
-	// Target size should reflect resize
-	if fs.PoolTargetSize() != 5 {
-		t.Errorf("PoolTargetSize should return 5 after ResizePool(5), got %d", fs.PoolTargetSize())
-	}
-}
-
-// TestSFTPFileSystem_PoolMinSize_ReturnsMinSize tests that PoolMinSize delegates correctly.
-// This test will FAIL until Phase 3 implements:
-// - func (fs *SFTPFileSystem) PoolMinSize() int
-// - Method should return fs.pool.MinSize()
-//
-// Expected behavior:
-// - PoolMinSize() returns the minimum allowed pool size
-// - Should match the min size set during pool creation
-func TestSFTPFileSystem_PoolMinSize_ReturnsMinSize(t *testing.T) {
-	conn, err := filesystem.Connect("localhost", 2222, "testuser")
-	if err != nil {
-		t.Skip("Requires SSH connection")
-	}
-	defer conn.Close()
-
-	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
-	if err != nil {
-		t.Fatalf("Creating filesystem should succeed: %v", err)
-	}
-	defer fs.Close()
-
-	// Get min size
-	minSize := fs.PoolMinSize()
-
-	// Should match default min size (1)
-	if minSize != 1 {
-		t.Errorf("Default min size should be 1, got %d", minSize)
-	}
-}
-
-// TestSFTPFileSystem_PoolMaxSize_ReturnsMaxSize tests that PoolMaxSize delegates correctly.
-// This test will FAIL until Phase 3 implements:
-// - func (fs *SFTPFileSystem) PoolMaxSize() int
-// - Method should return fs.pool.MaxSize()
-//
-// Expected behavior:
-// - PoolMaxSize() returns the maximum allowed pool size
-// - Should match the max size set during pool creation
-func TestSFTPFileSystem_PoolMaxSize_ReturnsMaxSize(t *testing.T) {
-	conn, err := filesystem.Connect("localhost", 2222, "testuser")
-	if err != nil {
-		t.Skip("Requires SSH connection")
-	}
-	defer conn.Close()
-
-	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
-	if err != nil {
-		t.Fatalf("Creating filesystem should succeed: %v", err)
-	}
-	defer fs.Close()
-
-	// Get max size
-	maxSize := fs.PoolMaxSize()
-
-	// Should match default max size (16)
-	if maxSize != 16 {
-		t.Errorf("Default max size should be 16, got %d", maxSize)
-	}
-}
-
-// TestSFTPFileSystem_PoolConfig_DefaultValues tests pool creation with default config.
-// This test will FAIL until Phase 3 implements:
-// - PoolConfig struct with Initial, Min, Max fields
-// - NewSFTPFileSystem updated to use defaults when config is nil
-// - Defaults: Initial=4, Min=1, Max=16
-//
-// Expected behavior:
-// - When PoolConfig is nil, use default values
-// - Pool should be created with Initial=4, Min=1, Max=16
-func TestSFTPFileSystem_PoolConfig_DefaultValues(t *testing.T) {
-	conn, err := filesystem.Connect("localhost", 2222, "testuser")
-	if err != nil {
-		t.Skip("Requires SSH connection")
-	}
-	defer conn.Close()
-
-	// Create filesystem without explicit config (should use defaults)
-	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
-	if err != nil {
-		t.Fatalf("Creating filesystem with default config should succeed: %v", err)
-	}
-	defer fs.Close()
-
-	// Verify defaults
-	if fs.PoolTargetSize() != 4 {
-		t.Errorf("Default initial size should be 4, got %d", fs.PoolTargetSize())
-	}
-	if fs.PoolMinSize() != 1 {
-		t.Errorf("Default min size should be 1, got %d", fs.PoolMinSize())
-	}
-	if fs.PoolMaxSize() != 16 {
-		t.Errorf("Default max size should be 16, got %d", fs.PoolMaxSize())
-	}
-	if fs.PoolSize() != 4 {
-		t.Errorf("Actual pool size should match initial size (4), got %d", fs.PoolSize())
-	}
 }
 
 // TestSFTPFileSystem_PoolConfig_CustomValues tests pool creation with custom config.
@@ -225,6 +57,8 @@ func TestSFTPFileSystem_PoolConfig_DefaultValues(t *testing.T) {
 // - When PoolConfig provided, use specified values
 // - Pool should be created with custom Initial, Min, Max
 func TestSFTPFileSystem_PoolConfig_CustomValues(t *testing.T) {
+	t.Parallel()
+
 	conn, err := filesystem.Connect("localhost", 2222, "testuser")
 	if err != nil {
 		t.Skip("Requires SSH connection")
@@ -260,6 +94,46 @@ func TestSFTPFileSystem_PoolConfig_CustomValues(t *testing.T) {
 	}
 }
 
+// TestSFTPFileSystem_PoolConfig_DefaultValues tests pool creation with default config.
+// This test will FAIL until Phase 3 implements:
+// - PoolConfig struct with Initial, Min, Max fields
+// - NewSFTPFileSystem updated to use defaults when config is nil
+// - Defaults: Initial=4, Min=1, Max=16
+//
+// Expected behavior:
+// - When PoolConfig is nil, use default values
+// - Pool should be created with Initial=4, Min=1, Max=16
+func TestSFTPFileSystem_PoolConfig_DefaultValues(t *testing.T) {
+	t.Parallel()
+
+	conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	if err != nil {
+		t.Skip("Requires SSH connection")
+	}
+	defer conn.Close()
+
+	// Create filesystem without explicit config (should use defaults)
+	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
+	if err != nil {
+		t.Fatalf("Creating filesystem with default config should succeed: %v", err)
+	}
+	defer fs.Close()
+
+	// Verify defaults
+	if fs.PoolTargetSize() != 4 {
+		t.Errorf("Default initial size should be 4, got %d", fs.PoolTargetSize())
+	}
+	if fs.PoolMinSize() != 1 {
+		t.Errorf("Default min size should be 1, got %d", fs.PoolMinSize())
+	}
+	if fs.PoolMaxSize() != 16 {
+		t.Errorf("Default max size should be 16, got %d", fs.PoolMaxSize())
+	}
+	if fs.PoolSize() != 4 {
+		t.Errorf("Actual pool size should match initial size (4), got %d", fs.PoolSize())
+	}
+}
+
 // TestSFTPFileSystem_PoolConfig_InvalidValues_ReturnsError tests validation of pool config.
 // This test will FAIL until Phase 3 implements validation:
 // - Initial must be >= Min
@@ -271,11 +145,13 @@ func TestSFTPFileSystem_PoolConfig_CustomValues(t *testing.T) {
 // - Invalid config should return error
 // - Error message should indicate which constraint failed
 func TestSFTPFileSystem_PoolConfig_InvalidValues_ReturnsError(t *testing.T) {
+	t.Parallel()
+
 	conn, err := filesystem.Connect("localhost", 2222, "testuser")
 	if err != nil {
 		t.Skip("Requires SSH connection")
 	}
-	defer conn.Close()
+	t.Cleanup(func() { _ = conn.Close() })
 
 	// Test cases for invalid config
 	testCases := []struct {
@@ -307,6 +183,8 @@ func TestSFTPFileSystem_PoolConfig_InvalidValues_ReturnsError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			fs, err := filesystem.NewSFTPFileSystem(conn, tc.config)
 			if err == nil {
 				t.Errorf("Should return error for invalid config")
@@ -321,6 +199,169 @@ func TestSFTPFileSystem_PoolConfig_InvalidValues_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestSFTPFileSystem_PoolMaxSize_ReturnsMaxSize tests that PoolMaxSize delegates correctly.
+// This test will FAIL until Phase 3 implements:
+// - func (fs *SFTPFileSystem) PoolMaxSize() int
+// - Method should return fs.pool.MaxSize()
+//
+// Expected behavior:
+// - PoolMaxSize() returns the maximum allowed pool size
+// - Should match the max size set during pool creation
+func TestSFTPFileSystem_PoolMaxSize_ReturnsMaxSize(t *testing.T) {
+	t.Parallel()
+
+	conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	if err != nil {
+		t.Skip("Requires SSH connection")
+	}
+	defer conn.Close()
+
+	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
+	if err != nil {
+		t.Fatalf("Creating filesystem should succeed: %v", err)
+	}
+	defer fs.Close()
+
+	// Get max size
+	maxSize := fs.PoolMaxSize()
+
+	// Should match default max size (16)
+	if maxSize != 16 {
+		t.Errorf("Default max size should be 16, got %d", maxSize)
+	}
+}
+
+// TestSFTPFileSystem_PoolMinSize_ReturnsMinSize tests that PoolMinSize delegates correctly.
+// This test will FAIL until Phase 3 implements:
+// - func (fs *SFTPFileSystem) PoolMinSize() int
+// - Method should return fs.pool.MinSize()
+//
+// Expected behavior:
+// - PoolMinSize() returns the minimum allowed pool size
+// - Should match the min size set during pool creation
+func TestSFTPFileSystem_PoolMinSize_ReturnsMinSize(t *testing.T) {
+	t.Parallel()
+
+	conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	if err != nil {
+		t.Skip("Requires SSH connection")
+	}
+	defer conn.Close()
+
+	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
+	if err != nil {
+		t.Fatalf("Creating filesystem should succeed: %v", err)
+	}
+	defer fs.Close()
+
+	// Get min size
+	minSize := fs.PoolMinSize()
+
+	// Should match default min size (1)
+	if minSize != 1 {
+		t.Errorf("Default min size should be 1, got %d", minSize)
+	}
+}
+
+// TestSFTPFileSystem_PoolSize_ReturnsActualSize tests that PoolSize returns pool's actual size.
+// This test will FAIL until Phase 3 implements:
+// - func (fs *SFTPFileSystem) PoolSize() int
+// - Method should return fs.pool.Size()
+//
+// Expected behavior:
+// - PoolSize() returns the current actual number of clients
+// - Delegates directly to underlying pool
+func TestSFTPFileSystem_PoolSize_ReturnsActualSize(t *testing.T) {
+	t.Parallel()
+
+	conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	if err != nil {
+		t.Skip("Requires SSH connection")
+	}
+	defer conn.Close()
+
+	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
+	if err != nil {
+		t.Fatalf("Creating filesystem should succeed: %v", err)
+	}
+	defer fs.Close()
+
+	// Get actual size
+	actualSize := fs.PoolSize()
+
+	// Should match pool's Size()
+	if actualSize <= 0 {
+		t.Errorf("Pool size should be greater than 0, got %d", actualSize)
+	}
+	if fs.PoolSize() != actualSize {
+		t.Errorf("PoolSize should return consistent value")
+	}
+}
+
+// TestSFTPFileSystem_PoolTargetSize_ReturnsTargetSize tests that PoolTargetSize delegates correctly.
+// This test will FAIL until Phase 3 implements:
+// - func (fs *SFTPFileSystem) PoolTargetSize() int
+// - Method should return fs.pool.TargetSize()
+//
+// Expected behavior:
+// - PoolTargetSize() returns the desired pool size
+// - After ResizePool(5), should return 5
+func TestSFTPFileSystem_PoolTargetSize_ReturnsTargetSize(t *testing.T) {
+	t.Parallel()
+
+	conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	if err != nil {
+		t.Skip("Requires SSH connection")
+	}
+	defer conn.Close()
+
+	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
+	if err != nil {
+		t.Fatalf("Creating filesystem should succeed: %v", err)
+	}
+	defer fs.Close()
+
+	// Resize pool
+	fs.ResizePool(5)
+
+	// Target size should reflect resize
+	if fs.PoolTargetSize() != 5 {
+		t.Errorf("PoolTargetSize should return 5 after ResizePool(5), got %d", fs.PoolTargetSize())
+	}
+}
+
+// TestSFTPFileSystem_ResizePool_DelegatesToPool tests that ResizePool delegates to pool's Resize.
+// This test will FAIL until Phase 3 implements:
+// - func (fs *SFTPFileSystem) ResizePool(targetSize int)
+// - Method should call fs.pool.Resize(targetSize)
+//
+// Expected behavior:
+// - ResizePool(8) should result in pool.TargetSize() == 8
+// - Delegation should be direct (no additional logic)
+func TestSFTPFileSystem_ResizePool_DelegatesToPool(t *testing.T) {
+	t.Parallel()
+
+	conn, err := filesystem.Connect("localhost", 2222, "testuser")
+	if err != nil {
+		t.Skip("Requires SSH connection for integration test")
+	}
+	defer conn.Close()
+
+	fs, err := filesystem.NewSFTPFileSystem(conn, nil)
+	if err != nil {
+		t.Fatalf("Creating filesystem should succeed: %v", err)
+	}
+	defer fs.Close()
+
+	// Resize to 8
+	fs.ResizePool(8)
+
+	// Verify pool was resized
+	if fs.PoolTargetSize() != 8 {
+		t.Errorf("Pool target size should be 8 after ResizePool(8), got %d", fs.PoolTargetSize())
+	}
+}
+
 // TestSFTPFileSystem_ResizePool_IntegrationWithSyncEngine tests that pool resize works end-to-end.
 // This test will FAIL until Phase 3 is complete.
 //
@@ -330,6 +371,8 @@ func TestSFTPFileSystem_PoolConfig_InvalidValues_ReturnsError(t *testing.T) {
 // - File operations work correctly at different pool sizes
 // - No deadlocks or race conditions during resize
 func TestSFTPFileSystem_ResizePool_IntegrationWithSyncEngine(t *testing.T) {
+	t.Parallel()
+
 	conn, err := filesystem.Connect("localhost", 2222, "testuser")
 	if err != nil {
 		t.Skip("Requires SSH connection")
@@ -367,6 +410,8 @@ func TestSFTPFileSystem_ResizePool_IntegrationWithSyncEngine(t *testing.T) {
 // - Type assertion from FileSystem to ResizablePool should succeed
 // - Can call ResizablePool methods through interface
 func TestSFTPFileSystem_TypeAssertion_ToResizablePool(t *testing.T) {
+	t.Parallel()
+
 	conn, err := filesystem.Connect("localhost", 2222, "testuser")
 	if err != nil {
 		t.Skip("Requires SSH connection")
@@ -380,7 +425,7 @@ func TestSFTPFileSystem_TypeAssertion_ToResizablePool(t *testing.T) {
 	defer fs.Close()
 
 	// Type assert to ResizablePool
-	resizable, ok := interface{}(fs).(filesystem.ResizablePool)
+	resizable, ok := any(fs).(filesystem.ResizablePool)
 	if !ok {
 		t.Errorf("SFTPFileSystem should implement ResizablePool interface")
 	}
@@ -393,25 +438,4 @@ func TestSFTPFileSystem_TypeAssertion_ToResizablePool(t *testing.T) {
 	if resizable.PoolTargetSize() != 5 {
 		t.Errorf("PoolTargetSize should return 5 after ResizePool(5), got %d", resizable.PoolTargetSize())
 	}
-}
-
-// TestSFTPFileSystem_API_Exists tests that ResizablePool methods exist.
-// This is a compile-time check for Phase 3 implementation.
-func TestSFTPFileSystem_API_Exists(t *testing.T) {
-	t.Parallel()
-
-	// Verify the API exists by checking function signatures compile
-	_ = (*filesystem.SFTPFileSystem).Close
-	_ = (*filesystem.SFTPFileSystem).Scan
-	_ = (*filesystem.SFTPFileSystem).Open
-	_ = (*filesystem.SFTPFileSystem).Create
-
-	// Phase 3: ResizablePool methods
-	_ = (*filesystem.SFTPFileSystem).ResizePool
-	_ = (*filesystem.SFTPFileSystem).PoolSize
-	_ = (*filesystem.SFTPFileSystem).PoolTargetSize
-	_ = (*filesystem.SFTPFileSystem).PoolMinSize
-	_ = (*filesystem.SFTPFileSystem).PoolMaxSize
-
-	// Test passes if code compiles
 }

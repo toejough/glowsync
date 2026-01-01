@@ -13,16 +13,6 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-// mustNewEngine creates a new engine and fails the test if there's an error
-func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
-	t.Helper()
-	engine, err := syncengine.NewEngine(source, dest)
-	if err != nil {
-		t.Fatalf("NewEngine failed: %v", err)
-	}
-	return engine
-}
-
 func TestConfirmationScreen_Update_CtrlCKey(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -250,4 +240,15 @@ func TestNewConfirmationScreen(t *testing.T) {
 
 	// Verify screen is created
 	g.Expect(screen).ShouldNot(BeNil(), "Expected screen to be created")
+}
+
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+
+	return engine
 }

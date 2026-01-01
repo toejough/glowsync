@@ -13,16 +13,6 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-// mustNewEngine creates a new engine and fails the test if there's an error
-func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
-	t.Helper()
-	engine, err := syncengine.NewEngine(source, dest)
-	if err != nil {
-		t.Fatalf("NewEngine failed: %v", err)
-	}
-	return engine
-}
-
 func TestAppModelStoresLogPath(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -271,4 +261,15 @@ func TestNewAppModelNonInteractiveMode(t *testing.T) {
 	_ = model.Init()
 	_, _ = model.Update(nil)
 	_ = model.View()
+}
+
+// mustNewEngine creates a new engine and fails the test if there's an error
+func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
+	t.Helper()
+	engine, err := syncengine.NewEngine(source, dest)
+	if err != nil {
+		t.Fatalf("NewEngine failed: %v", err)
+	}
+
+	return engine
 }

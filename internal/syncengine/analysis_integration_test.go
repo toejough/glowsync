@@ -139,6 +139,8 @@ func TestAnalysisProgressIntegration_DivisionByZeroSafety(t *testing.T) {
 }
 
 // TestAnalysisProgressIntegration_PerformanceOverhead verifies <5% overhead.
+//
+//nolint:paralleltest // Performance test requires sequential execution for accurate timing measurements
 func TestAnalysisProgressIntegration_PerformanceOverhead(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping performance test in short mode")

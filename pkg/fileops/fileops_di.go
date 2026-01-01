@@ -26,11 +26,6 @@ type FileOps struct {
 	DestFS   filesystem.FileSystem // Destination filesystem for copy operations
 }
 
-// NewFileOps creates a new FileOps instance with the given filesystem.
-func NewFileOps(fs filesystem.FileSystem) *FileOps {
-	return &FileOps{FS: fs}
-}
-
 // NewDualFileOps creates a new FileOps instance with separate source and destination filesystems.
 func NewDualFileOps(sourceFS, destFS filesystem.FileSystem) *FileOps {
 	return &FileOps{
@@ -38,6 +33,11 @@ func NewDualFileOps(sourceFS, destFS filesystem.FileSystem) *FileOps {
 		SourceFS: sourceFS,
 		DestFS:   destFS,
 	}
+}
+
+// NewFileOps creates a new FileOps instance with the given filesystem.
+func NewFileOps(fs filesystem.FileSystem) *FileOps {
+	return &FileOps{FS: fs}
 }
 
 // NewRealFileOps creates a new FileOps instance using the real filesystem.
@@ -174,22 +174,6 @@ func (fo *FileOps) CopyFile(src, dst string, progress ProgressCallback) (int64, 
 	return written, nil
 }
 
-// getSourceFS returns the source filesystem, falling back to FS if SourceFS is not set.
-func (fo *FileOps) getSourceFS() filesystem.FileSystem {
-	if fo.SourceFS != nil {
-		return fo.SourceFS
-	}
-	return fo.FS
-}
-
-// getDestFS returns the destination filesystem, falling back to FS if DestFS is not set.
-func (fo *FileOps) getDestFS() filesystem.FileSystem {
-	if fo.DestFS != nil {
-		return fo.DestFS
-	}
-	return fo.FS
-}
-
 // CopyFileWithStats copies a file and returns detailed timing statistics.
 // If cancelChan is provided and closed, the copy will be aborted.
 // If onDataComplete is provided, it will be called after data transfer but before file close/chtimes.
@@ -274,6 +258,13 @@ func (fo *FileOps) CopyFileWithStats(src, dst string, progress ProgressCallback,
 	return stats, nil
 }
 
+// CountDestFilesWithProgress counts destination files with progress reporting.
+// Used for dual-filesystem operations where source and dest are different.
+func (fo *FileOps) CountDestFilesWithProgress(rootPath string, progressCallback CountProgressCallback) (int, error) {
+	fs := fo.getDestFS()
+	return fo.countFilesWithProgressFS(fs, rootPath, progressCallback)
+}
+
 // CountFiles quickly counts the total number of files/directories in a path.
 func (fo *FileOps) CountFiles(rootPath string) (int, error) {
 	return fo.CountFilesWithProgress(rootPath, nil)
@@ -284,36 +275,6 @@ func (fo *FileOps) CountFiles(rootPath string) (int, error) {
 func (fo *FileOps) CountFilesWithProgress(rootPath string, progressCallback CountProgressCallback) (int, error) {
 	fs := fo.getSourceFS()
 	return fo.countFilesWithProgressFS(fs, rootPath, progressCallback)
-}
-
-// CountDestFilesWithProgress counts destination files with progress reporting.
-// Used for dual-filesystem operations where source and dest are different.
-func (fo *FileOps) CountDestFilesWithProgress(rootPath string, progressCallback CountProgressCallback) (int, error) {
-	fs := fo.getDestFS()
-	return fo.countFilesWithProgressFS(fs, rootPath, progressCallback)
-}
-
-// countFilesWithProgressFS counts files using the specified filesystem.
-func (fo *FileOps) countFilesWithProgressFS(fs filesystem.FileSystem, rootPath string, progressCallback CountProgressCallback) (int, error) {
-	scanner := fs.Scan(rootPath)
-	count := 0
-
-	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
-		count++
-
-		// Report progress every 10 files to avoid spam
-		if progressCallback != nil && count%10 == 0 {
-			path := filepath.Join(rootPath, info.RelativePath)
-			progressCallback(path, count)
-		}
-	}
-
-	err := scanner.Err()
-	if err != nil {
-		return count, fmt.Errorf("failed to count files in %s: %w", rootPath, err)
-	}
-
-	return count, nil
 }
 
 // Remove removes a file or empty directory.
@@ -340,6 +301,15 @@ func (fo *FileOps) RemoveFromDest(path string) error {
 	return nil
 }
 
+// ScanDestDirectoryWithProgress recursively scans destination directory with progress reporting.
+// Used for dual-filesystem operations where source and dest are different.
+//
+//nolint:lll // Long function signature with callback parameter
+func (fo *FileOps) ScanDestDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
+	fs := fo.getDestFS()
+	return fo.scanDirectoryWithProgressFS(fs, rootPath, progressCallback)
+}
+
 // ScanDirectory recursively scans a directory and returns file information.
 func (fo *FileOps) ScanDirectory(rootPath string) (map[string]*FileInfo, error) {
 	return fo.ScanDirectoryWithProgress(rootPath, nil)
@@ -352,50 +322,6 @@ func (fo *FileOps) ScanDirectory(rootPath string) (map[string]*FileInfo, error) 
 func (fo *FileOps) ScanDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
 	fs := fo.getSourceFS()
 	return fo.scanDirectoryWithProgressFS(fs, rootPath, progressCallback)
-}
-
-// ScanDestDirectoryWithProgress recursively scans destination directory with progress reporting.
-// Used for dual-filesystem operations where source and dest are different.
-//
-//nolint:lll // Long function signature with callback parameter
-func (fo *FileOps) ScanDestDirectoryWithProgress(rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
-	fs := fo.getDestFS()
-	return fo.scanDirectoryWithProgressFS(fs, rootPath, progressCallback)
-}
-
-// scanDirectoryWithProgressFS scans a directory using the specified filesystem.
-func (fo *FileOps) scanDirectoryWithProgressFS(fs filesystem.FileSystem, rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) {
-	files := make(map[string]*FileInfo)
-	fileCount := 0
-
-	scanner := fs.Scan(rootPath)
-	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
-		path := filepath.Join(rootPath, info.RelativePath)
-
-		fileInfo := &FileInfo{
-			Path:         path,
-			RelativePath: info.RelativePath,
-			Size:         info.Size,
-			ModTime:      info.ModTime,
-			IsDir:        info.IsDir,
-		}
-
-		files[info.RelativePath] = fileInfo
-		fileCount++
-
-		// Report progress if callback provided
-		// Note: totalCount is 0 because we don't know the total until we finish scanning
-		if progressCallback != nil {
-			progressCallback(path, fileCount, 0, info.Size)
-		}
-	}
-
-	err := scanner.Err()
-	if err != nil {
-		return files, fmt.Errorf("failed to scan directory %s: %w", rootPath, err)
-	}
-
-	return files, nil
 }
 
 // Stat returns file information
@@ -491,6 +417,82 @@ func (fo *FileOps) copyLoop(sourceFile filesystem.File, destFile filesystem.File
 	}
 
 	return written, nil
+}
+
+// countFilesWithProgressFS counts files using the specified filesystem.
+func (fo *FileOps) countFilesWithProgressFS(fs filesystem.FileSystem, rootPath string, progressCallback CountProgressCallback) (int, error) { //nolint:lll // Function signature with long parameter names
+	scanner := fs.Scan(rootPath)
+	count := 0
+
+	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
+		count++
+
+		// Report progress every 10 files to avoid spam
+		if progressCallback != nil && count%10 == 0 {
+			path := filepath.Join(rootPath, info.RelativePath)
+			progressCallback(path, count)
+		}
+	}
+
+	err := scanner.Err()
+	if err != nil {
+		return count, fmt.Errorf("failed to count files in %s: %w", rootPath, err)
+	}
+
+	return count, nil
+}
+
+// getDestFS returns the destination filesystem, falling back to FS if DestFS is not set.
+func (fo *FileOps) getDestFS() filesystem.FileSystem {
+	if fo.DestFS != nil {
+		return fo.DestFS
+	}
+
+	return fo.FS
+}
+
+// getSourceFS returns the source filesystem, falling back to FS if SourceFS is not set.
+func (fo *FileOps) getSourceFS() filesystem.FileSystem {
+	if fo.SourceFS != nil {
+		return fo.SourceFS
+	}
+
+	return fo.FS
+}
+
+// scanDirectoryWithProgressFS scans a directory using the specified filesystem.
+func (fo *FileOps) scanDirectoryWithProgressFS(fs filesystem.FileSystem, rootPath string, progressCallback ScanProgressCallback) (map[string]*FileInfo, error) { //nolint:lll // Function signature with long parameter and return types
+	files := make(map[string]*FileInfo)
+	fileCount := 0
+
+	scanner := fs.Scan(rootPath)
+	for info, ok := scanner.Next(); ok; info, ok = scanner.Next() {
+		path := filepath.Join(rootPath, info.RelativePath)
+
+		fileInfo := &FileInfo{
+			Path:         path,
+			RelativePath: info.RelativePath,
+			Size:         info.Size,
+			ModTime:      info.ModTime,
+			IsDir:        info.IsDir,
+		}
+
+		files[info.RelativePath] = fileInfo
+		fileCount++
+
+		// Report progress if callback provided
+		// Note: totalCount is 0 because we don't know the total until we finish scanning
+		if progressCallback != nil {
+			progressCallback(path, fileCount, 0, info.Size)
+		}
+	}
+
+	err := scanner.Err()
+	if err != nil {
+		return files, fmt.Errorf("failed to scan directory %s: %w", rootPath, err)
+	}
+
+	return files, nil
 }
 
 // CopyFile copies a file from src to dst with progress reporting.

@@ -16,7 +16,7 @@ func (e *Engine) GetDesiredWorkers() int32 {
 
 // SetDesiredWorkers sets the desired worker count (test helper)
 func (e *Engine) SetDesiredWorkers(count int) {
-	atomic.StoreInt32(&e.desiredWorkers, int32(count))
+	atomic.StoreInt32(&e.desiredWorkers, int32(count)) //nolint:gosec // count bounded by test, no overflow risk
 }
 
 // TestWorker exposes the worker function for testing

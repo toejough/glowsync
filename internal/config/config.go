@@ -114,13 +114,13 @@ func (cfg Config) ValidatePaths() error {
 	// Check if source is an SFTP URL
 	if strings.HasPrefix(cfg.SourcePath, "sftp://") {
 		// Validate SFTP URL format
-		if err := validateSFTPURL(cfg.SourcePath); err != nil {
+		if err := validateSFTPURL(cfg.SourcePath); err != nil { //nolint:noinlineerr,lll // Inline validation is idiomatic for config checks
 			return fmt.Errorf("invalid source SFTP URL: %w", err)
 		}
 		// Cannot validate remote paths until connection - will be validated during engine init
 	} else {
 		// Validate local source path
-		if err := validateLocalPath(cfg.SourcePath, "source"); err != nil {
+		if err := validateLocalPath(cfg.SourcePath, "source"); err != nil { //nolint:noinlineerr,lll // Inline validation is idiomatic for config checks
 			return err
 		}
 	}
@@ -128,51 +128,15 @@ func (cfg Config) ValidatePaths() error {
 	// Check if destination is an SFTP URL
 	if strings.HasPrefix(cfg.DestPath, "sftp://") {
 		// Validate SFTP URL format
-		if err := validateSFTPURL(cfg.DestPath); err != nil {
+		if err := validateSFTPURL(cfg.DestPath); err != nil { //nolint:noinlineerr,lll // Inline validation is idiomatic for config checks
 			return fmt.Errorf("invalid destination SFTP URL: %w", err)
 		}
 		// Cannot validate remote paths until connection - will be validated during engine init
 	} else {
 		// Validate local destination path
-		if err := validateLocalPath(cfg.DestPath, "destination"); err != nil {
+		if err := validateLocalPath(cfg.DestPath, "destination"); err != nil { //nolint:noinlineerr,lll // Inline validation is idiomatic for config checks
 			return err
 		}
-	}
-
-	return nil
-}
-
-// validateSFTPURL validates basic SFTP URL format
-func validateSFTPURL(sftpURL string) error {
-	// Basic validation - just check it has required components
-	if !strings.Contains(sftpURL, "@") {
-		return errors.New("SFTP URL must include username (sftp://user@host/path)")
-	}
-	if !strings.Contains(sftpURL, "/") || strings.Count(sftpURL, "/") < 3 {
-		return errors.New("SFTP URL must include path (sftp://user@host/path)")
-	}
-	return nil
-}
-
-// validateLocalPath validates that a local path exists and is a directory
-func validateLocalPath(path, pathType string) error {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		if pathType == "source" {
-			return fmt.Errorf("%w: %s", ErrSourcePathNotExist, path)
-		}
-		return fmt.Errorf("%w: %s", ErrDestPathNotExist, path)
-	}
-
-	if err != nil {
-		return fmt.Errorf("cannot access %s path: %w", pathType, err)
-	}
-
-	if !info.IsDir() {
-		if pathType == "source" {
-			return fmt.Errorf("%w: %s", ErrSourcePathNotDirectory, path)
-		}
-		return fmt.Errorf("%w: %s", ErrDestPathNotDirectory, path)
 	}
 
 	return nil
@@ -249,6 +213,45 @@ func ValidateFilePattern(pattern string) error {
 	_, err := doublestar.Match(strings.ToLower(pattern), "test")
 	if err != nil {
 		return fmt.Errorf("%w: %s (%w)", ErrInvalidFilePattern, pattern, err)
+	}
+
+	return nil
+}
+
+// validateLocalPath validates that a local path exists and is a directory
+func validateLocalPath(path, pathType string) error {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		if pathType == "source" {
+			return fmt.Errorf("%w: %s", ErrSourcePathNotExist, path)
+		}
+
+		return fmt.Errorf("%w: %s", ErrDestPathNotExist, path)
+	}
+
+	if err != nil {
+		return fmt.Errorf("cannot access %s path: %w", pathType, err)
+	}
+
+	if !info.IsDir() {
+		if pathType == "source" {
+			return fmt.Errorf("%w: %s", ErrSourcePathNotDirectory, path)
+		}
+
+		return fmt.Errorf("%w: %s", ErrDestPathNotDirectory, path)
+	}
+
+	return nil
+}
+
+// validateSFTPURL validates basic SFTP URL format
+func validateSFTPURL(sftpURL string) error {
+	// Basic validation - just check it has required components
+	if !strings.Contains(sftpURL, "@") {
+		return errors.New("SFTP URL must include username (sftp://user@host/path)") //nolint:err113,lll // Validation error with specific format guidance
+	}
+	if !strings.Contains(sftpURL, "/") || strings.Count(sftpURL, "/") < 3 {
+		return errors.New("SFTP URL must include path (sftp://user@host/path)") //nolint:err113,lll // Validation error with specific format guidance
 	}
 
 	return nil

@@ -27,6 +27,7 @@ func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
 	if err != nil {
 		t.Fatalf("NewEngine failed: %v", err)
 	}
+
 	return engine
 }
 
@@ -725,7 +726,6 @@ func TestEngineSyncWithFile(t *testing.T) {
 	g.Expect(err).ShouldNot(HaveOccurred())
 }
 
-
 func TestHandleCopyError(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -763,7 +763,6 @@ func TestHandleCopyError(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect Open call for the source file
-		//nolint:lll // Test mock method chain with inline error injection
 		fsMock.Open.ExpectCalledWithExactly(testFile).InjectReturnValues(nil, errors.New("mock error: permission denied"))
 	}()
 
@@ -1200,7 +1199,7 @@ func TestWorkerExitsWhenOverDesiredCount(t *testing.T) {
 	// Create some test files to sync
 	for i := 1; i <= 3; i++ {
 		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
-		err := os.WriteFile(testFile, []byte(fmt.Sprintf("content %d", i)), 0o600)
+		err := os.WriteFile(testFile, fmt.Appendf(nil, "content %d", i), 0o600)
 		g.Expect(err).ShouldNot(HaveOccurred())
 	}
 
@@ -1223,7 +1222,7 @@ func TestWorkerExitsWhenOverDesiredCount(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Start 5 workers
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
 
 		go engine.TestWorker(&wg, jobs, errors)
@@ -1257,7 +1256,7 @@ func TestWorkerCASPreventsStampede(t *testing.T) {
 	// Create test files
 	for i := 1; i <= 10; i++ {
 		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
-		err := os.WriteFile(testFile, []byte(fmt.Sprintf("content %d", i)), 0o600)
+		err := os.WriteFile(testFile, fmt.Appendf(nil, "content %d", i), 0o600)
 		g.Expect(err).ShouldNot(HaveOccurred())
 	}
 
@@ -1286,7 +1285,7 @@ func TestWorkerCASPreventsStampede(t *testing.T) {
 	close(jobs)
 
 	// Start 10 workers - they'll all try to exit at similar times
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 
 		go engine.TestWorker(&wg, jobs, errors)
@@ -1311,7 +1310,7 @@ func TestGetStatus_IncludesAllCurrentFiles(t *testing.T) {
 
 	// Create 50 files in FilesToSync to simulate a large sync
 	engine.Status.FilesToSync = make([]*syncengine.FileToSync, 50)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		engine.Status.FilesToSync[i] = &syncengine.FileToSync{
 			RelativePath: fmt.Sprintf("file%d.txt", i),
 			Status:       "complete", // Most files are complete
@@ -1360,7 +1359,7 @@ func TestGetStatus_PrioritizesCurrentFilesOverRecent(t *testing.T) {
 
 	// Create 100 files to ensure we exceed the 20-file limit
 	engine.Status.FilesToSync = make([]*syncengine.FileToSync, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		engine.Status.FilesToSync[i] = &syncengine.FileToSync{
 			RelativePath: fmt.Sprintf("file%d.txt", i),
 			Status:       "complete",
@@ -1417,7 +1416,7 @@ func TestGetStatus_EmptyCurrentFiles(t *testing.T) {
 
 	// Create 30 complete files
 	engine.Status.FilesToSync = make([]*syncengine.FileToSync, 30)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		engine.Status.FilesToSync[i] = &syncengine.FileToSync{
 			RelativePath: fmt.Sprintf("file%d.txt", i),
 			Status:       "complete",
@@ -1434,7 +1433,7 @@ func TestGetStatus_EmptyCurrentFiles(t *testing.T) {
 	// Should return last 20 recently active files when CurrentFiles is empty
 	g.Expect(len(status.FilesToSync)).Should(BeNumerically("<=", 20),
 		"Should limit to 20 files when no CurrentFiles")
-	g.Expect(len(status.CurrentFiles)).Should(Equal(0), "CurrentFiles should be empty")
+	g.Expect(status.CurrentFiles).Should(BeEmpty(), "CurrentFiles should be empty")
 }
 
 // Phase 4 Tests: Sync Engine Integration with ResizablePool
@@ -1710,6 +1709,8 @@ func TestSyncAdaptive_ResizesPoolsWithWorkerCount_Integration(t *testing.T) {
 // Target behavior (Change 1):
 // - addRateSample() called every 1 second during progressCallback
 // - Each sample captures current transfer state (bytes, workers, timestamp)
+//
+//nolint:funlen // Comprehensive test with detailed assertions and debug output
 func TestProgressCallback_AddsRateSampleDuringTransfer(t *testing.T) {
 	t.Skip("Flaky test: race condition (reads RecentSamples without lock) + timing assumption (files transfer too fast)")
 	t.Parallel()
@@ -1719,7 +1720,7 @@ func TestProgressCallback_AddsRateSampleDuringTransfer(t *testing.T) {
 	destDir := t.TempDir()
 
 	// Create multiple large files to ensure transfer takes multiple seconds
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		largeContent := make([]byte, 50*1024*1024) // 50 MB per file
 		for j := range largeContent {
 			largeContent[j] = byte(j % 256)
@@ -1886,7 +1887,7 @@ func TestProgressCallback_CapturesTransferState(t *testing.T) {
 	g.Expect(err).ShouldNot(HaveOccurred())
 
 	// CRITICAL ASSERTION: Samples should capture current transfer state
-	g.Expect(len(engine.Status.Workers.RecentSamples)).Should(BeNumerically(">", 0),
+	g.Expect(engine.Status.Workers.RecentSamples).ShouldNot(BeEmpty(),
 		"At least one sample should be added during transfer (Change 1)")
 
 	if len(engine.Status.Workers.RecentSamples) > 0 {
@@ -1961,6 +1962,8 @@ func TestEvaluationInterval_Is10Seconds(t *testing.T) {
 // Target behavior (Change 2):
 // - Evaluation interval changed from 5s to 10s
 // - Evaluations should occur at 10s, 20s, 30s intervals
+//
+//nolint:cyclop,funlen // Comprehensive test with multiple timing validation points
 func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -1969,9 +1972,9 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 	destDir := t.TempDir()
 
 	// Create test files
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
-		err := os.WriteFile(testFile, []byte(fmt.Sprintf("content %d", i)), 0o600)
+		err := os.WriteFile(testFile, fmt.Appendf(nil, "content %d", i), 0o600)
 		g.Expect(err).ShouldNot(HaveOccurred())
 	}
 
@@ -2017,7 +2020,7 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 
 		// Send ticks every 100ms, simulate 30 seconds of operation
 		currentTime := baseTime
-		for i := 0; i < 300; i++ {
+		for range 300 {
 			select {
 			case <-done:
 				return
@@ -2153,7 +2156,8 @@ func TestSyncAdaptive_10sIntervalWithFullRollingWindow(t *testing.T) {
 // Expected changes in sync.go around line 1558:
 // OLD: if filesSinceLastCheck >= currentWorkers*targetFilesPerWorker {
 // NEW: const evaluationInterval = 5 * time.Second
-//      if time.Since(state.LastCheckTime) >= evaluationInterval {
+//
+//	if time.Since(state.LastCheckTime) >= evaluationInterval {
 func TestSyncAdaptive_ActualTimeBehavior_Integration(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -2162,7 +2166,7 @@ func TestSyncAdaptive_ActualTimeBehavior_Integration(t *testing.T) {
 	destDir := t.TempDir()
 
 	// Create exactly 3 small test files (below the file-count threshold)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		testFile := filepath.Join(sourceDir, fmt.Sprintf("test%d.txt", i))
 		err := os.WriteFile(testFile, []byte("small content"), 0o600)
 		g.Expect(err).ShouldNot(HaveOccurred())
@@ -2306,9 +2310,9 @@ func TestHillClimbingScalingDecision_InitialBehavior(t *testing.T) {
 
 	// Initial state: AdaptiveScalingState with LastThroughput = 0 (first measurement)
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  0, // First measurement
-		LastAdjustment:  0,
-		LastCheckTime:   time.Now(),
+		LastThroughput: 0, // First measurement
+		LastAdjustment: 0,
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 1 MB/s (arbitrary positive value)
@@ -2359,9 +2363,9 @@ func TestHillClimbingScalingDecision_ThroughputImproved(t *testing.T) {
 	// Previous state: Last adjustment was +1 (added worker)
 	// Last throughput was 1 MB/s
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  1024.0 * 1024.0, // 1 MB/s
-		LastAdjustment:  1,               // Last action: added worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment: 1,               // Last action: added worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 1.1 MB/s (10% improvement - above 5% threshold)
@@ -2412,9 +2416,9 @@ func TestHillClimbingScalingDecision_ThroughputDegraded(t *testing.T) {
 	// Previous state: Last adjustment was +1 (added worker)
 	// Last throughput was 1 MB/s
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  1024.0 * 1024.0, // 1 MB/s
-		LastAdjustment:  1,               // Last action: added worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment: 1,               // Last action: added worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 0.9 MB/s (10% degradation - below -5% threshold)
@@ -2465,9 +2469,9 @@ func TestHillClimbingScalingDecision_ThroughputFlat(t *testing.T) {
 	// Previous state: Last adjustment was +1
 	// Last throughput was 1 MB/s
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  1024.0 * 1024.0, // 1 MB/s
-		LastAdjustment:  1,               // Last action: added worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment: 1,               // Last action: added worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 1.02 MB/s (2% change - within ±5% threshold)
@@ -2517,9 +2521,9 @@ func TestHillClimbingScalingDecision_DirectionContinuity(t *testing.T) {
 	// Simulate a sequence: started with 1 worker, added to 2, throughput improved
 	// Now we're at 2 workers, and throughput improved again
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  2.0 * 1024.0 * 1024.0, // 2 MB/s
-		LastAdjustment:  1,                     // Last action: added worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 2.0 * 1024.0 * 1024.0, // 2 MB/s
+		LastAdjustment: 1,                     // Last action: added worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 2.2 MB/s (10% improvement)
@@ -2567,9 +2571,9 @@ func TestHillClimbingScalingDecision_DirectionReversal(t *testing.T) {
 
 	// Previous state: Last adjustment was +1 (added worker from 2 to 3)
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  2.0 * 1024.0 * 1024.0, // 2 MB/s
-		LastAdjustment:  1,                     // Last action: added worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 2.0 * 1024.0 * 1024.0, // 2 MB/s
+		LastAdjustment: 1,                     // Last action: added worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 1.8 MB/s (10% degradation)
@@ -2617,9 +2621,9 @@ func TestHillClimbingScalingDecision_BoundsCheckMinWorkers(t *testing.T) {
 
 	// Previous state: Last adjustment was -1, currently at 1 worker
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  1.0 * 1024.0 * 1024.0, // 1 MB/s
-		LastAdjustment:  -1,                    // Last action: removed worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 1.0 * 1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment: -1,                    // Last action: removed worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 0.9 MB/s (degraded further)
@@ -2671,9 +2675,9 @@ func TestHillClimbingScalingDecision_BoundsCheckMaxWorkers(t *testing.T) {
 
 	// Previous state: Last adjustment was +1, at max workers
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  5.0 * 1024.0 * 1024.0, // 5 MB/s
-		LastAdjustment:  1,                     // Last action: added worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 5.0 * 1024.0 * 1024.0, // 5 MB/s
+		LastAdjustment: 1,                     // Last action: added worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 5.5 MB/s (improved by 10%)
@@ -2726,9 +2730,9 @@ func TestHillClimbingScalingDecision_TotalThroughputCalculation(t *testing.T) {
 	// Even though per-worker speed stayed same (~1 MB/s), total throughput improved
 
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  3.0 * 1024.0 * 1024.0, // 3 MB/s total (3 workers)
-		LastAdjustment:  1,                     // Last action: added worker (3->4)
-		LastCheckTime:   time.Now(),
+		LastThroughput: 3.0 * 1024.0 * 1024.0, // 3 MB/s total (3 workers)
+		LastAdjustment: 1,                     // Last action: added worker (3->4)
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current: 4.2 MB/s total with 4 workers (improvement in total throughput)
@@ -2781,9 +2785,9 @@ func TestHillClimbingScalingDecision_RemovalContinuity(t *testing.T) {
 	// Previous state: Last adjustment was -1 (removed worker from 5 to 4)
 	// Throughput was 2.0 MB/s
 	state := &syncengine.AdaptiveScalingState{
-		LastThroughput:  2.0 * 1024.0 * 1024.0, // 2 MB/s
-		LastAdjustment:  -1,                    // Last action: removed worker
-		LastCheckTime:   time.Now(),
+		LastThroughput: 2.0 * 1024.0 * 1024.0, // 2 MB/s
+		LastAdjustment: -1,                    // Last action: removed worker
+		LastCheckTime:  time.Now(),
 	}
 
 	// Current throughput: 2.2 MB/s (10% improvement after removing worker)
