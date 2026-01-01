@@ -342,10 +342,11 @@ A simple md issue tracker.
    - migrated_from: imptest issues.md #14
    - linear: TOE-87
 17. Adaptive scaling ratchets up worker count inefficiently
-   - status: in progress
+   - status: done
    - priority: high
    - created: 2025-12-31 19:03 EST
-   - started: 2025-12-31 19:09 EST
+   - started: 2025-12-31 19:04 EST
+   - completed: 2025-12-31 19:25 EST
    - description: Current adaptive scaling algorithm uses per-worker speed as metric, causing runaway worker growth even when it hurts performance
    - observed behavior:
      - Workers ratchet up to 14+ even when not helping throughput
@@ -391,3 +392,6 @@ A simple md issue tracker.
       - 2025-12-31 19:19 EST: AUDIT phase - Routing to auditor
       - 2025-12-31 19:23 EST: AUDIT PASS - Clean implementation, algorithm correct, all tests pass, backward compatible
       - 2025-12-31 19:23 EST: Routing to git-workflow for commit
+      - 2025-12-31 19:25 EST: Committed (5cad77a) - Hill climbing algorithm implementation
+      - 2025-12-31 19:25 EST: Committed (5826996) - Issue tracker update
+      - 2025-12-31 19:25 EST: Issue #17 COMPLETE - Adaptive scaling now uses hill climbing with total throughput tracking
