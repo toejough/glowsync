@@ -8,6 +8,7 @@ package syncengine
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,10 +60,16 @@ var (
 
 // AdaptiveScalingState holds the state for adaptive scaling algorithm
 type AdaptiveScalingState struct {
+	// Old fields (for EvaluateAndScale - per-worker algorithm)
 	LastProcessedFiles int
 	LastPerWorkerSpeed float64
 	FilesAtLastCheck   int
-	LastCheckTime      time.Time
+
+	// New fields (for HillClimbingScalingDecision - total throughput algorithm)
+	LastThroughput float64   // Total bytes/sec (not per-worker)
+	LastAdjustment int       // Direction: +1 (added worker), -1 (removed), 0 (no change)
+
+	LastCheckTime  time.Time // Shared by both algorithms
 }
 
 // Engine handles the synchronization process
@@ -459,6 +466,115 @@ func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed f
 	} else {
 		e.logToFile(fmt.Sprintf("Adaptive: → Per-worker speed stable, adding worker to test (%d -> %d)",
 			currentWorkers, currentWorkers+1))
+	}
+}
+
+// HillClimbingScalingDecision makes a scaling decision using hill climbing algorithm.
+// It tracks total system throughput (bytes/sec) and adjusts workers based on:
+// - Initial: optimistically add worker
+// - Improved (>5%): continue in same direction
+// - Degraded (<-5%): reverse direction
+// - Flat (±5%): random perturbation
+func (e *Engine) HillClimbingScalingDecision(
+	state *AdaptiveScalingState,
+	currentThroughput float64,
+	currentWorkers, maxWorkers int,
+	workerControl chan bool,
+) *AdaptiveScalingState {
+	const (
+		improvementThreshold = 1.05 // >5% improvement
+		degradationThreshold = 0.95 // <5% degradation
+	)
+
+	// Initialize desiredWorkers to currentWorkers if not yet set
+	if atomic.LoadInt32(&e.desiredWorkers) == 0 {
+		atomic.StoreInt32(&e.desiredWorkers, int32(currentWorkers))
+	}
+
+	// Determine adjustment direction
+	var adjustment int
+
+	if state.LastThroughput == 0 {
+		// First measurement - optimistically add worker
+		adjustment = 1
+		e.logToFile(fmt.Sprintf("HillClimbing: First measurement (%.2f MB/s), optimistically adding worker",
+			currentThroughput/BytesPerKilobyte/BytesPerKilobyte))
+	} else {
+		// Calculate throughput ratio
+		throughputRatio := currentThroughput / state.LastThroughput
+
+		// Get current desired to check boundaries
+		currentDesired := int(atomic.LoadInt32(&e.desiredWorkers))
+
+		if throughputRatio > improvementThreshold {
+			// Throughput improved >5% - continue in same direction
+			adjustment = state.LastAdjustment
+			e.logToFile(fmt.Sprintf("HillClimbing: Throughput improved (+%.1f%%), continuing direction %+d",
+				(throughputRatio-1)*PercentageScale, adjustment))
+		} else if throughputRatio < degradationThreshold {
+			// Throughput degraded >5% - normally reverse direction
+			// Special case: if we're at min/max boundary and were heading towards it,
+			// don't reverse (to avoid immediate oscillation at boundaries)
+			if (currentDesired == 1 && state.LastAdjustment == -1) ||
+				(currentDesired == maxWorkers && state.LastAdjustment == 1) {
+				// At boundary, don't reverse - stay put
+				adjustment = 0
+				e.logToFile(fmt.Sprintf("HillClimbing: Throughput degraded (%.1f%%) at boundary (%d workers), staying put",
+					(throughputRatio-1)*PercentageScale, currentDesired))
+			} else {
+				// Normal case: reverse direction
+				adjustment = -state.LastAdjustment
+				e.logToFile(fmt.Sprintf("HillClimbing: Throughput degraded (%.1f%%), reversing direction to %+d",
+					(throughputRatio-1)*PercentageScale, adjustment))
+			}
+		} else {
+			// Throughput flat (±5%) - random perturbation
+			// Use simple random: rand.Intn(2) gives 0 or 1, multiply by 2 gives 0 or 2, subtract 1 gives -1 or 1
+			adjustment = rand.Intn(2)*2 - 1
+			e.logToFile(fmt.Sprintf("HillClimbing: Throughput flat (%.1f%%), random perturbation %+d",
+				(throughputRatio-1)*PercentageScale, adjustment))
+		}
+	}
+
+	// Execute adjustment with bounds checking
+	if adjustment != 0 {
+		// Get current desired workers
+		currentDesired := atomic.LoadInt32(&e.desiredWorkers)
+
+		// Calculate new desired with bounds
+		newDesired := int(currentDesired) + adjustment
+		if newDesired < 1 {
+			newDesired = 1
+		} else if newDesired > maxWorkers {
+			newDesired = maxWorkers
+		}
+
+		// Only apply if within bounds
+		if newDesired == int(currentDesired) {
+			// Hit a bound, no change
+			e.logToFile(fmt.Sprintf("HillClimbing: Bounded at %d workers (min: 1, max: %d)", newDesired, maxWorkers))
+			adjustment = 0 // No actual adjustment made
+		} else {
+			// Apply the adjustment
+			atomic.StoreInt32(&e.desiredWorkers, int32(newDesired))
+			e.resizePools(newDesired)
+
+			if adjustment > 0 {
+				// Add worker
+				workerControl <- true
+				e.logToFile(fmt.Sprintf("HillClimbing: Adding worker (%d -> %d)", currentDesired, newDesired))
+			} else {
+				// Remove worker
+				e.logToFile(fmt.Sprintf("HillClimbing: Removing worker (%d -> %d)", currentDesired, newDesired))
+			}
+		}
+	}
+
+	// Return updated state
+	return &AdaptiveScalingState{
+		LastThroughput: currentThroughput,
+		LastAdjustment: adjustment,
+		LastCheckTime:  e.TimeProvider.Now(),
 	}
 }
 

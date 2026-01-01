@@ -2600,3 +2600,529 @@ func TestMakeScalingDecision_WidenedThresholds(t *testing.T) {
 		t.Fatal("Expected worker to be added for improved speed")
 	}
 }
+
+// TestHillClimbingScalingDecision_InitialBehavior verifies that the first evaluation
+// adds a worker (optimistic start from 1 worker).
+func TestHillClimbingScalingDecision_InitialBehavior(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Initial state: AdaptiveScalingState with LastThroughput = 0 (first measurement)
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  0, // First measurement
+		LastAdjustment:  0,
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 1 MB/s (arbitrary positive value)
+	currentThroughput := 1024.0 * 1024.0 // 1 MB/s
+	currentWorkers := 1
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify worker was added (optimistic start)
+	expectWorkerAdded(t, g, workerControl, "initial evaluation")
+
+	// Verify state was updated
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"LastThroughput should be updated to current throughput")
+	g.Expect(newState.LastAdjustment).Should(Equal(1),
+		"LastAdjustment should be +1 (added worker)")
+
+	// Verify desiredWorkers was incremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(2)),
+		"desiredWorkers should increment from 1 to 2 on initial evaluation")
+}
+
+// TestHillClimbingScalingDecision_ThroughputImproved verifies that when throughput
+// improves by >5%, we continue in the same direction.
+func TestHillClimbingScalingDecision_ThroughputImproved(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was +1 (added worker)
+	// Last throughput was 1 MB/s
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment:  1,               // Last action: added worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 1.1 MB/s (10% improvement - above 5% threshold)
+	currentThroughput := 1.1 * 1024.0 * 1024.0
+	currentWorkers := 2
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify worker was added (continue in +1 direction)
+	expectWorkerAdded(t, g, workerControl, "throughput improved")
+
+	// Verify state was updated
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"LastThroughput should be updated")
+	g.Expect(newState.LastAdjustment).Should(Equal(1),
+		"LastAdjustment should remain +1 (continue same direction)")
+
+	// Verify desiredWorkers was incremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(3)),
+		"desiredWorkers should increment from 2 to 3 when throughput improved")
+}
+
+// TestHillClimbingScalingDecision_ThroughputDegraded verifies that when throughput
+// degrades by >5%, we reverse direction.
+func TestHillClimbingScalingDecision_ThroughputDegraded(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was +1 (added worker)
+	// Last throughput was 1 MB/s
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment:  1,               // Last action: added worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 0.9 MB/s (10% degradation - below -5% threshold)
+	currentThroughput := 0.9 * 1024.0 * 1024.0
+	currentWorkers := 3
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify no worker was added (direction reversed - worker removed)
+	expectNoWorkerAdded(t, workerControl, "throughput degraded")
+
+	// Verify state was updated
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"LastThroughput should be updated")
+	g.Expect(newState.LastAdjustment).Should(Equal(-1),
+		"LastAdjustment should be -1 (reversed direction - remove worker)")
+
+	// Verify desiredWorkers was decremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(2)),
+		"desiredWorkers should decrement from 3 to 2 when throughput degraded")
+}
+
+// TestHillClimbingScalingDecision_ThroughputFlat verifies that when throughput
+// is within ±5%, we apply random perturbation (can go either direction).
+func TestHillClimbingScalingDecision_ThroughputFlat(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was +1
+	// Last throughput was 1 MB/s
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment:  1,               // Last action: added worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 1.02 MB/s (2% change - within ±5% threshold)
+	currentThroughput := 1.02 * 1024.0 * 1024.0
+	currentWorkers := 2
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify state was updated
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"LastThroughput should be updated")
+
+	// Random perturbation - adjustment should be either +1 or -1
+	g.Expect(newState.LastAdjustment).Should(Or(Equal(1), Equal(-1)),
+		"LastAdjustment should be ±1 for random perturbation")
+
+	// Verify desiredWorkers changed (either +1 or -1)
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Or(Equal(int32(1)), Equal(int32(3))),
+		"desiredWorkers should be either 1 or 3 after random perturbation from 2")
+}
+
+// TestHillClimbingScalingDecision_DirectionContinuity verifies that if last adjustment
+// was +1 and throughput improved, we continue adding workers.
+func TestHillClimbingScalingDecision_DirectionContinuity(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Simulate a sequence: started with 1 worker, added to 2, throughput improved
+	// Now we're at 2 workers, and throughput improved again
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  2.0 * 1024.0 * 1024.0, // 2 MB/s
+		LastAdjustment:  1,                     // Last action: added worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 2.2 MB/s (10% improvement)
+	currentThroughput := 2.2 * 1024.0 * 1024.0
+	currentWorkers := 2
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify worker was added (continue +1 direction)
+	expectWorkerAdded(t, g, workerControl, "direction continuity")
+
+	// Verify adjustment remains +1
+	g.Expect(newState.LastAdjustment).Should(Equal(1),
+		"LastAdjustment should remain +1 when continuing successful direction")
+
+	// Verify desiredWorkers incremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(3)),
+		"desiredWorkers should increment from 2 to 3")
+}
+
+// TestHillClimbingScalingDecision_DirectionReversal verifies that if last adjustment
+// was +1 but throughput degraded, we reverse to -1 (remove worker).
+func TestHillClimbingScalingDecision_DirectionReversal(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was +1 (added worker from 2 to 3)
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  2.0 * 1024.0 * 1024.0, // 2 MB/s
+		LastAdjustment:  1,                     // Last action: added worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 1.8 MB/s (10% degradation)
+	currentThroughput := 1.8 * 1024.0 * 1024.0
+	currentWorkers := 3
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify no worker was added (direction reversed)
+	expectNoWorkerAdded(t, workerControl, "direction reversal")
+
+	// Verify adjustment reversed to -1
+	g.Expect(newState.LastAdjustment).Should(Equal(-1),
+		"LastAdjustment should reverse to -1 when throughput degraded")
+
+	// Verify desiredWorkers decremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(2)),
+		"desiredWorkers should decrement from 3 to 2 after direction reversal")
+}
+
+// TestHillClimbingScalingDecision_BoundsCheckMinWorkers verifies that we don't
+// go below 1 worker.
+func TestHillClimbingScalingDecision_BoundsCheckMinWorkers(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was -1, currently at 1 worker
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  1.0 * 1024.0 * 1024.0, // 1 MB/s
+		LastAdjustment:  -1,                    // Last action: removed worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 0.9 MB/s (degraded further)
+	// Algorithm might want to remove worker, but we're already at 1
+	currentThroughput := 0.9 * 1024.0 * 1024.0
+	currentWorkers := 1
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify no worker was removed (can't go below 1)
+	expectNoWorkerAdded(t, workerControl, "minimum workers bound")
+
+	// Verify desiredWorkers stayed at 1
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(1)),
+		"desiredWorkers should not go below 1")
+
+	// State should be updated
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"LastThroughput should be updated")
+}
+
+// TestHillClimbingScalingDecision_BoundsCheckMaxWorkers verifies that we don't
+// exceed maxWorkers.
+func TestHillClimbingScalingDecision_BoundsCheckMaxWorkers(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Set desiredWorkers to maxWorkers
+	engine.SetDesiredWorkers(10)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was +1, at max workers
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  5.0 * 1024.0 * 1024.0, // 5 MB/s
+		LastAdjustment:  1,                     // Last action: added worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 5.5 MB/s (improved by 10%)
+	// Algorithm wants to add worker, but we're at max
+	currentThroughput := 5.5 * 1024.0 * 1024.0
+	currentWorkers := 10
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify no worker was added (at max)
+	expectNoWorkerAdded(t, workerControl, "maximum workers bound")
+
+	// Verify desiredWorkers stayed at 10
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(10)),
+		"desiredWorkers should not exceed maxWorkers")
+
+	// State should be updated even though no action taken
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"LastThroughput should be updated even at max workers")
+}
+
+// TestHillClimbingScalingDecision_TotalThroughputCalculation verifies that we're using
+// system-wide bytes/sec, not per-worker metrics.
+func TestHillClimbingScalingDecision_TotalThroughputCalculation(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Scenario: We have 4 workers
+	// Total system throughput: 4 MB/s (1 MB/s per worker on average)
+	// Previous total throughput: 3 MB/s with 3 workers
+	// Even though per-worker speed stayed same (~1 MB/s), total throughput improved
+
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  3.0 * 1024.0 * 1024.0, // 3 MB/s total (3 workers)
+		LastAdjustment:  1,                     // Last action: added worker (3->4)
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current: 4.2 MB/s total with 4 workers (improvement in total throughput)
+	// Per-worker: ~1.05 MB/s (marginal per-worker improvement)
+	currentThroughput := 4.2 * 1024.0 * 1024.0
+	currentWorkers := 4
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Total throughput improved by 40% (4.2/3.0 = 1.4)
+	// This should trigger adding another worker (continue direction)
+	expectWorkerAdded(t, g, workerControl, "total throughput improved")
+
+	// Verify state tracks total throughput, not per-worker
+	g.Expect(newState.LastThroughput).Should(Equal(currentThroughput),
+		"Should track total system throughput")
+	g.Expect(newState.LastAdjustment).Should(Equal(1),
+		"Should continue adding workers when total throughput improves")
+
+	// Verify desiredWorkers incremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(5)),
+		"desiredWorkers should increment from 4 to 5 based on total throughput")
+}
+
+// TestHillClimbingScalingDecision_RemovalContinuity verifies that if last adjustment
+// was -1 and throughput improved, we continue removing workers.
+func TestHillClimbingScalingDecision_RemovalContinuity(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	// Create temp directories
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Create engine
+	engine := mustNewEngine(t, sourceDir, destDir)
+
+	// Create worker control channel
+	workerControl := make(chan bool, 10)
+
+	// Previous state: Last adjustment was -1 (removed worker from 5 to 4)
+	// Throughput was 2.0 MB/s
+	state := &syncengine.AdaptiveScalingState{
+		LastThroughput:  2.0 * 1024.0 * 1024.0, // 2 MB/s
+		LastAdjustment:  -1,                    // Last action: removed worker
+		LastCheckTime:   time.Now(),
+	}
+
+	// Current throughput: 2.2 MB/s (10% improvement after removing worker)
+	// This means removing workers is the right direction (less contention)
+	currentThroughput := 2.2 * 1024.0 * 1024.0
+	currentWorkers := 4
+	maxWorkers := 10
+
+	// Call HillClimbingScalingDecision
+	newState := engine.HillClimbingScalingDecision(
+		state,
+		currentThroughput,
+		currentWorkers,
+		maxWorkers,
+		workerControl,
+	)
+
+	// Verify no worker was added (continue removing)
+	expectNoWorkerAdded(t, workerControl, "removal continuity")
+
+	// Verify adjustment remains -1
+	g.Expect(newState.LastAdjustment).Should(Equal(-1),
+		"LastAdjustment should remain -1 when continuing successful removal")
+
+	// Verify desiredWorkers decremented
+	desired := engine.GetDesiredWorkers()
+	g.Expect(desired).Should(Equal(int32(3)),
+		"desiredWorkers should decrement from 4 to 3 when continuing removal")
+}
