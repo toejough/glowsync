@@ -1648,7 +1648,7 @@ func (e *Engine) startAdaptiveScaling(done chan struct{}, jobs chan *FileToSync,
 		state := &AdaptiveScalingState{}
 		maxWorkers := len(e.Status.FilesToSync) // Cap at total files
 
-		e.logToFile("Adaptive: Starting with 1 worker, will continuously adjust based on per-worker efficiency")
+		e.logToFile("HillClimbing: Starting with 1 worker, will adjust based on total system throughput")
 
 		for {
 			select {
