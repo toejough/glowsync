@@ -551,12 +551,20 @@ func (e *Engine) HillClimbingScalingDecision(
 			e.resizePools(newDesired)
 
 			if adjustment > 0 {
-				// Add worker
-				workerControl <- true
-				e.logToFile(fmt.Sprintf("HillClimbing: Adding worker (%d -> %d)", currentDesired, newDesired))
+				// Add worker - but only if actual count is below target
+				// (Workers may not have exited yet from previous removal)
+				if currentWorkers < newDesired {
+					workerControl <- true
+					e.logToFile(fmt.Sprintf("HillClimbing: Adding worker (desired: %d -> %d, active: %d)",
+						currentDesired, newDesired, currentWorkers))
+				} else {
+					e.logToFile(fmt.Sprintf("HillClimbing: Target increased %d -> %d, but %d workers already active (waiting for convergence)",
+						currentDesired, newDesired, currentWorkers))
+				}
 			} else {
-				// Remove worker
-				e.logToFile(fmt.Sprintf("HillClimbing: Removing worker (%d -> %d)", currentDesired, newDesired))
+				// Remove worker (workers will self-exit when they notice)
+				e.logToFile(fmt.Sprintf("HillClimbing: Removing worker (desired: %d -> %d, active: %d)",
+					currentDesired, newDesired, currentWorkers))
 			}
 		}
 	}
