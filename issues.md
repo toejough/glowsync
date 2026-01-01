@@ -341,3 +341,53 @@ A simple md issue tracker.
    - effort: Trivial
    - migrated_from: imptest issues.md #14
    - linear: TOE-87
+17. Adaptive scaling ratchets up worker count inefficiently
+   - status: in progress
+   - priority: high
+   - created: 2025-12-31 19:03 EST
+   - started: 2025-12-31 19:09 EST
+   - description: Current adaptive scaling algorithm uses per-worker speed as metric, causing runaway worker growth even when it hurts performance
+   - observed behavior:
+     - Workers ratchet up to 14+ even when not helping throughput
+     - When workers decrease, per-worker speed increases (less contention)
+     - Algorithm interprets this as "improvement" and adds workers again
+     - Creates feedback loop: too many workers → decrease → speed improves → add more → repeat
+   - root cause:
+     - Metric: per-worker speed (wrong - doesn't capture contention)
+     - No directional tracking (doesn't remember if we just added or removed workers)
+     - No awareness of throughput degradation from over-parallelization
+   - proposed solution: Hill climbing algorithm with throughput tracking
+     - Track total throughput (files/sec or MB/sec) instead of per-worker speed
+     - Remember adjustment direction (are we adding or removing?)
+     - Continue in direction that improves throughput
+     - Reverse direction when throughput decreases
+     - Research references:
+       - .NET CLR ThreadPool hill climbing (proven in production)
+       - MySQL adaptive thread pool (40% improvement)
+       - ADAPT-T algorithm (exploits concave upward performance curve)
+       - AIMD (additive increase, multiplicative decrease) from TCP congestion control
+   - acceptance criteria:
+     - Worker count stabilizes at optimal level for workload
+     - No runaway growth beyond useful parallelism
+     - Adapts correctly when workload characteristics change
+     - Decreases workers when contention detected
+   - updates:
+      - 2025-12-31 19:04 EST: DESIGN phase - Starting hill climbing algorithm design
+      - 2025-12-31 19:07 EST: Design complete - Hill climbing with total throughput tracking
+      - design parameters:
+        - Metric: Total throughput (bytes/sec for entire system)
+        - Thresholds: 5% hysteresis (1.05 for improvement, 0.95 for degradation)
+        - Direction tracking: Track last adjustment (+1 or -1)
+        - Flat behavior: Random perturbation when throughput within ±5%
+        - Initial: Start with 1 worker, add first (optimistic)
+        - Algorithm: Continue direction on improvement, reverse on degradation
+      - state additions needed:
+        - LastThroughput (float64) - replaces LastPerWorkerSpeed
+        - LastAdjustment (int) - tracks direction (+1, -1, or 0)
+      - 2025-12-31 19:08 EST: RED phase - Routing to test-writer for hill climbing tests
+      - 2025-12-31 19:13 EST: RED phase complete - 11 tests written, all failing as expected
+      - 2025-12-31 19:13 EST: GREEN phase - Routing to implementer
+      - 2025-12-31 19:19 EST: GREEN phase complete - Hill climbing algorithm implemented, all 10 tests pass
+      - 2025-12-31 19:19 EST: AUDIT phase - Routing to auditor
+      - 2025-12-31 19:23 EST: AUDIT PASS - Clean implementation, algorithm correct, all tests pass, backward compatible
+      - 2025-12-31 19:23 EST: Routing to git-workflow for commit
