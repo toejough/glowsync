@@ -271,7 +271,15 @@ func (e *Engine) EvaluateAndScale(state *AdaptiveScalingState, currentProcessedF
 
 			// Make scaling decision using hill climbing algorithm based on total throughput
 			newState := e.HillClimbingScalingDecision(state, currentThroughput, currentWorkers, maxWorkers, workerControl)
-			*state = *newState
+
+			// Update state with new hill climbing fields
+			state.LastThroughput = newState.LastThroughput
+			state.LastAdjustment = newState.LastAdjustment
+			state.LastCheckTime = newState.LastCheckTime
+
+			// Also update the old tracking fields to prevent hitting baseline path again
+			state.LastProcessedFiles = currentProcessedFiles
+			state.FilesAtLastCheck = currentProcessedFiles
 		}
 	} else {
 		// First check - just record baseline
