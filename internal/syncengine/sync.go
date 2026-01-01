@@ -1,9 +1,9 @@
 // Package syncengine provides file synchronization functionality.
 package syncengine
 
-//go:generate impgen syncengine.Engine.Cancel
-//go:generate impgen syncengine.Engine.EnableFileLogging
-//go:generate impgen syncengine.Engine.CloseLog
+//go:generate impgen --target syncengine.Engine.Cancel
+//go:generate impgen --target syncengine.Engine.EnableFileLogging
+//go:generate impgen --target syncengine.Engine.CloseLog
 
 import (
 	"errors"

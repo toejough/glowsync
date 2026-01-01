@@ -1,8 +1,8 @@
 //nolint:varnamelen // Test files use idiomatic short variable names (t, fs, etc.)
 package filesystem_test
 
-//go:generate impgen filesystem.FileSystem
-//go:generate impgen filesystem.FileScanner
+//go:generate impgen --dependency filesystem.FileSystem
+//go:generate impgen --dependency filesystem.FileScanner
 
 import (
 	"testing"

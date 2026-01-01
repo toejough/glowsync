@@ -1,7 +1,7 @@
 // Package config handles application configuration and command-line argument parsing.
 package config
 
-//go:generate impgen config.PostProcessConfig
+//go:generate impgen --target config.PostProcessConfig
 
 import (
 	"errors"

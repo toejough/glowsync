@@ -33,9 +33,9 @@ func TestCompareFilesBytes(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	wrapper := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
+	wrapper := WrapCompareFilesBytes(t, fileops.CompareFilesBytes)
 	wrapper.Start(file1, file2)
-	wrapper.ExpectReturnedValuesShould(Equal(true), BeNil())
+	wrapper.ExpectReturnsMatch(Equal(true), BeNil())
 }
 
 func TestCompareFilesBytesDifferent(t *testing.T) {
@@ -57,9 +57,9 @@ func TestCompareFilesBytesDifferent(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	wrapper := NewCompareFilesBytesImp(t, fileops.CompareFilesBytes)
+	wrapper := WrapCompareFilesBytes(t, fileops.CompareFilesBytes)
 	wrapper.Start(file1, file2)
-	wrapper.ExpectReturnedValuesShould(Equal(false), BeNil())
+	wrapper.ExpectReturnsMatch(Equal(false), BeNil())
 }
 
 func TestComputeFileHash(t *testing.T) {
@@ -76,16 +76,16 @@ func TestComputeFileHash(t *testing.T) {
 	}
 
 	// First hash
-	hashImp1 := NewComputeFileHashImp(t, fileops.ComputeFileHash).Start(testFile)
-	hashImp1.ExpectReturnedValuesShould(
+	hashImp1 := WrapComputeFileHash(t, fileops.ComputeFileHash).Start(testFile)
+	hashImp1.ExpectReturnsMatch(
 		Not(BeEmpty()), // hash should not be empty
 		BeNil(),        // no error
 	)
 	hash1 := hashImp1.Returned.Result0
 
 	// Hash should be consistent
-	hashImp2 := NewComputeFileHashImp(t, fileops.ComputeFileHash).Start(testFile)
-	hashImp2.ExpectReturnedValuesAre(hash1, nil)
+	hashImp2 := WrapComputeFileHash(t, fileops.ComputeFileHash).Start(testFile)
+	hashImp2.ExpectReturnsEqual(hash1, nil)
 
 	// Different content should produce different hash
 	err = os.WriteFile(testFile, []byte("different content"), 0o600)
@@ -93,8 +93,8 @@ func TestComputeFileHash(t *testing.T) {
 		t.Fatalf("Failed to write different content: %v", err)
 	}
 
-	hashImp3 := NewComputeFileHashImp(t, fileops.ComputeFileHash).Start(testFile)
-	hashImp3.ExpectReturnedValuesShould(
+	hashImp3 := WrapComputeFileHash(t, fileops.ComputeFileHash).Start(testFile)
+	hashImp3.ExpectReturnsMatch(
 		Not(Equal(hash1)), // different hash
 		BeNil(),           // no error
 	)
@@ -124,8 +124,8 @@ func TestCopyFile(t *testing.T) {
 		}
 	}
 
-	copyImp := NewCopyFileImp(t, fileops.CopyFile).Start(srcFile, dstFile, progressCallback)
-	copyImp.ExpectReturnedValuesAre(int64(len(content)), nil)
+	copyImp := WrapCopyFile(t, fileops.CopyFile).Start(srcFile, dstFile, progressCallback)
+	copyImp.ExpectReturnsEqual(int64(len(content)), nil)
 
 	if progressCalls == 0 {
 		t.Error("Expected progress callback to be called")
@@ -193,8 +193,8 @@ func TestCopyFileWithProgress(t *testing.T) {
 		lastBytes = bytesTransferred
 	}
 
-	copyImp := NewCopyFileImp(t, fileops.CopyFile).Start(srcFile, dstFile, progressCallback)
-	copyImp.ExpectReturnedValuesAre(int64(len(content)), nil)
+	copyImp := WrapCopyFile(t, fileops.CopyFile).Start(srcFile, dstFile, progressCallback)
+	copyImp.ExpectReturnsEqual(int64(len(content)), nil)
 
 	if lastBytes != int64(len(content)) {
 		t.Errorf("lastBytes (%d) != expected (%d)", lastBytes, len(content))
@@ -267,13 +267,13 @@ func TestCopyFileWithStatsProgress(t *testing.T) {
 	)
 }
 
-//go:generate impgen fileops.ScanDirectory
-//go:generate impgen fileops.ComputeFileHash
-//go:generate impgen fileops.CopyFile
-//go:generate impgen fileops.FilesNeedSync
-//go:generate impgen fileops.CountFiles
-//go:generate impgen fileops.CountFilesWithProgress
-//go:generate impgen fileops.CompareFilesBytes
+//go:generate impgen --target fileops.ScanDirectory
+//go:generate impgen --target fileops.ComputeFileHash
+//go:generate impgen --target fileops.CopyFile
+//go:generate impgen --target fileops.FilesNeedSync
+//go:generate impgen --target fileops.CountFiles
+//go:generate impgen --target fileops.CountFilesWithProgress
+//go:generate impgen --target fileops.CompareFilesBytes
 
 func TestCountFilesStandalone(t *testing.T) {
 	t.Parallel()
@@ -291,9 +291,9 @@ func TestCountFilesStandalone(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	wrapper := NewCountFilesImp(t, fileops.CountFiles)
+	wrapper := WrapCountFiles(t, fileops.CountFiles)
 	wrapper.Start(dir)
-	wrapper.ExpectReturnedValuesShould(Equal(2), BeNil())
+	wrapper.ExpectReturnsMatch(Equal(2), BeNil())
 }
 
 func TestCountFilesWithProgressStandalone(t *testing.T) {
@@ -313,9 +313,9 @@ func TestCountFilesWithProgressStandalone(t *testing.T) {
 		callbackCalled = true
 	}
 
-	wrapper := NewCountFilesWithProgressImp(t, fileops.CountFilesWithProgress)
+	wrapper := WrapCountFilesWithProgress(t, fileops.CountFilesWithProgress)
 	wrapper.Start(dir, callback)
-	wrapper.ExpectReturnedValuesShould(Equal(10), BeNil())
+	wrapper.ExpectReturnsMatch(Equal(10), BeNil())
 
 	// Verify callback was called
 	g := NewWithT(t)
@@ -363,8 +363,8 @@ func TestFilesNeedSync(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			needSyncImp := NewFilesNeedSyncImp(t, fileops.FilesNeedSync).Start(tt.src, tt.dst)
-			needSyncImp.ExpectReturnedValuesAre(tt.expected)
+			needSyncImp := WrapFilesNeedSync(t, fileops.FilesNeedSync).Start(tt.src, tt.dst)
+			needSyncImp.ExpectReturnsEqual(tt.expected)
 		})
 	}
 }
@@ -397,10 +397,10 @@ func TestScanDirectory(t *testing.T) {
 	}
 
 	// Use imptest callable wrapper
-	scanImp := NewScanDirectoryImp(t, fileops.ScanDirectory).Start(tmpDir)
+	scanImp := WrapScanDirectory(t, fileops.ScanDirectory).Start(tmpDir)
 
 	// Verify we found all files and check that relative paths are correct
-	scanImp.ExpectReturnedValuesShould(
+	scanImp.ExpectReturnsMatch(
 		And(
 			HaveLen(4), // 3 files + 1 directory
 			HaveKey("file1.txt"),

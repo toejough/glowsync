@@ -1,6 +1,6 @@
 package fileops
 
-//go:generate impgen fileops.CopyFileWithStats
+//go:generate impgen --target fileops.CopyFileWithStats
 
 import (
 	"crypto/sha256"

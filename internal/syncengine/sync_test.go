@@ -42,23 +42,23 @@ func TestAdaptiveScalingWithMockedTime(t *testing.T) {
 	createLargeTestFiles(t, sourceDir, 20)
 
 	// Create mocked TimeProvider
-	timeImp := NewTimeProviderImp(t)
+	timeMock := MockTimeProvider(t)
 
 	// Create engine with adaptive mode
-	engine := setupAdaptiveEngine(sourceDir, destDir, timeImp)
+	engine := setupAdaptiveEngine(sourceDir, destDir, timeMock)
 
 	// Set up mock expectations for Analyze phase
 	// The Analyze phase calls Now() during scanSourceDirectory and scanDestDirectory
 	analyzeStartTime := time.Now()
 	go func() {
 		// Expect first Now() call (AnalysisStartTime initialization)
-		nowCall1 := timeImp.Within(5 * time.Second).ExpectCallIs.Now()
-		nowCall1.InjectResult(analyzeStartTime)
+		nowCall1 := timeMock.Now.Eventually().ExpectCalledWithExactly()
+		nowCall1.InjectReturnValues(analyzeStartTime)
 
 		// Expect subsequent Now() calls during progress callbacks (up to 40 total - 20 files x 2 scans)
 		for range 40 {
-			nowCall := timeImp.Within(5 * time.Second).ExpectCallIs.Now()
-			nowCall.InjectResult(analyzeStartTime.Add(100 * time.Millisecond)) // Simulate some elapsed time
+			nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+			nowCall.InjectReturnValues(analyzeStartTime.Add(100 * time.Millisecond)) // Simulate some elapsed time
 		}
 	}()
 
@@ -72,7 +72,7 @@ func TestAdaptiveScalingWithMockedTime(t *testing.T) {
 	done := make(chan struct{})
 
 	// Start a goroutine to handle mock expectations
-	runMockTimeProvider(timeImp, tickerChan, done)
+	runMockTimeProvider(timeMock, tickerChan, done)
 
 	// Run Sync
 	err = engine.Sync()
@@ -150,28 +150,28 @@ func TestEngineAdaptiveScaling(t *testing.T) { //nolint:paralleltest // Don't ru
 func TestEngineAnalyze(t *testing.T) {
 	t.Parallel()
 
-	fsImp := NewFileSystemImp(t)
-	scannerImp := NewFileScannerImp(t)
+	fsMock := MockFileSystem(t)
+	scannerMock := MockFileScanner(t)
 
 	engine := mustNewEngine(t, "/source", "/dest")
-	engine.FileOps = fileops.NewFileOps(fsImp.Mock)
+	engine.FileOps = fileops.NewFileOps(fsMock.Interface())
 
 	// Set up expectations in a goroutine
 	go func() {
 		// Expect Scan call for source directory
-		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/source").InjectResult(scannerImp.Mock)
+		fsMock.Scan.ExpectCalledWithExactly("/source").InjectReturnValues(scannerMock.Interface())
 
 		// Return empty directory (no files)
-		scannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
-		scannerImp.ExpectCallIs.Err().InjectResult(nil)
+		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		scannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 
 		// Expect Scan call for dest directory
-		destScannerImp := NewFileScannerImp(t)
-		fsImp.ExpectCallIs.Scan().ExpectArgsAre("/dest").InjectResult(destScannerImp.Mock)
+		destScannerMock := MockFileScanner(t)
+		fsMock.Scan.ExpectCalledWithExactly("/dest").InjectReturnValues(destScannerMock.Interface())
 
 		// Return empty directory (no files)
-		destScannerImp.ExpectCallIs.Next().InjectResults(filesystem.FileInfo{}, false)
-		destScannerImp.ExpectCallIs.Err().InjectResult(nil)
+		destScannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		destScannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	// Call Analyze
@@ -752,8 +752,8 @@ func TestHandleCopyError(t *testing.T) {
 	g.Expect(engine.Status.TotalFiles).Should(Equal(1))
 
 	// Now replace FileOps with a mock that returns an error
-	fsImp := NewFileSystemImp(t)
-	mockFileOps := fileops.NewFileOps(fsImp.Mock)
+	fsMock := MockFileSystem(t)
+	mockFileOps := fileops.NewFileOps(fsMock.Interface())
 	engine.FileOps = mockFileOps
 
 	// Set up the mock to return an error when opening the source file
@@ -762,9 +762,9 @@ func TestHandleCopyError(t *testing.T) {
 
 	go func() {
 		defer close(done)
-		// Expect Open call for the source file with a timeout
+		// Expect Open call for the source file
 		//nolint:lll // Test mock method chain with inline error injection
-		fsImp.Within(5*time.Second).ExpectCallIs.Open().ExpectArgsAre(testFile).InjectResults(nil, errors.New("mock error: permission denied"))
+		fsMock.Open.ExpectCalledWithExactly(testFile).InjectReturnValues(nil, errors.New("mock error: permission denied"))
 	}()
 
 	// Give the goroutine a moment to set up the expectation
@@ -849,9 +849,9 @@ func TestMockTicker(t *testing.T) {
 	g.Expect(ok).Should(BeFalse(), "Channel should be closed after Stop()")
 }
 
-//go:generate impgen syncengine.TimeProvider
-//go:generate impgen filesystem.FileSystem
-//go:generate impgen filesystem.FileScanner
+//go:generate impgen --dependency syncengine.TimeProvider
+//go:generate impgen --dependency filesystem.FileSystem
+//go:generate impgen --dependency filesystem.FileScanner
 
 func TestNewEngine(t *testing.T) {
 	t.Parallel()
@@ -933,19 +933,16 @@ func expectWorkerAdded(t *testing.T, g *WithT, workerControl <-chan bool, testNa
 }
 
 // runMockTimeProvider starts a goroutine to handle mock time expectations
-func runMockTimeProvider(timeImp *TimeProviderImp, tickerChan chan time.Time, done chan struct{}) {
+func runMockTimeProvider(timeMock *TimeProviderMock, tickerChan chan time.Time, done chan struct{}) {
 	go func() {
-		defer close(done)
-
 		// Expect NewTicker call
-		call := timeImp.Within(5 * time.Second).ExpectCallIs.NewTicker()
-		call.ExpectArgsAre(1 * time.Second)
+		call := timeMock.NewTicker.Eventually().ExpectCalledWithExactly(1 * time.Second)
 
 		// Create a mock ticker
 		mockTicker := &syncengine.MockTicker{
 			TickChan: tickerChan,
 		}
-		call.InjectResult(mockTicker)
+		call.InjectReturnValues(mockTicker)
 
 		// Send ticks every 100ms to trigger evaluateAndScale
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -957,8 +954,8 @@ func runMockTimeProvider(timeImp *TimeProviderImp, tickerChan chan time.Time, do
 			select {
 			case <-ticker.C:
 				// Expect Now() call
-				nowCall := timeImp.Within(1 * time.Second).ExpectCallIs.Now()
-				nowCall.InjectResult(currentTime)
+				nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+				nowCall.InjectReturnValues(currentTime)
 				currentTime = currentTime.Add(1 * time.Second)
 
 				// Send a tick to the mock ticker
@@ -974,7 +971,7 @@ func runMockTimeProvider(timeImp *TimeProviderImp, tickerChan chan time.Time, do
 }
 
 // setupAdaptiveEngine creates and configures an engine with adaptive mode
-func setupAdaptiveEngine(sourceDir, destDir string, timeImp *TimeProviderImp) *syncengine.Engine {
+func setupAdaptiveEngine(sourceDir, destDir string, timeMock *TimeProviderMock) *syncengine.Engine {
 	engine, err := syncengine.NewEngine(sourceDir, destDir)
 	if err != nil {
 		panic(fmt.Sprintf("NewEngine failed: %v", err))
@@ -982,7 +979,7 @@ func setupAdaptiveEngine(sourceDir, destDir string, timeImp *TimeProviderImp) *s
 	engine.Workers = 0 // 0 means adaptive mode
 	engine.AdaptiveMode = true
 	engine.FileOps = fileops.NewRealFileOps()
-	engine.TimeProvider = timeImp.Mock
+	engine.TimeProvider = timeMock.Interface()
 
 	return engine
 }
@@ -1984,16 +1981,16 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 	engine.Workers = 0 // Adaptive starts with 1 worker
 
 	// Create mocked TimeProvider
-	timeImp := NewTimeProviderImp(t)
-	engine.TimeProvider = timeImp.Mock
+	timeMock := MockTimeProvider(t)
+	engine.TimeProvider = timeMock.Interface()
 
 	// Run Analyze
 	go func() {
 		// Expect Analyze phase Now() calls
 		analyzeTime := time.Now()
 		for range 50 {
-			nowCall := timeImp.Within(5 * time.Second).ExpectCallIs.Now()
-			nowCall.InjectResult(analyzeTime)
+			nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+			nowCall.InjectReturnValues(analyzeTime)
 		}
 	}()
 
@@ -2013,13 +2010,10 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		defer close(done)
-
 		// Expect NewTicker call
-		tickerCall := timeImp.Within(5 * time.Second).ExpectCallIs.NewTicker()
-		tickerCall.ExpectArgsAre(1 * time.Second)
+		tickerCall := timeMock.NewTicker.Eventually().ExpectCalledWithExactly(1 * time.Second)
 		mockTicker := &syncengine.MockTicker{TickChan: tickerChan}
-		tickerCall.InjectResult(mockTicker)
+		tickerCall.InjectReturnValues(mockTicker)
 
 		// Send ticks every 100ms, simulate 30 seconds of operation
 		currentTime := baseTime
@@ -2031,8 +2025,8 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 				currentTime = currentTime.Add(100 * time.Millisecond)
 
 				// Provide Now() for evaluation check
-				nowCall := timeImp.Within(1 * time.Second).ExpectCallIs.Now()
-				nowCall.InjectResult(currentTime)
+				nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+				nowCall.InjectReturnValues(currentTime)
 
 				// Send tick
 				select {

@@ -403,3 +403,90 @@ A simple md issue tracker.
       - 2025-12-31 21:04 EST: Issue #17 COMPLETE - Adaptive scaling now uses hill climbing with total throughput tracking
       - 2025-12-31 21:22 EST: INTEGRATION BUG FOUND - HillClimbingScalingDecision was never hooked up! EvaluateAndScale still called old MakeScalingDecision
       - 2025-12-31 21:22 EST: Integration fix committed (9d17905) - EvaluateAndScale now calls HillClimbingScalingDecision, logs show total throughput
+18. File counting screen shows 0 files in destination then jumps to 100%
+   - status: backlog
+   - priority: medium
+   - created: 2025-12-31 22:38 EST
+   - description: During the analysis phase, the file counting screen shows destination file count as 0 for several seconds, then suddenly jumps to 100% complete without showing intermediate progress
+   - observed behavior:
+     - Source file count updates progressively (shows intermediate values)
+     - Destination count stays at 0 files for several seconds
+     - Then destination jumps directly to final count (e.g., 0 → 1500 files instantly)
+     - Creates perception that destination scanning isn't working, then completes all at once
+   - expected behavior:
+     - Destination file count should update progressively like source count
+     - Should show intermediate values as files are discovered
+     - Smooth progress indication rather than 0 → 100% jump
+   - possible causes:
+     - Destination scan callback not firing frequently enough
+     - Progress updates buffered instead of streaming
+     - Different callback mechanism for destination vs source scanning
+19. Time percentage in file counting screen goes above 100%
+   - status: backlog
+   - priority: low
+   - created: 2025-12-31 22:38 EST
+   - description: During the analysis phase file counting, the time-based progress percentage exceeds 100%, showing values like 110%, 120%, etc.
+   - observed behavior:
+     - Time percentage calculation shows values > 100%
+     - Other percentages (files, bytes) stay at correct 0-100% range
+     - Suggests time estimate is inaccurate or calculation has bug
+   - expected behavior:
+     - Time percentage should be clamped to max 100%
+     - Should not exceed 100% even if operation takes longer than estimated
+   - possible causes:
+     - Missing max(percentage, 100) clamp in calculation
+     - Time estimate too optimistic causing actual time > estimated time
+     - Division by zero or negative elapsed time edge case
+20. Files percentage stays at 0% on analyzing screen
+   - status: backlog
+   - priority: medium
+   - created: 2025-12-31 22:40 EST
+   - description: During the analyzing screen, the files percentage remains at 0% throughout the entire analysis phase, then jumps to completion
+   - observed behavior:
+     - Files percentage shows 0% during analysis
+     - Bytes and time percentages may update correctly
+     - Files percentage doesn't reflect actual analysis progress
+     - Creates impression that file analysis isn't progressing
+   - expected behavior:
+     - Files percentage should update as files are analyzed
+     - Should show progressive values (e.g., 25%, 50%, 75%)
+     - Should correlate with actual number of files analyzed
+   - possible causes:
+     - Files percentage calculation using wrong denominator (total files not yet known)
+     - Analysis phase not updating processed file count
+     - Percentage calculation happening before file totals are established
+21. Bytes percentage starts at 100% on analyzing screen
+   - status: backlog
+   - priority: medium
+   - created: 2025-12-31 22:40 EST
+   - description: During the analyzing screen, the bytes percentage shows 100% from the start instead of 0%, then may stay at 100% or fluctuate
+   - observed behavior:
+     - Bytes percentage shows 100% immediately when analysis screen appears
+     - Should start at 0% and progress to 100%
+     - Creates confusion about actual progress state
+   - expected behavior:
+     - Bytes percentage should start at 0%
+     - Should increase progressively as bytes are analyzed
+     - Should reach 100% only when analysis is complete
+   - possible causes:
+     - Initial bytes calculation dividing by zero (0/0 = NaN → displayed as 100%)
+     - Total bytes not initialized causing percentage = processed/0
+     - Logic error in percentage calculation initialization
+22. Status shows "counting: current" when not actually counting files
+   - status: backlog
+   - priority: low
+   - created: 2025-12-31 22:41 EST
+   - description: The status line shows "counting: current" even when the action log shows "Accessing destination" or other non-counting operations
+   - observed behavior:
+     - Status line displays "counting: current"
+     - Action log shows "Accessing destination" (filesystem initialization, not counting)
+     - Mismatch between status message and actual operation
+     - User sees "counting" but no files are being counted yet
+   - expected behavior:
+     - Status should reflect actual current operation
+     - Should show "Accessing destination" when establishing connection
+     - Should only show "counting: current" when actively scanning/counting files
+   - possible causes:
+     - Status initialized to "counting" before operation actually starts
+     - Status not updated when transitioning from access to counting
+     - Generic "counting" status used for entire analysis phase regardless of sub-operation
