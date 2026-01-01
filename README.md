@@ -1,4 +1,4 @@
-# Copy Files - Fast File Synchronization Tool
+# GlowSync - Fast File Synchronization Tool
 
 A beautiful, fast file synchronization CLI tool with a rich Terminal User Interface (TUI) built with Go and Bubbletea.
 
@@ -19,11 +19,11 @@ A beautiful, fast file synchronization CLI tool with a rich Terminal User Interf
 
 ```bash
 # Clone the repository
-git clone https://github.com/joe/copy-files.git
-cd copy-files
+git clone https://github.com/joe/glowsync.git
+cd glowsync
 
 # Build the binary
-go build -o copy-files ./cmd/copy-files
+go build -o glowsync ./cmd/copy-files
 
 # Or use mage
 mage build
@@ -39,7 +39,7 @@ mage install
 Simply run the command without arguments to enter interactive mode:
 
 ```bash
-./copy-files
+./glowsync
 ```
 
 You'll be prompted to enter source and destination paths.
@@ -49,9 +49,9 @@ You'll be prompted to enter source and destination paths.
 Specify source and destination paths directly:
 
 ```bash
-./copy-files --source /path/to/source --dest /path/to/destination
+./glowsync --source /path/to/source --dest /path/to/destination
 # or use short flags
-./copy-files -s /path/to/source -d /path/to/destination
+./glowsync -s /path/to/source -d /path/to/destination
 ```
 
 ### Flags
@@ -118,7 +118,7 @@ mage clean
 ### Project Structure
 
 ```
-copy-files/
+glowsync/
 ├── cmd/copy-files/     # Main application entry point
 ├── internal/
 │   ├── config/         # Configuration and CLI parsing
@@ -170,7 +170,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│                            Copy-Files System                            │
+│                            GlowSync System                              │
 │                                                                         │
 │  A fast file synchronization CLI tool with a rich Terminal UI that     │
 │  copies files from source to destination, tracking progress and        │
@@ -194,7 +194,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ### Container Diagram (Level 2)
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Copy-Files Application                          │
+│                         GlowSync Application                            │
 │                                                                         │
 │  ┌─────────────────┐         ┌─────────────────┐                      │
 │  │                 │         │                 │                      │

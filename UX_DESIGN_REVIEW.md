@@ -1,4 +1,4 @@
-# UX Design Review: Copy Files TUI
+# UX Design Review: GlowSync TUI
 
 **Date:** 2025-12-29
 **Reviewer:** cli-tui-architect agent
@@ -286,25 +286,25 @@ Location: Summary screen shows errors but offers no remediation.
 
 **Recommendation**:
 - Add "Press r to retry failed files" on Summary screen when `FailedFiles > 0`
-- Or suggest CLI command: "Run again with: copy-files --source ... --retry-failed"
+- Or suggest CLI command: "Run again with: glowsync --source ... --retry-failed"
 
 ---
 
 **Issue 4.3: Debug Log Path Hardcoded in Display**
 
-The debug log path message always says "copy-files-debug.log" but the actual path is from environment or temp directory.
+The debug log path message always says "glowsync-debug.log" but the actual path is from environment or temp directory.
 
 Location: `internal/tui/screens/4_summary.go:216,335`
 
 ```go
-builder.WriteString(shared.RenderDim("Debug log saved to: copy-files-debug.log"))
+builder.WriteString(shared.RenderDim("Debug log saved to: glowsync-debug.log"))
 ```
 
 But the log path is dynamically determined in analysis screen:
 ```go
 logPath := os.Getenv("COPY_FILES_LOG")
 if logPath == "" {
-    logPath = filepath.Join(os.TempDir(), "copy-files-debug.log")
+    logPath = filepath.Join(os.TempDir(), "glowsync-debug.log")
 }
 ```
 

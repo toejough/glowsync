@@ -1,4 +1,4 @@
-# TUI/CLI Design Review: copy-files
+# TUI/CLI Design Review: glowsync
 
 **Review Date:** 2025-12-28
 **Reviewer:** cli-tui-architect agent
@@ -20,7 +20,7 @@ This is a well-architected file synchronization tool with a polished Bubble Tea 
 
 **Well-Defined Message Protocol**
 - Clear separation between transition messages (`TransitionToAnalysisMsg`) and internal messages (`EngineInitializedMsg`)
-- Messages are documented and centralized in `/Users/joe/repos/personal/copy-files/internal/tui/shared/messages.go`
+- Messages are documented and centralized in `/Users/joe/repos/personal/glowsync/internal/tui/shared/messages.go`
 
 **Proper State Management**
 - Each screen owns its state
@@ -38,7 +38,7 @@ This is a well-architected file synchronization tool with a polished Bubble Tea 
    - The flow is strictly forward-only
 
 3. **Context Detection Missing**
-   - In `/Users/joe/repos/personal/copy-files/cmd/copy-files/main.go` (line 23), the TUI always uses `tea.WithAltScreen()`
+   - In `/Users/joe/repos/personal/glowsync/cmd/copy-files/main.go` (line 23), the TUI always uses `tea.WithAltScreen()`
    - No detection of whether stdout is a TTY - if piped, should provide non-interactive output
 
 **Recommendation:**
@@ -78,7 +78,7 @@ if term.IsTerminal(int(os.Stdout.Fd())) {
 ### Areas for Improvement
 
 1. **Inline Error Display (TODO in code)**
-   - In `/Users/joe/repos/personal/copy-files/internal/tui/screens/1_input.go` (line 181):
+   - In `/Users/joe/repos/personal/glowsync/internal/tui/screens/1_input.go` (line 181):
    ```go
    // TODO: Show error inline instead of just staying on screen
    ```
@@ -146,7 +146,7 @@ internal/tui/
 ### Areas for Improvement
 
 1. **Magic Numbers in Shared Package**
-   - `/Users/joe/repos/personal/copy-files/internal/tui/shared/styles.go` has constants like `ProgressHalfDivisor = 2` which seem overly abstracted
+   - `/Users/joe/repos/personal/glowsync/internal/tui/shared/styles.go` has constants like `ProgressHalfDivisor = 2` which seem overly abstracted
    - Constants like `ProgressLogThreshold = 20` are used for multiple unrelated purposes (path display calculations AND log entry limits)
 
 2. **Duplicate Code Patterns**
@@ -180,7 +180,7 @@ func TickCmd() tea.Cmd {
 ### Strengths
 
 **Consistent Color Palette**
-- Semantic colors defined in `/Users/joe/repos/personal/copy-files/internal/tui/shared/styles.go`:
+- Semantic colors defined in `/Users/joe/repos/personal/glowsync/internal/tui/shared/styles.go`:
   - Primary (205 - pink/purple)
   - Success (42 - green)
   - Error (196 - red)
@@ -262,7 +262,7 @@ func SuccessSymbol() string {
    - Example: "failed to delete directory" - could suggest checking permissions
 
 3. **Log File Path Hardcoded**
-   - `/Users/joe/repos/personal/copy-files/internal/tui/screens/2_analysis.go` line 137:
+   - `/Users/joe/repos/personal/glowsync/internal/tui/screens/2_analysis.go` line 137:
    ```go
    logPath := "copy-files-debug.log"
    ```
@@ -301,7 +301,7 @@ if logPath == "" {
    - Could use `cobra` or generate completions
 
 2. **No Man Page**
-   - Complex tools benefit from `man copy-files`
+   - Complex tools benefit from `man glowsync`
 
 3. **No JSON Output Mode**
    - For scripting: `--format=json` flag
@@ -344,7 +344,7 @@ const (
 ### Areas for Improvement
 
 1. **Status Copy Overhead**
-   - `GetStatus()` in `/Users/joe/repos/personal/copy-files/internal/syncengine/sync.go` copies significant data on every call
+   - `GetStatus()` in `/Users/joe/repos/personal/glowsync/internal/syncengine/sync.go` copies significant data on every call
    - Consider using a snapshot pattern with less frequent full copies
 
 2. **Memory for Large File Lists**

@@ -108,7 +108,7 @@ internal/tui/
 11. Create `app.go` - top-level router
 
 ### Phase 5: Integration
-12. Update `cmd/copy-files/main.go` to use AppModel
+12. Update `cmd/glowsync/main.go` to use AppModel
 13. Run tests, verify everything works
 14. Delete old files (model.go, update.go, view.go)
 

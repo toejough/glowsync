@@ -60,7 +60,7 @@ var (
 
 **Usage in screens:**
 ```go
-import "github.com/joe/copy-files/internal/tui/shared"
+import "github.com/joe/glowsync/internal/tui/shared"
 
 func (s InputScreen) View() string {
     return shared.TitleStyle.Render("Enter Paths")
@@ -106,7 +106,7 @@ func FormatBytes(bytes int64) string {
 **Screens can depend on shared:**
 ```go
 // In screens/1_input.go
-import "github.com/joe/copy-files/internal/tui/shared"
+import "github.com/joe/glowsync/internal/tui/shared"
 
 func (s InputScreen) View() string {
     return shared.TitleStyle.Render("Input")
@@ -116,7 +116,7 @@ func (s InputScreen) View() string {
 **AppModel can depend on shared:**
 ```go
 // In app.go
-import "github.com/joe/copy-files/internal/tui/shared"
+import "github.com/joe/glowsync/internal/tui/shared"
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
@@ -131,25 +131,25 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 **Shared CANNOT depend on screens:**
 ```go
 // ❌ WRONG - shared/helpers.go cannot import screens
-import "github.com/joe/copy-files/internal/tui/screens"
+import "github.com/joe/glowsync/internal/tui/screens"
 ```
 
 **Shared CANNOT depend on app:**
 ```go
 // ❌ WRONG - shared/messages.go cannot import app
-import "github.com/joe/copy-files/internal/tui"
+import "github.com/joe/glowsync/internal/tui"
 ```
 
 **Screens CANNOT depend on other screens:**
 ```go
 // ❌ WRONG - screens/1_input.go cannot import screens/2_analysis.go
-import "github.com/joe/copy-files/internal/tui/screens"
+import "github.com/joe/glowsync/internal/tui/screens"
 ```
 
 **Screens CANNOT depend on app:**
 ```go
 // ❌ WRONG - screens/1_input.go cannot import app
-import "github.com/joe/copy-files/internal/tui"
+import "github.com/joe/glowsync/internal/tui"
 ```
 
 ## Dependency Graph

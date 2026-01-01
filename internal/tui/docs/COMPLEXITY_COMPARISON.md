@@ -168,7 +168,7 @@ func (s SummaryScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 4. Extract SyncScreen logic from current model
 5. Extract SummaryScreen logic from current model
 6. Create AppModel router
-7. Update cmd/copy-files/main.go to use AppModel
+7. Update cmd/glowsync/main.go to use AppModel
 8. Delete old model.go, update.go, view.go
 9. Run tests and verify
 

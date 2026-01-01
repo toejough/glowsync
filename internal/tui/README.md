@@ -116,7 +116,7 @@ ErrorMsg              →  Used by AnalysisScreen, SyncScreen
 ## Usage
 
 ```go
-// In cmd/copy-files/main.go
+// In cmd/glowsync/main.go
 model := tui.NewAppModel(cfg)
 program := tea.NewProgram(model)
 if _, err := program.Run(); err != nil {

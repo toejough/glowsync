@@ -333,14 +333,20 @@ A simple md issue tracker.
      - May require server-side tuning
    - related: Issue #11 (Phase 3.3 from original optimization plan)
 16. Fix stale 'copy-files' reference in documentation
-   - status: in progress
+   - status: done
    - priority: low
    - created: 2025-12-31
+   - completed: 2025-12-31
    - description: Remaining reference to old 'copy-files' repository name that needs updating to 'glowsync'
    - acceptance: All documentation uses correct repository name
    - effort: Trivial
    - migrated_from: imptest issues.md #14
    - linear: TOE-87
+   - updates:
+      - 2025-12-31: Updated all documentation files to use 'glowsync' instead of 'copy-files'
+      - Files updated: README.md, TUI_DESIGN_REVIEW.md, UX_DESIGN_REVIEW.md, internal/tui/README.md, internal/tui/docs/*.md, internal/tui/shared/README.md
+      - Changed repository name, import paths, executable name, and architecture diagram titles
+      - All tests pass after documentation updates
 17. Adaptive scaling ratchets up worker count inefficiently
    - status: done
    - priority: high
