@@ -395,3 +395,5 @@ A simple md issue tracker.
       - 2025-12-31 21:03 EST: Committed (5cad77a) - Hill climbing algorithm implementation
       - 2025-12-31 21:04 EST: Committed (5826996) - Issue tracker update
       - 2025-12-31 21:04 EST: Issue #17 COMPLETE - Adaptive scaling now uses hill climbing with total throughput tracking
+      - 2025-12-31 21:22 EST: INTEGRATION BUG FOUND - HillClimbingScalingDecision was never hooked up! EvaluateAndScale still called old MakeScalingDecision
+      - 2025-12-31 21:22 EST: Integration fix committed (9d17905) - EvaluateAndScale now calls HillClimbingScalingDecision, logs show total throughput
