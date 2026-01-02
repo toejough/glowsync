@@ -193,21 +193,21 @@ func (e *Engine) Cancel() {
 	})
 }
 
-// CloseLog closes the log file if open
-func (e *Engine) CloseLog() {
-	if e.logFile != nil {
-		e.logToFile(fmt.Sprintf("\n=== Sync Log Ended: %s ===", time.Now().Format(time.RFC3339)))
-		_ = e.logFile.Close()
-		e.logFile = nil
-	}
-}
-
 // Close cleans up resources, including SFTP connections if any.
 // Should be called when done with the engine.
 func (e *Engine) Close() {
 	e.CloseLog()
 	if e.closeFunc != nil {
 		e.closeFunc()
+	}
+}
+
+// CloseLog closes the log file if open
+func (e *Engine) CloseLog() {
+	if e.logFile != nil {
+		e.logToFile(fmt.Sprintf("\n=== Sync Log Ended: %s ===", time.Now().Format(time.RFC3339)))
+		_ = e.logFile.Close()
+		e.logFile = nil
 	}
 }
 
@@ -382,70 +382,6 @@ func (e *Engine) GetStatus() *Status {
 	return status
 }
 
-// LogVerbose logs verbose progress information (only when Verbose is enabled)
-func (e *Engine) LogVerbose(message string) {
-	if !e.Verbose {
-		return
-	}
-
-	e.logToFile(message)
-}
-
-// MakeScalingDecision decides whether to add workers based on per-worker speed comparison
-//
-//nolint:lll // Long function signature with many parameters
-func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed float64, currentWorkers, maxWorkers int, workerControl chan bool) {
-	// First measurement - add a worker to test
-	if lastPerWorkerSpeed == 0 {
-		if currentWorkers < maxWorkers {
-			newDesired := atomic.AddInt32(&e.desiredWorkers, 1)
-			e.resizePools(int(newDesired))
-			workerControl <- true
-
-			e.logToFile(fmt.Sprintf("Adaptive: First measurement complete, adding worker (%d -> %d)",
-				currentWorkers, currentWorkers+1))
-		}
-
-		return
-	}
-
-	speedRatio := currentPerWorkerSpeed / lastPerWorkerSpeed
-
-	// Per-worker speed decreased - remove a worker
-	if speedRatio < AdaptiveScalingLowThreshold {
-		// Decrement desired worker count (workers will self-terminate)
-		newDesired := atomic.AddInt32(&e.desiredWorkers, -1)
-		if newDesired < 1 {
-			// Don't go below 1 worker
-			atomic.StoreInt32(&e.desiredWorkers, 1)
-			newDesired = 1
-		}
-		e.resizePools(int(newDesired))
-
-		e.logToFile(fmt.Sprintf("Adaptive: ↓ Per-worker speed decreased (-%.1f%%), removing worker (%d -> %d)",
-			(1-speedRatio)*PercentageScale, currentWorkers, newDesired))
-
-		return
-	}
-
-	// Per-worker speed maintained or improved - add a worker
-	if currentWorkers >= maxWorkers {
-		return
-	}
-
-	newDesired := atomic.AddInt32(&e.desiredWorkers, 1)
-	e.resizePools(int(newDesired))
-	workerControl <- true
-
-	if speedRatio >= AdaptiveScalingHighThreshold {
-		e.logToFile(fmt.Sprintf("Adaptive: ↑ Per-worker speed improved (+%.1f%%), adding worker (%d -> %d)",
-			(speedRatio-1)*PercentageScale, currentWorkers, currentWorkers+1))
-	} else {
-		e.logToFile(fmt.Sprintf("Adaptive: → Per-worker speed stable, adding worker to test (%d -> %d)",
-			currentWorkers, currentWorkers+1))
-	}
-}
-
 // HillClimbingScalingDecision makes a scaling decision using hill climbing algorithm.
 // It tracks total system throughput (bytes/sec) and adjusts workers based on:
 // - Initial: optimistically add worker
@@ -579,6 +515,70 @@ func (e *Engine) HillClimbingScalingDecision(
 	}
 }
 
+// LogVerbose logs verbose progress information (only when Verbose is enabled)
+func (e *Engine) LogVerbose(message string) {
+	if !e.Verbose {
+		return
+	}
+
+	e.logToFile(message)
+}
+
+// MakeScalingDecision decides whether to add workers based on per-worker speed comparison
+//
+//nolint:lll // Long function signature with many parameters
+func (e *Engine) MakeScalingDecision(lastPerWorkerSpeed, currentPerWorkerSpeed float64, currentWorkers, maxWorkers int, workerControl chan bool) {
+	// First measurement - add a worker to test
+	if lastPerWorkerSpeed == 0 {
+		if currentWorkers < maxWorkers {
+			newDesired := atomic.AddInt32(&e.desiredWorkers, 1)
+			e.resizePools(int(newDesired))
+			workerControl <- true
+
+			e.logToFile(fmt.Sprintf("Adaptive: First measurement complete, adding worker (%d -> %d)",
+				currentWorkers, currentWorkers+1))
+		}
+
+		return
+	}
+
+	speedRatio := currentPerWorkerSpeed / lastPerWorkerSpeed
+
+	// Per-worker speed decreased - remove a worker
+	if speedRatio < AdaptiveScalingLowThreshold {
+		// Decrement desired worker count (workers will self-terminate)
+		newDesired := atomic.AddInt32(&e.desiredWorkers, -1)
+		if newDesired < 1 {
+			// Don't go below 1 worker
+			atomic.StoreInt32(&e.desiredWorkers, 1)
+			newDesired = 1
+		}
+		e.resizePools(int(newDesired))
+
+		e.logToFile(fmt.Sprintf("Adaptive: ↓ Per-worker speed decreased (-%.1f%%), removing worker (%d -> %d)",
+			(1-speedRatio)*PercentageScale, currentWorkers, newDesired))
+
+		return
+	}
+
+	// Per-worker speed maintained or improved - add a worker
+	if currentWorkers >= maxWorkers {
+		return
+	}
+
+	newDesired := atomic.AddInt32(&e.desiredWorkers, 1)
+	e.resizePools(int(newDesired))
+	workerControl <- true
+
+	if speedRatio >= AdaptiveScalingHighThreshold {
+		e.logToFile(fmt.Sprintf("Adaptive: ↑ Per-worker speed improved (+%.1f%%), adding worker (%d -> %d)",
+			(speedRatio-1)*PercentageScale, currentWorkers, currentWorkers+1))
+	} else {
+		e.logToFile(fmt.Sprintf("Adaptive: → Per-worker speed stable, adding worker to test (%d -> %d)",
+			currentWorkers, currentWorkers+1))
+	}
+}
+
 // RegisterStatusCallback registers a callback for status updates
 func (e *Engine) RegisterStatusCallback(callback func(*Status)) {
 	e.mu.Lock()
@@ -594,16 +594,6 @@ func (e *Engine) Sync() error {
 	}
 
 	return e.syncFixed()
-}
-
-// resizePools calls ResizePool on source and dest if they implement ResizablePool
-func (e *Engine) resizePools(targetSize int) {
-	if e.sourceResizable != nil {
-		e.sourceResizable.ResizePool(targetSize)
-	}
-	if e.destResizable != nil {
-		e.destResizable.ResizePool(targetSize)
-	}
 }
 
 // applyFileFilter applies the file pattern filter to the given files
@@ -1511,6 +1501,16 @@ func (e *Engine) removeFromCurrentFiles(relativePath string) {
 	}
 }
 
+// resizePools calls ResizePool on source and dest if they implement ResizablePool
+func (e *Engine) resizePools(targetSize int) {
+	if e.sourceResizable != nil {
+		e.sourceResizable.ResizePool(targetSize)
+	}
+	if e.destResizable != nil {
+		e.destResizable.ResizePool(targetSize)
+	}
+}
+
 // scanDestinationDirectory scans the destination directory and returns file information.
 func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error) {
 	e.logAnalysis("Scanning destination: " + e.DestPath)
@@ -2252,6 +2252,68 @@ type FileToSync struct {
 	Error        error
 }
 
+// Status represents the current status of synchronization
+type Status struct {
+	TotalFiles        int
+	ProcessedFiles    int
+	FailedFiles       int // Number of files that failed to sync (excluding cancelled)
+	CancelledFiles    int // Number of files cancelled during copy
+	TotalBytes        int64
+	TransferredBytes  int64
+	CurrentFile       string   // Most recently updated file (for display)
+	CurrentFiles      []string // All files currently being copied
+	RecentlyCompleted []string // Recently completed files (for display)
+	CurrentFileBytes  int64
+	CurrentFileTotal  int64
+	StartTime         time.Time
+	EndTime           time.Time // Actual completion time
+	BytesPerSecond    float64
+	EstimatedTimeLeft time.Duration
+	CompletionTime    time.Time // Estimated completion time
+	FilesToSync       []*FileToSync
+	Errors            []FileError // All errors encountered during sync (excluding cancellations)
+	CancelledCopies   []string    // Files that were cancelled during copy
+
+	// Overall statistics (including already-synced files)
+	TotalFilesInSource int   // Total files found in source
+	TotalBytesInSource int64 // Total bytes in source
+	AlreadySyncedFiles int   // Files that were already up-to-date
+	AlreadySyncedBytes int64 // Bytes that were already up-to-date
+
+	// Analysis progress
+	//nolint:lll // Inline comment listing all possible phase values
+	AnalysisPhase    string   // "counting_source", "scanning_source", "counting_dest", "scanning_dest", "comparing", "deleting", "complete"
+	ScannedFiles     int      // Number of files scanned/compared so far
+	TotalFilesToScan int      // Total files to scan/compare (0 if unknown/counting)
+	CurrentPath      string   // Current path being analyzed
+	AnalysisLog      []string // Recent analysis activities
+
+	// Analysis progress tracking for time estimation
+	ScannedBytes      int64     // Bytes scanned so far
+	TotalBytesToScan  int64     // Total bytes to scan (0 if unknown)
+	AnalysisStartTime time.Time // When analysis started
+	AnalysisRate      float64   // Items per second (rolling)
+
+	// Concurrency tracking
+	ActiveWorkers int32 // Current number of active workers (atomic)
+	MaxWorkers    int   // Maximum workers reached
+	AdaptiveMode  bool  // Whether adaptive concurrency is enabled
+
+	// Performance tracking (for bottleneck detection)
+	TotalReadTime  time.Duration // Total time spent reading from source
+	TotalWriteTime time.Duration // Total time spent writing to destination
+	Bottleneck     string        // "source", "destination", or "balanced"
+
+	// Progress metrics (pre-computed for UI display)
+	Progress ProgressMetrics // Pre-computed progress percentages
+	Workers  WorkerMetrics   // Pre-computed worker performance metrics
+
+	// Cleanup/finalization status
+	FinalizationPhase string // "updating_cache", "complete", or empty
+
+	mu sync.RWMutex
+}
+
 // CalculateAnalysisProgress calculates progress metrics for the analysis phase
 //
 //nolint:cyclop,nestif,mnd // Progress calculation requires multiple conditions and percentage constants
@@ -2324,68 +2386,6 @@ func (s *Status) CalculateAnalysisProgress() ProgressMetrics {
 		OverallPercent:         overallPercent,
 		EstimatedTimeRemaining: estimatedTimeRemaining,
 	}
-}
-
-// Status represents the current status of synchronization
-type Status struct {
-	TotalFiles        int
-	ProcessedFiles    int
-	FailedFiles       int // Number of files that failed to sync (excluding cancelled)
-	CancelledFiles    int // Number of files cancelled during copy
-	TotalBytes        int64
-	TransferredBytes  int64
-	CurrentFile       string   // Most recently updated file (for display)
-	CurrentFiles      []string // All files currently being copied
-	RecentlyCompleted []string // Recently completed files (for display)
-	CurrentFileBytes  int64
-	CurrentFileTotal  int64
-	StartTime         time.Time
-	EndTime           time.Time // Actual completion time
-	BytesPerSecond    float64
-	EstimatedTimeLeft time.Duration
-	CompletionTime    time.Time // Estimated completion time
-	FilesToSync       []*FileToSync
-	Errors            []FileError // All errors encountered during sync (excluding cancellations)
-	CancelledCopies   []string    // Files that were cancelled during copy
-
-	// Overall statistics (including already-synced files)
-	TotalFilesInSource int   // Total files found in source
-	TotalBytesInSource int64 // Total bytes in source
-	AlreadySyncedFiles int   // Files that were already up-to-date
-	AlreadySyncedBytes int64 // Bytes that were already up-to-date
-
-	// Analysis progress
-	//nolint:lll // Inline comment listing all possible phase values
-	AnalysisPhase    string   // "counting_source", "scanning_source", "counting_dest", "scanning_dest", "comparing", "deleting", "complete"
-	ScannedFiles     int      // Number of files scanned/compared so far
-	TotalFilesToScan int      // Total files to scan/compare (0 if unknown/counting)
-	CurrentPath      string   // Current path being analyzed
-	AnalysisLog      []string // Recent analysis activities
-
-	// Analysis progress tracking for time estimation
-	ScannedBytes      int64     // Bytes scanned so far
-	TotalBytesToScan  int64     // Total bytes to scan (0 if unknown)
-	AnalysisStartTime time.Time // When analysis started
-	AnalysisRate      float64   // Items per second (rolling)
-
-	// Concurrency tracking
-	ActiveWorkers int32 // Current number of active workers (atomic)
-	MaxWorkers    int   // Maximum workers reached
-	AdaptiveMode  bool  // Whether adaptive concurrency is enabled
-
-	// Performance tracking (for bottleneck detection)
-	TotalReadTime  time.Duration // Total time spent reading from source
-	TotalWriteTime time.Duration // Total time spent writing to destination
-	Bottleneck     string        // "source", "destination", or "balanced"
-
-	// Progress metrics (pre-computed for UI display)
-	Progress ProgressMetrics // Pre-computed progress percentages
-	Workers  WorkerMetrics   // Pre-computed worker performance metrics
-
-	// Cleanup/finalization status
-	FinalizationPhase string // "updating_cache", "complete", or empty
-
-	mu sync.RWMutex
 }
 
 // ComputeProgressMetrics calculates all progress metrics and updates the

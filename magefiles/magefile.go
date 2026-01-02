@@ -64,13 +64,13 @@ func Check(c context.Context) error {
 	fmt.Println("Checking...")
 
 	mg.SerialCtxDeps(c,
-		Tidy,           // clean up the module dependencies
-		DeleteDeadcode, // no use doing anything else to dead code
-		FixImports,     // after dead code removal, fix imports to remove unused ones
-		Modernize,      // no use doing anything else to old code patterns
-		CheckCoverage,  // does our code work?
-		CheckNils,      // is it nil free?
-		// ReorderDecls removed - incompatible with test helper pattern (breaks //go:build !release files)
+		Tidy,              // clean up the module dependencies
+		DeleteDeadcode,    // no use doing anything else to dead code
+		FixImports,        // after dead code removal, fix imports to remove unused ones
+		Modernize,         // no use doing anything else to old code patterns
+		CheckCoverage,     // does our code work?
+		CheckNils,         // is it nil free?
+		ReorderDeclsCheck, // are declarations in correct order?
 		Lint,
 	)
 

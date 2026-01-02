@@ -13,6 +13,76 @@ import (
 	"github.com/joe/copy-files/pkg/fileops"
 )
 
+// TestAnalysisProgressIntegration_DivisionByZeroSafety verifies no panics with edge cases.
+func TestAnalysisProgressIntegration_DivisionByZeroSafety(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	engine.FileOps = fileops.NewRealFileOps()
+
+	// Create empty file (zero bytes)
+	err := os.WriteFile(filepath.Join(sourceDir, "empty.txt"), []byte{}, 0o600)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	err = engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Should handle zero-byte files without division by zero
+	progress := engine.Status.CalculateAnalysisProgress()
+	g.Expect(progress.BytesPercent).Should(Equal(0.0))
+	g.Expect(progress.OverallPercent).Should(BeNumerically(">=", 0.0))
+}
+
+// TestAnalysisProgressIntegration_EmptyDestination verifies handling when destination is empty.
+func TestAnalysisProgressIntegration_EmptyDestination(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir() // Create empty dest dir
+
+	// Create source file
+	err := os.WriteFile(filepath.Join(sourceDir, "test.txt"), []byte("test"), 0o600)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	engine.FileOps = fileops.NewRealFileOps()
+
+	err = engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Should still calculate progress correctly
+	progress := engine.Status.CalculateAnalysisProgress()
+	g.Expect(progress.IsCounting).Should(BeFalse())
+	g.Expect(engine.Status.TotalFiles).Should(Equal(1))
+}
+
+// TestAnalysisProgressIntegration_EmptySource verifies graceful handling of empty source.
+func TestAnalysisProgressIntegration_EmptySource(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	sourceDir := t.TempDir()
+	destDir := t.TempDir()
+
+	engine := mustNewEngine(t, sourceDir, destDir)
+	engine.FileOps = fileops.NewRealFileOps()
+
+	err := engine.Analyze()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Verify progress handles zero files gracefully
+	progress := engine.Status.CalculateAnalysisProgress()
+	g.Expect(progress.FilesPercent).Should(Equal(0.0))
+	g.Expect(progress.BytesPercent).Should(Equal(0.0))
+	g.Expect(progress.OverallPercent).Should(Equal(0.0))
+	g.Expect(engine.Status.TotalBytesToScan).Should(Equal(int64(0)))
+}
+
 // TestAnalysisProgressIntegration_FullFlow verifies the complete analysis flow
 // transitions properly from counting to processing phase.
 func TestAnalysisProgressIntegration_FullFlow(t *testing.T) {
@@ -66,76 +136,6 @@ func TestAnalysisProgressIntegration_FullFlow(t *testing.T) {
 
 	// Verify analysis start time was recorded
 	g.Expect(engine.Status.AnalysisStartTime.IsZero()).Should(BeFalse())
-}
-
-// TestAnalysisProgressIntegration_EmptySource verifies graceful handling of empty source.
-func TestAnalysisProgressIntegration_EmptySource(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
-
-	engine := mustNewEngine(t, sourceDir, destDir)
-	engine.FileOps = fileops.NewRealFileOps()
-
-	err := engine.Analyze()
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	// Verify progress handles zero files gracefully
-	progress := engine.Status.CalculateAnalysisProgress()
-	g.Expect(progress.FilesPercent).Should(Equal(0.0))
-	g.Expect(progress.BytesPercent).Should(Equal(0.0))
-	g.Expect(progress.OverallPercent).Should(Equal(0.0))
-	g.Expect(engine.Status.TotalBytesToScan).Should(Equal(int64(0)))
-}
-
-// TestAnalysisProgressIntegration_EmptyDestination verifies handling when destination is empty.
-func TestAnalysisProgressIntegration_EmptyDestination(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	sourceDir := t.TempDir()
-	destDir := t.TempDir() // Create empty dest dir
-
-	// Create source file
-	err := os.WriteFile(filepath.Join(sourceDir, "test.txt"), []byte("test"), 0o600)
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	engine := mustNewEngine(t, sourceDir, destDir)
-	engine.FileOps = fileops.NewRealFileOps()
-
-	err = engine.Analyze()
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	// Should still calculate progress correctly
-	progress := engine.Status.CalculateAnalysisProgress()
-	g.Expect(progress.IsCounting).Should(BeFalse())
-	g.Expect(engine.Status.TotalFiles).Should(Equal(1))
-}
-
-// TestAnalysisProgressIntegration_DivisionByZeroSafety verifies no panics with edge cases.
-func TestAnalysisProgressIntegration_DivisionByZeroSafety(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
-
-	engine := mustNewEngine(t, sourceDir, destDir)
-	engine.FileOps = fileops.NewRealFileOps()
-
-	// Create empty file (zero bytes)
-	err := os.WriteFile(filepath.Join(sourceDir, "empty.txt"), []byte{}, 0o600)
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	err = engine.Analyze()
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	// Should handle zero-byte files without division by zero
-	progress := engine.Status.CalculateAnalysisProgress()
-	g.Expect(progress.BytesPercent).Should(Equal(0.0))
-	g.Expect(progress.OverallPercent).Should(BeNumerically(">=", 0.0))
 }
 
 // TestAnalysisProgressIntegration_PerformanceOverhead verifies <5% overhead.

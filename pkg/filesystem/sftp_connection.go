@@ -147,7 +147,7 @@ func SetSSHDialerForTesting(dialer SSHDialer) func() {
 
 // unexported variables.
 var (
-	defaultSSHDialer SSHDialer = &realSSHDialer{} //nolint:gochecknoglobals // DI default
+	defaultSSHDialer SSHDialer = &realSSHDialer{}
 )
 
 // realSSHDialer implements SSHDialer using the actual ssh.Dial function.
