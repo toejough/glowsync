@@ -13,7 +13,7 @@ func TestRenderASCIIProgress_HundredPercent(t *testing.T) {
 	g := NewWithT(t)
 
 	result := shared.RenderASCIIProgress(1.0, 40)
-	expected := "[========================================] 100%"
+	expected := "[========================================]"
 
 	g.Expect(result).To(Equal(expected), "100%% progress should show full bar")
 }
@@ -23,7 +23,7 @@ func TestRenderASCIIProgress_MidRange(t *testing.T) {
 	g := NewWithT(t)
 
 	result := shared.RenderASCIIProgress(0.45, 40)
-	expected := "[================>                       ] 45%"
+	expected := "[================>                       ]"
 
 	g.Expect(result).To(Equal(expected), "45%% progress should show arrow at correct position")
 }
@@ -41,25 +41,25 @@ func TestRenderASCIIProgress_NarrowWidths(t *testing.T) {
 			name:     "Width 5, 50%",
 			percent:  0.50,
 			width:    5,
-			expected: "[=>   ] 50%",
+			expected: "[=>   ]",
 		},
 		{
 			name:     "Width 3, 50%",
 			percent:  0.50,
 			width:    3,
-			expected: "[>  ] 50%",
+			expected: "[>  ]",
 		},
 		{
 			name:     "Width 2, 50%",
 			percent:  0.50,
 			width:    2,
-			expected: "[> ] 50%",
+			expected: "[> ]",
 		},
 		{
 			name:     "Width 1, 50%",
 			percent:  0.50,
 			width:    1,
-			expected: "[>] 50%",
+			expected: "[>]",
 		},
 	}
 
@@ -87,19 +87,19 @@ func TestRenderASCIIProgress_VariousPercentages(t *testing.T) {
 			name:     "25% at width 40",
 			percent:  0.25,
 			width:    40,
-			expected: "[========>                               ] 25%",
+			expected: "[========>                               ]",
 		},
 		{
 			name:     "75% at width 40",
 			percent:  0.75,
 			width:    40,
-			expected: "[============================>           ] 75%",
+			expected: "[============================>           ]",
 		},
 		{
 			name:     "50% at width 20",
 			percent:  0.50,
 			width:    20,
-			expected: "[========>           ] 50%",
+			expected: "[========>           ]",
 		},
 	}
 
@@ -119,7 +119,7 @@ func TestRenderASCIIProgress_ZeroPercent(t *testing.T) {
 	g := NewWithT(t)
 
 	result := shared.RenderASCIIProgress(0.0, 40)
-	expected := "[                                        ] 0%"
+	expected := "[                                        ]"
 
 	g.Expect(result).To(Equal(expected), "0%% progress should show empty bar")
 }
@@ -143,7 +143,7 @@ func TestRenderProgress_WithASCIIFallback(t *testing.T) {
 
 	// Test with 45% progress
 	result := shared.RenderProgress(model, 0.45)
-	expected := "[================>                       ] 45%"
+	expected := "[================>                       ]"
 
 	g.Expect(result).To(Equal(expected), "RenderProgress should use ASCII fallback when colors disabled")
 }
@@ -174,6 +174,6 @@ func TestRenderProgress_WithBubbleTeaProgress(t *testing.T) {
 	g.Expect(result).NotTo(BeEmpty(), "RenderProgress should return non-empty output")
 
 	// The ASCII version would be exactly this string:
-	asciiVersion := "[================>                       ] 45%"
+	asciiVersion := "[================>                       ]"
 	g.Expect(result).NotTo(Equal(asciiVersion), "RenderProgress should use styled output when colors enabled, not ASCII")
 }

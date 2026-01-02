@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -25,11 +24,8 @@ func NewProgressModel(width int) progress.Model {
 
 // RenderASCIIProgress renders a progress bar in ASCII format.
 // percent should be between 0.0 and 1.0, width is the total width of the bar.
-// Returns a string like: "[=========>          ] 45%"
+// Returns a string like: "[=========>          ]" (bar only, percentage added by caller)
 func RenderASCIIProgress(percent float64, width int) string {
-	// Calculate percentage for display
-	pct := int(percent * ProgressPercentageScale)
-
 	// Calculate how many characters should be filled
 	filled := int(percent * float64(width))
 
@@ -72,7 +68,7 @@ func RenderASCIIProgress(percent float64, width int) string {
 
 	bar.WriteString("]")
 
-	return fmt.Sprintf("%s %d%%", bar.String(), pct)
+	return bar.String()
 }
 
 // RenderProgress is a wrapper that renders progress using either Bubble Tea's progress bar

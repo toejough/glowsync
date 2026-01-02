@@ -36,9 +36,8 @@ func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
 	spin.Spinner = spinner.Dot
 	spin.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
 
-	overallProg := progress.New(
-		progress.WithDefaultGradient(),
-	)
+	// Use shared helper to ensure consistent configuration (ShowPercentage = false)
+	overallProg := shared.NewProgressModel(0) // Width set later in resize
 
 	return &AnalysisScreen{
 		config:          cfg,

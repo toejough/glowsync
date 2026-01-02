@@ -43,7 +43,9 @@ A simple md issue tracker.
 2. create a way to ignore files on the server side from deletion during sync
    - status: backlog
 3. there's no border around the app in the analysis screen
-   - status: backlog
+   - status: done
+   - completed: 2026-01-02 10:28 EST
+   - resolution: User reports issue no longer visible, marking as resolved
 4. fix impgen V1 deprecation warnings in mage check
    - status: done
    - created: 2025-12-30 23:36 EST
@@ -82,9 +84,18 @@ A simple md issue tracker.
      - CLI help text (--help flag output)
      - README.md with SFTP usage section
 6. there's a duplicate (less precise) percentage after the file progress bars `22% (22.5%)`
-   - status: backlog
-   - description: Remove redundant percentage display in file progress bars. I'd like to keep the second one, and remove
-     the first.
+   - status: done
+   - started: 2026-01-02 10:28 EST
+   - completed: 2026-01-02 10:32 EST
+   - description: Remove redundant percentage display in file progress bars. Keep the precise percentage (22.5%), remove the less precise one (22%)
+   - implementation: Modified RenderASCIIProgress to return only progress bar without percentage, allowing caller (3_sync.go) to add precise float percentage
+   - affected files:
+     - internal/tui/shared/progress.go - Removed percentage from RenderASCIIProgress return value
+     - internal/tui/shared/progress_test.go - Updated all test expectations
+   - timeline:
+     - 2026-01-02 10:28 EST - Started: Investigating duplicate percentage display
+     - 2026-01-02 10:32 EST - Complete: Removed integer percentage from progress bar, caller now shows only precise float percentage
+     - 2026-01-02 10:37 EST - COMMIT: Routing to git-workflow agent for commit
 7. the file progress bars section frequently shows a higher number of workers than files being synced
    - status: done
    - started: 2025-12-31 01:34 EST

@@ -32,13 +32,9 @@ func NewSyncScreen(engine *syncengine.Engine) *SyncScreen {
 	spin.Spinner = spinner.Dot
 	spin.Style = lipgloss.NewStyle().Foreground(shared.PrimaryColor())
 
-	overallProg := progress.New(
-		progress.WithDefaultGradient(),
-	)
-
-	fileProg := progress.New(
-		progress.WithDefaultGradient(),
-	)
+	// Use shared helper to ensure consistent configuration (ShowPercentage = false)
+	overallProg := shared.NewProgressModel(0) // Width set later in resize
+	fileProg := shared.NewProgressModel(0)    // Width set later in resize
 
 	return &SyncScreen{
 		engine:          engine,
