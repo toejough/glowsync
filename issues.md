@@ -425,10 +425,19 @@ A simple md issue tracker.
       - 2025-12-31 21:22 EST: INTEGRATION BUG FOUND - HillClimbingScalingDecision was never hooked up! EvaluateAndScale still called old MakeScalingDecision
       - 2025-12-31 21:22 EST: Integration fix committed (9d17905) - EvaluateAndScale now calls HillClimbingScalingDecision, logs show total throughput
 18. File counting screen shows 0 files in destination then jumps to 100%
-   - status: backlog
+   - status: in progress
    - priority: medium
    - created: 2025-12-31 22:38 EST
+   - started: 2026-01-02 11:19 EST
    - description: During the analysis phase, the file counting screen shows destination file count as 0 for several seconds, then suddenly jumps to 100% complete without showing intermediate progress
+   - timeline:
+     - 2026-01-02 11:19 EST - Started: Investigating destination file count update behavior
+     - 2026-01-02 12:12 EST - RED: Writing tests for progressive file yielding during scan
+     - 2026-01-02 12:24 EST - GREEN: Implementing progressive yielding in both scanners
+     - 2026-01-02 12:33 EST - AUDIT: Reviewing progressive yielding implementation quality
+     - 2026-01-02 12:33 EST - AUDIT: Reviewing progressive yielding implementation quality
+     - 2026-01-02 12:40 EST - COMMIT: Routing to git-workflow agent for commit
+     - 2026-01-02 12:39 EST - COMMIT: Creating commit for progressive file yielding
    - observed behavior:
      - Source file count updates progressively (shows intermediate values)
      - Destination count stays at 0 files for several seconds
@@ -610,3 +619,24 @@ A simple md issue tracker.
      - 2026-01-01 23:21 EST - SOLUTION: Removed //go:build !release tag (methods now regular exported helpers)
      - 2026-01-02 09:05 EST - COMPLETE: go-reorder bug fixed, ReorderDecls restored to pipeline, all tests passing
      - 2026-01-02 09:41 EST - COMMIT: Creating commit for Issue #24 completion
+25. Screen flickers when transitioning between initializing/finalizing messages and progress bars
+   - status: backlog
+   - priority: medium
+   - created: 2026-01-02 10:40 EST
+   - description: Rapid transitions between "initializing"/"finalizing" messages and per-file progress bars create jarring screen flicker
+   - observed behavior:
+     - When files complete quickly, screen rapidly switches between:
+       - "Initializing..." or "Finalizing..." status messages
+       - Per-file progress bars showing transfer progress
+     - Creates visual flicker as UI elements appear/disappear rapidly
+     - Distracting and makes it hard to track what's happening
+   - expected behavior:
+     - Smooth, stable visual presentation even during rapid file transitions
+     - Reduced visual noise and flicker
+     - Clear progress indication without jarring UI changes
+   - possible solutions:
+     - Add minimum display time for status messages (debouncing)
+     - Combine initializing/finalizing into progress bar states
+     - Show persistent progress bars with state labels instead of switching views
+     - Add transition delays or animations to smooth state changes
+     - Queue rapid updates and batch display changes
