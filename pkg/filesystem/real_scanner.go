@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 )
 
-// realFileScanner implements FileScanner using filepath.Walk.
+// realFileScanner implements FileScanner using filepath.Walk with progressive yielding.
 type realFileScanner struct {
 	root    string
-	files   []FileInfo
-	index   int
+	fileCh  chan FileInfo
+	errCh   chan error
 	err     error
-	scanned bool
+	started bool
+	done    bool
 }
 
 // Err returns any error that occurred during scanning.
@@ -22,61 +23,87 @@ func (s *realFileScanner) Err() error {
 
 // Next advances to the next file and returns its info.
 func (s *realFileScanner) Next() (FileInfo, bool) {
-	// Scan on first call
-	if !s.scanned {
-		s.scan()
-		s.scanned = true
+	// Start walking on first call
+	if !s.started {
+		s.startWalking()
+		s.started = true
 	}
 
-	// Check if we have an error
-	if s.err != nil {
+	// If already done, return false
+	if s.done {
 		return FileInfo{}, false
 	}
 
-	// Advance to next file
-	s.index++
-	if s.index >= len(s.files) {
+	// Try to get next file from channel
+	select {
+	case file, ok := <-s.fileCh:
+		if !ok {
+			// Channel closed, check for error
+			select {
+			case err := <-s.errCh:
+				s.err = err
+			default:
+				// No error, just finished
+			}
+			s.done = true
+
+			return FileInfo{}, false
+		}
+
+		return file, true
+	case err := <-s.errCh:
+		// Error occurred during walk
+		s.err = err
+		s.done = true
+
 		return FileInfo{}, false
 	}
-
-	return s.files[s.index], true
 }
 
-// scan walks the directory tree and collects all files.
-func (s *realFileScanner) scan() {
-	s.err = filepath.Walk(s.root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+// startWalking begins the directory walk in a background goroutine.
+func (s *realFileScanner) startWalking() {
+	s.fileCh = make(chan FileInfo)
+	s.errCh = make(chan error, 1)
 
-		// Get relative path
-		relPath, err := filepath.Rel(s.root, path)
-		if err != nil {
-			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
-		}
+	go func() {
+		defer close(s.fileCh)
 
-		// Skip the root directory itself
-		if relPath == "." {
+		walkErr := filepath.Walk(s.root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Get relative path
+			relPath, err := filepath.Rel(s.root, path)
+			if err != nil {
+				return fmt.Errorf("failed to get relative path for %s: %w", path, err)
+			}
+
+			// Skip the root directory itself
+			if relPath == "." {
+				return nil
+			}
+
+			// Send file info to channel (yields immediately)
+			s.fileCh <- FileInfo{
+				RelativePath: relPath,
+				Size:         info.Size(),
+				ModTime:      info.ModTime(),
+				IsDir:        info.IsDir(),
+			}
+
 			return nil
-		}
-
-		// Add file info
-		s.files = append(s.files, FileInfo{
-			RelativePath: relPath,
-			Size:         info.Size(),
-			ModTime:      info.ModTime(),
-			IsDir:        info.IsDir(),
 		})
 
-		return nil
-	})
+		if walkErr != nil {
+			s.errCh <- walkErr
+		}
+	}()
 }
 
 // newRealFileScanner creates a new scanner for the given directory.
 func newRealFileScanner(root string) *realFileScanner {
 	return &realFileScanner{
-		root:  root,
-		files: make([]FileInfo, 0),
-		index: -1,
+		root: root,
 	}
 }

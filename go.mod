@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/kr/fs v0.1.0
 	github.com/onsi/gomega v1.38.3
 	github.com/pkg/sftp v1.13.10
 	github.com/toejough/imptest v0.0.0-20260101042338-551eb715673a
@@ -26,7 +27,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/kr/fs v0.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect

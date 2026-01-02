@@ -28,6 +28,7 @@ allow = [
 	'github.com/charmbracelet/bubbletea',
 	'github.com/charmbracelet/lipgloss',
 	'github.com/joe/copy-files',
+	'github.com/kr/fs',
 	'github.com/magefile/mage',
 	'github.com/pkg/sftp',
 	'golang.org/x/crypto/ssh',

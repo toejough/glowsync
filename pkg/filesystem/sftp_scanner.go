@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/kr/fs"
 	"github.com/pkg/sftp"
 )
 
@@ -35,14 +36,13 @@ func (s *pooledSFTPScanner) Next() (FileInfo, bool) {
 	return info, hasNext
 }
 
-// sftpScanner implements FileScanner for SFTP directories.
+// sftpScanner implements FileScanner for SFTP directories with progressive yielding.
 type sftpScanner struct {
 	client  *sftp.Client
 	root    string
-	files   []FileInfo
-	index   int
+	walker  *fs.Walker
 	err     error
-	scanned bool
+	started bool
 }
 
 // Err returns any error that occurred during scanning.
@@ -52,38 +52,28 @@ func (s *sftpScanner) Err() error {
 
 // Next advances to the next file and returns its info.
 func (s *sftpScanner) Next() (FileInfo, bool) {
-	// Scan on first call
-	if !s.scanned {
-		s.scan()
-		s.scanned = true
+	// Start walker on first call
+	if !s.started {
+		s.walker = s.client.Walk(s.root)
+		s.started = true
 	}
 
-	// Check if we have an error
+	// Check if we have an error from previous iteration
 	if s.err != nil {
 		return FileInfo{}, false
 	}
 
-	// Advance to next file
-	s.index++
-	if s.index >= len(s.files) {
-		return FileInfo{}, false
-	}
-
-	return s.files[s.index], true
-}
-
-// scan walks the remote directory tree and collects all files.
-func (s *sftpScanner) scan() {
-	walker := s.client.Walk(s.root)
-
-	for walker.Step() {
-		if err := walker.Err(); err != nil { //nolint:noinlineerr // Inline error check is idiomatic for walker error handling
+	// Step to next file
+	for s.walker.Step() {
+		//nolint:noinlineerr // Inline error check is idiomatic for walker error handling
+		if err := s.walker.Err(); err != nil {
 			s.err = fmt.Errorf("error scanning SFTP directory: %w", err)
-			return
+
+			return FileInfo{}, false
 		}
 
-		stat := walker.Stat()
-		fullPath := walker.Path()
+		stat := s.walker.Stat()
+		fullPath := s.walker.Path()
 
 		// Skip the root directory itself
 		if fullPath == s.root {
@@ -94,17 +84,21 @@ func (s *sftpScanner) scan() {
 		relPath, err := relativePath(s.root, fullPath)
 		if err != nil {
 			s.err = fmt.Errorf("failed to get relative path for %s: %w", fullPath, err)
-			return
+
+			return FileInfo{}, false
 		}
 
-		// Add file info
-		s.files = append(s.files, FileInfo{
+		// Return this file immediately (progressive yielding)
+		return FileInfo{
 			RelativePath: relPath,
 			Size:         stat.Size(),
 			ModTime:      stat.ModTime(),
 			IsDir:        stat.IsDir(),
-		})
+		}, true
 	}
+
+	// Walker finished, no more files
+	return FileInfo{}, false
 }
 
 // newPooledSFTPScanner creates a new pooled scanner.
@@ -122,8 +116,6 @@ func newSFTPScanner(client *sftp.Client, root string) *sftpScanner {
 	return &sftpScanner{
 		client: client,
 		root:   root,
-		files:  make([]FileInfo, 0),
-		index:  -1,
 	}
 }
 
@@ -131,9 +123,7 @@ func newSFTPScanner(client *sftp.Client, root string) *sftpScanner {
 func newSFTPScannerWithError(err error) *sftpScanner {
 	return &sftpScanner{
 		err:     err,
-		scanned: true,
-		files:   make([]FileInfo, 0),
-		index:   -1,
+		started: true,
 	}
 }
 
