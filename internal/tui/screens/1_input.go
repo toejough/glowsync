@@ -409,57 +409,106 @@ func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
 // ============================================================================
 
 func (s InputScreen) renderInputView() string {
-	content := shared.RenderTitle("🚀 File Sync Tool") + "\n\n" +
-		shared.RenderSubtitle("Configure your sync operation") + "\n\n" +
-		shared.RenderLabel("Source Path:") + "\n" +
-		s.sourceInput.View() + "\n"
+	// Render timeline header showing "input" phase as active
+	timeline := shared.RenderTimeline("input")
 
-	// Show completion list for source
+	// Calculate column widths for two-column layout (60% left, 40% right)
+	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+
+	// Build left column content: title, inputs in widget boxes, errors, help
+	leftContent := s.renderLeftColumn(leftWidth)
+
+	// Build right column content: activity log
+	rightContent := s.renderRightColumn()
+
+	// Combine columns using two-column layout
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+
+	// Final assembly: timeline + main content wrapped in box
+	output := timeline + "\n\n" + mainContent
+
+	return shared.RenderBox(output, s.width, s.height)
+}
+
+// renderLeftColumn builds the left column content with inputs, errors, and help text.
+// Following wsl_v5 pattern: blank lines between logical sections, before returns.
+func (s InputScreen) renderLeftColumn(leftWidth int) string {
+	var content string
+
+	// Title and subtitle
+	content = shared.RenderTitle("🚀 File Sync Tool") + "\n\n" +
+		shared.RenderSubtitle("Configure your sync operation") + "\n\n"
+
+	// Source input widget box
+	sourceWidgetContent := s.sourceInput.View()
+	content += shared.RenderWidgetBox("Source Path", sourceWidgetContent, leftWidth) + "\n"
+
+	// Completion list for source (rendered outside widget box)
 	if s.focusIndex == 0 && s.showCompletions && len(s.completions) > 0 {
 		content += s.formatCompletionList(s.completions, s.completionIndex) + "\n"
 	}
 
-	content += "\n" +
-		shared.RenderLabel("Destination Path:") + "\n" +
-		s.destInput.View() + "\n"
+	content += "\n"
 
-	// Show completion list for dest
+	// Destination input widget box
+	destWidgetContent := s.destInput.View()
+	content += shared.RenderWidgetBox("Destination Path", destWidgetContent, leftWidth) + "\n"
+
+	// Completion list for dest (rendered outside widget box)
 	if s.focusIndex == 1 && s.showCompletions && len(s.completions) > 0 {
 		content += s.formatCompletionList(s.completions, s.completionIndex) + "\n"
 	}
 
-	content += "\n" +
-		shared.RenderLabel("Filter Pattern (optional):") + "\n" +
-		s.patternInput.View() + "\n"
+	content += "\n"
 
-	// Show validation error if present
+	// Pattern input widget box
+	patternWidgetContent := s.patternInput.View()
+	content += shared.RenderWidgetBox("Filter Pattern (optional)", patternWidgetContent, leftWidth) + "\n\n"
+
+	// Validation error section (if present)
 	if s.validationError != nil {
-		enricher := pkgerrors.NewEnricher()
-
-		// Determine the path to use for enrichment context
-		var affectedPath string
-		if s.focusIndex == 0 {
-			affectedPath = s.sourceInput.Value()
-		} else {
-			affectedPath = s.destInput.Value()
-		}
-
-		enrichedErr := enricher.Enrich(s.validationError, affectedPath)
-		content += "\n" + shared.RenderError("Error: "+enrichedErr.Error()) + "\n"
-
-		// Show suggestions if available
-		suggestions := pkgerrors.FormatSuggestions(enrichedErr)
-		if suggestions != "" {
-			content += suggestions + "\n"
-		}
+		content += s.renderValidationError() + "\n\n"
 	}
 
-	content += "\n" +
-		shared.RenderDim("Navigation: Tab/Shift+Tab to cycle • ↑↓ to switch fields") + "\n" +
+	// Help text at bottom of left column
+	content += shared.RenderDim("Navigation: Tab/Shift+Tab to cycle • ↑↓ to switch fields") + "\n" +
 		shared.RenderDim("Actions: → to accept & continue • Enter to submit") + "\n" +
 		shared.RenderDim("Other: Esc to clear field • Ctrl+C to exit")
 
-	return shared.RenderBox(content, s.width, s.height)
+	return content
+}
+
+// renderRightColumn builds the right column content with activity log.
+func (s InputScreen) renderRightColumn() string {
+	// Initial activity log message
+	activityEntries := []string{"Enter source and destination paths to begin"}
+
+	return shared.RenderActivityLog("Activity", activityEntries, 0)
+}
+
+// renderValidationError formats validation errors with enrichment and suggestions.
+// Extracted to keep renderLeftColumn focused and under length limits.
+func (s InputScreen) renderValidationError() string {
+	enricher := pkgerrors.NewEnricher()
+
+	// Determine the path to use for enrichment context
+	var affectedPath string
+	if s.focusIndex == 0 {
+		affectedPath = s.sourceInput.Value()
+	} else {
+		affectedPath = s.destInput.Value()
+	}
+
+	enrichedErr := enricher.Enrich(s.validationError, affectedPath)
+	errorContent := shared.RenderError("Error: " + enrichedErr.Error())
+
+	// Show suggestions if available
+	suggestions := pkgerrors.FormatSuggestions(enrichedErr)
+	if suggestions != "" {
+		errorContent += "\n" + suggestions
+	}
+
+	return errorContent
 }
 
 // setFocus sets the focus to the specified field index and updates all prompts accordingly.
