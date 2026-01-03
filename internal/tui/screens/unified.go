@@ -10,6 +10,7 @@ import (
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/shared"
+	"github.com/joe/copy-files/internal/tui/widgets"
 )
 
 // WorkflowPhase represents the current phase of the workflow
@@ -115,6 +116,11 @@ func (s *UnifiedScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.spinner, cmd = s.spinner.Update(msg)
 		return s, cmd
 
+	case shared.StatusUpdateMsg:
+		// Update status so widgets can access latest data
+		s.status = msg.Status
+		return s, nil
+
 	case shared.AnalysisCompleteMsg:
 		return s.handleAnalysisComplete()
 
@@ -129,9 +135,7 @@ func (s *UnifiedScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.widgets.Add(shared.NewWidget(
 			"summary",
 			shared.WidgetTypeSummary,
-			func() string {
-				return "<!-- PHASE: summary -->Error: " + s.err.Error()
-			},
+			widgets.NewSummaryWidget(s.getStatus, msg.Err),
 		))
 
 		return s, nil
@@ -470,19 +474,19 @@ func (s *UnifiedScreen) startAnalysis() (tea.Model, tea.Cmd) {
 	s.widgets.Add(shared.NewWidget(
 		"phase",
 		shared.WidgetTypePhase,
-		func() string { return "Analyzing files..." },
+		widgets.NewPhaseWidget("analyzing"),
 	))
 
 	s.widgets.Add(shared.NewWidget(
 		"progress",
 		shared.WidgetTypeProgress,
-		func() string { return "Progress: calculating..." },
+		widgets.NewProgressWidget(s.getStatus),
 	))
 
 	s.widgets.Add(shared.NewWidget(
 		"activitylog",
 		shared.WidgetTypeActivityLog,
-		func() string { return "Activity log..." },
+		widgets.NewActivityLogWidget(s.getActivities),
 	))
 
 	// Transition to analyzing phase
@@ -512,13 +516,13 @@ func (s *UnifiedScreen) startSync() (tea.Model, tea.Cmd) {
 	s.widgets.Add(shared.NewWidget(
 		"filelist",
 		shared.WidgetTypeFileList,
-		func() string { return "Files being synced..." },
+		widgets.NewFileListWidget(s.getStatus),
 	))
 
 	s.widgets.Add(shared.NewWidget(
 		"workerstats",
 		shared.WidgetTypeWorkerStats,
-		func() string { return "Worker statistics..." },
+		widgets.NewWorkerStatsWidget(s.getStatus),
 	))
 
 	// Transition to syncing phase
@@ -548,7 +552,7 @@ func (s *UnifiedScreen) handleAnalysisComplete() (tea.Model, tea.Cmd) {
 	s.widgets.Add(shared.NewWidget(
 		"syncplan",
 		shared.WidgetTypeSyncPlan,
-		func() string { return "Sync plan: Ready to sync..." },
+		widgets.NewSyncPlanWidget(s.getStatus),
 	))
 
 	// Transition to confirmation phase
@@ -563,7 +567,7 @@ func (s *UnifiedScreen) handleSyncComplete() (tea.Model, tea.Cmd) {
 	s.widgets.Add(shared.NewWidget(
 		"summary",
 		shared.WidgetTypeSummary,
-		func() string { return "Summary: Sync completed!" },
+		widgets.NewSummaryWidget(s.getStatus, nil),
 	))
 
 	// Transition to summary phase
@@ -580,4 +584,26 @@ func (s *UnifiedScreen) transitionToInput() (tea.Model, tea.Cmd) {
 	s.status = nil
 	s.err = nil
 	return s, nil
+}
+
+// getStatus returns current engine status
+func (s *UnifiedScreen) getStatus() *syncengine.Status {
+	// Return stored status if available (from StatusUpdateMsg)
+	if s.status != nil {
+		return s.status
+	}
+
+	// Otherwise poll engine directly
+	if s.engine == nil {
+		return nil
+	}
+
+	return s.engine.GetStatus()
+}
+
+// getActivities returns recent activity log entries
+func (s *UnifiedScreen) getActivities() []string {
+	// TODO: Implement activity tracking
+	// For now, return empty slice
+	return []string{}
 }
