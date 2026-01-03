@@ -333,6 +333,10 @@ func (e *Engine) GetStatus() *Status {
 	status.AnalysisLog = make([]string, len(e.Status.AnalysisLog))
 	copy(status.AnalysisLog, e.Status.AnalysisLog)
 
+	// Copy RecentlyCompleted slice
+	status.RecentlyCompleted = make([]string, len(e.Status.RecentlyCompleted))
+	copy(status.RecentlyCompleted, e.Status.RecentlyCompleted)
+
 	// Copy analysis progress tracking fields
 	status.ScannedBytes = e.Status.ScannedBytes
 	status.TotalBytesToScan = e.Status.TotalBytesToScan
