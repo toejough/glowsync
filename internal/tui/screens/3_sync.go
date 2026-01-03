@@ -278,8 +278,16 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	s.width = msg.Width
 	s.height = msg.Height
 
-	// Set progress bar widths
-	progressWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
+	// Calculate available width for progress bars inside widget boxes
+	// Widget boxes are in the left column (60% of content width)
+	// and have their own overhead (4 chars for borders + padding)
+	contentWidth := msg.Width - shared.BoxOverhead
+	leftColumnWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split
+	const widgetBoxOverhead = 4                         // Widget box borders (2) + padding (2)
+	availableWidth := leftColumnWidth - widgetBoxOverhead
+
+	// Set progress bar widths to fit within widget box
+	progressWidth := max(availableWidth-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
 	progressWidth = min(progressWidth, shared.MaxProgressBarWidth)
 
 	s.overallProgress.Width = progressWidth
@@ -343,7 +351,7 @@ func (s SyncScreen) renderCancellationProgress() string {
 	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
 	builder.WriteString("\n")
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return shared.RenderBox(builder.String(), s.width)
 }
 
 //nolint:cyclop,gocognit,funlen // Complex rendering logic for file status display with multiple formatting cases
@@ -524,6 +532,16 @@ func (s SyncScreen) renderLeftColumn(leftWidth int) string {
 		content = shared.RenderTitle("📦 Syncing Files") + "\n\n"
 	}
 
+	// Source/Dest/Filter context (Design Principle #1, #2)
+	if s.engine != nil {
+		content += shared.RenderSourceDestContext(
+			s.engine.SourcePath,
+			s.engine.DestPath,
+			s.engine.FilePattern,
+			leftWidth,
+		)
+	}
+
 	// Early return if status not available yet
 	if s.status == nil {
 		content += s.spinner.View() + " Starting sync...\n\n"
@@ -619,6 +637,8 @@ func (s SyncScreen) renderRightColumn() string {
 	// Render activity log with last 10 entries
 	const maxLogEntries = 10
 
+	// Calculate right column width (40% of total width)
+
 	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }
 
@@ -676,20 +696,24 @@ func (s SyncScreen) renderSyncingView() string {
 	// Render timeline header showing "sync" phase as active
 	timeline := shared.RenderTimeline("sync")
 
-	// Calculate left column width (60% of total width)
-	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Calculate content width (accounting for outer box overhead)
+	contentWidth := s.width - shared.BoxOverhead
+
+	// Calculate left column width (60% of content width)
+	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
+	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
 
 	// Build left and right column content
 	leftContent := s.renderLeftColumn(leftWidth)
 	rightContent := s.renderRightColumn()
 
 	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
 
 	// Final assembly: timeline + main content wrapped in box
 	output := timeline + "\n\n" + mainContent
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {

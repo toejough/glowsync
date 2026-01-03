@@ -706,3 +706,23 @@ A simple md issue tracker.
      - Show persistent progress bars with state labels instead of switching views
      - Add transition delays or animations to smooth state changes
      - Queue rapid updates and batch display changes
+26. Source/Dest boxes visible on ALL screens (Design Principle #1)
+   - status: done
+   - priority: high
+   - created: 2026-01-03
+   - completed: 2026-01-03 13:41 EST
+   - description: Source and destination boxes should remain visible across all screens for context preservation
+   - current behavior: Only visible on Input screen
+   - missing on: Analysis, Confirmation, Sync, Summary
+   - design principle: Widget consistency - keep source/dest visible throughout workflow
+   - files affected: 2_analysis.go, 2.5_confirmation.go, 3_sync.go, 4_summary.go
+   - implementation:
+     - Created RenderSourceDestContext() helper in shared/helpers.go
+     - Updated Analysis screen to show source/dest/filter context
+     - Updated Confirmation screen to show source/dest/filter context
+     - Updated Sync screen to show source/dest/filter context (with nil check)
+     - Updated Summary screen to add struct fields, updated constructor, added context to all 3 views
+     - All tests passing
+   - timeline:
+     - 2026-01-03 13:41 EST - Complete: Source/dest/filter context now visible on all screens
+     - 2026-01-03 13:44 EST - COMMIT: Routing to git-workflow for commit

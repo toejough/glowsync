@@ -268,20 +268,24 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	// Render timeline header showing "scan" phase as active
 	timeline := shared.RenderTimeline("scan")
 
-	// Calculate left column width (60% of total width)
-	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Calculate content width (accounting for outer box overhead)
+	contentWidth := s.width - shared.BoxOverhead
+
+	// Calculate left column width (60% of content width)
+	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
+	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
 
 	// Build left and right column content
 	leftContent := s.renderLeftColumn(leftWidth)
 	rightContent := s.renderRightColumn()
 
 	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
 
 	// Final assembly: timeline + main content wrapped in box
 	output := timeline + "\n\n" + mainContent
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
@@ -335,7 +339,7 @@ func (s AnalysisScreen) renderInitializingView() string {
 		shared.RenderDim("Setting up file logging and preparing to analyze directories") + "\n\n" +
 		shared.RenderDim("Press Esc to change paths • Ctrl+C to exit")
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 // renderLeftColumn builds the left column content for analyzing view with widget boxes
@@ -344,6 +348,14 @@ func (s AnalysisScreen) renderLeftColumn(leftWidth int) string {
 
 	// Title
 	content = shared.RenderTitle("🔍 Analyzing Files") + "\n\n"
+
+	// Source/Dest/Filter context (Design Principle #1, #2)
+	content += shared.RenderSourceDestContext(
+		s.config.SourcePath,
+		s.config.DestPath,
+		s.config.FilePattern,
+		leftWidth,
+	)
 
 	// Phase widget box
 	phaseContent := s.renderPhaseContent()
@@ -454,6 +466,8 @@ func (s AnalysisScreen) renderRightColumn() string {
 
 	// Render activity log with last 10 entries
 	const maxLogEntries = 10
+
+	// Calculate right column width (40% of total width)
 
 	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }

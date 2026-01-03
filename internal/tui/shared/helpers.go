@@ -2,6 +2,7 @@ package shared
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -71,6 +72,32 @@ func RenderPath(path string, style lipgloss.Style, maxWidth int) string {
 // RenderPathPlain returns a plain (unstyled) path string, truncated if necessary
 func RenderPathPlain(path string, maxWidth int) string {
 	return TruncatePath(path, maxWidth)
+}
+
+// RenderSourceDestContext renders source and destination paths as widget boxes
+// for consistent context display across screens
+func RenderSourceDestContext(source, dest, filter string, width int) string {
+	var builder strings.Builder
+
+	maxPathWidth := CalculateMaxPathWidth(width)
+
+	// Source path widget box
+	sourceContent := RenderPathPlain(source, maxPathWidth)
+	builder.WriteString(RenderWidgetBox("Source", sourceContent, width))
+	builder.WriteString("\n\n")
+
+	// Destination path widget box
+	destContent := RenderPathPlain(dest, maxPathWidth)
+	builder.WriteString(RenderWidgetBox("Destination", destContent, width))
+	builder.WriteString("\n\n")
+
+	// Filter widget box (conditional - only if filter is set)
+	if strings.TrimSpace(filter) != "" {
+		builder.WriteString(RenderWidgetBox("Filter", filter, width))
+		builder.WriteString("\n\n")
+	}
+
+	return builder.String()
 }
 
 // ============================================================================

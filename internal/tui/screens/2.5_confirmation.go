@@ -51,20 +51,24 @@ func (s ConfirmationScreen) View() string {
 	// Render timeline header showing "compare" phase as active
 	timeline := shared.RenderTimeline("compare")
 
-	// Calculate left column width (60% of total width)
-	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Calculate content width (accounting for outer box overhead)
+	contentWidth := s.width - shared.BoxOverhead
+
+	// Calculate left column width (60% of content width)
+	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
+	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
 
 	// Build left and right column content
 	leftContent := s.renderLeftColumn(leftWidth)
 	rightContent := s.renderRightColumn()
 
 	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
 
 	// Final assembly: timeline + main content wrapped in box
 	output := timeline + "\n\n" + mainContent
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 func (s ConfirmationScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -113,9 +117,6 @@ func (s ConfirmationScreen) renderErrorContent(status *syncengine.Status) string
 }
 
 // renderFilterContent builds the content for the filter widget box
-func (s ConfirmationScreen) renderFilterContent() string {
-	return s.engine.FilePattern
-}
 
 // renderLeftColumn builds the left column content with widget boxes
 func (s ConfirmationScreen) renderLeftColumn(leftWidth int) string {
@@ -127,15 +128,17 @@ func (s ConfirmationScreen) renderLeftColumn(leftWidth int) string {
 	// Title
 	content = shared.RenderTitle("Analysis Complete") + "\n\n"
 
+	// Source/Dest/Filter context (Design Principle #1, #2)
+	content += shared.RenderSourceDestContext(
+		s.engine.SourcePath,
+		s.engine.DestPath,
+		s.engine.FilePattern,
+		leftWidth,
+	)
+
 	// Sync Plan widget box
 	syncPlanContent := s.renderSyncPlanContent(status)
 	content += shared.RenderWidgetBox("Sync Plan", syncPlanContent, leftWidth) + "\n\n"
-
-	// Filter widget box (conditional - only if pattern is set)
-	if s.engine.FilePattern != "" {
-		filterContent := s.renderFilterContent()
-		content += shared.RenderWidgetBox("Filter", filterContent, leftWidth) + "\n\n"
-	}
 
 	// Errors widget box (conditional - only if errors exist)
 	if len(status.Errors) > 0 {
@@ -162,6 +165,8 @@ func (s ConfirmationScreen) renderRightColumn() string {
 
 	// Render activity log with last 10 entries
 	const maxLogEntries = 10
+
+	// Calculate right column width (40% of total width)
 
 	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }

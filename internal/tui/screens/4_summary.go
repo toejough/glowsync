@@ -13,26 +13,37 @@ import (
 
 // SummaryScreen displays the final results
 type SummaryScreen struct {
-	status     *syncengine.Status
-	finalState string // "complete", "cancelled", "error"
-	err        error
-	width      int
-	height     int
-	logPath    string
+	status      *syncengine.Status
+	finalState  string // "complete", "cancelled", "error"
+	err         error
+	width       int
+	height      int
+	logPath     string
+	sourcePath  string
+	destPath    string
+	filePattern string
 }
 
 // NewSummaryScreen creates a new summary screen
 func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error, logPath string) *SummaryScreen {
 	var status *syncengine.Status
+	var sourcePath, destPath, filePattern string
+
 	if engine != nil {
 		status = engine.GetStatus()
+		sourcePath = engine.SourcePath
+		destPath = engine.DestPath
+		filePattern = engine.FilePattern
 	}
 
 	return &SummaryScreen{
-		status:     status,
-		finalState: finalState,
-		err:        err,
-		logPath:    logPath,
+		status:      status,
+		finalState:  finalState,
+		err:         err,
+		logPath:     logPath,
+		sourcePath:  sourcePath,
+		destPath:    destPath,
+		filePattern: filePattern,
 	}
 }
 
@@ -87,7 +98,7 @@ func (s SummaryScreen) View() string {
 	case shared.StateError:
 		return s.renderErrorView()
 	default:
-		return shared.RenderBox("Unknown state", s.width, s.height)
+		return shared.RenderBox("Unknown state", s.width)
 	}
 }
 
@@ -157,6 +168,14 @@ func (s SummaryScreen) renderCancelledLeftColumn(leftWidth int) string {
 	// Title
 	content = shared.RenderWarning("⚠ Sync Cancelled") + "\n\n"
 
+	// Source/Dest/Filter context (Design Principle #1, #2)
+	content += shared.RenderSourceDestContext(
+		s.sourcePath,
+		s.destPath,
+		s.filePattern,
+		leftWidth,
+	)
+
 	// Early return if no status
 	if s.status == nil {
 		content += shared.RenderDim("No status information available") + "\n\n"
@@ -208,6 +227,8 @@ func (s SummaryScreen) renderCancelledRightColumn() string {
 
 	// Render activity log with last 10 entries
 	const maxLogEntries = 10
+
+	// Calculate right column width (40% of total width)
 
 	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }
@@ -282,20 +303,24 @@ func (s SummaryScreen) renderCancelledView() string {
 	// Timeline shows "done" phase for cancelled view
 	timeline := shared.RenderTimeline("done")
 
-	// Calculate left column width (60% of total width)
-	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Calculate content width (accounting for outer box overhead)
+	contentWidth := s.width - shared.BoxOverhead
+
+	// Calculate left column width (60% of content width)
+	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
+	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
 
 	// Build left and right column content
 	leftContent := s.renderCancelledLeftColumn(leftWidth)
 	rightContent := s.renderCancelledRightColumn()
 
 	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
 
 	// Final assembly: timeline + main content wrapped in box
 	output := timeline + "\n\n" + mainContent
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 // renderCompleteErrorsContent builds the content for the Errors widget box
@@ -317,6 +342,14 @@ func (s SummaryScreen) renderCompleteLeftColumn(leftWidth int) string {
 	var titleBuilder strings.Builder
 	s.renderCompleteTitle(&titleBuilder)
 	content = titleBuilder.String() + "\n\n"
+
+	// Source/Dest/Filter context (Design Principle #1, #2)
+	content += shared.RenderSourceDestContext(
+		s.sourcePath,
+		s.destPath,
+		s.filePattern,
+		leftWidth,
+	)
 
 	// Early return if no status
 	if s.status == nil {
@@ -385,6 +418,8 @@ func (s SummaryScreen) renderCompleteRightColumn() string {
 
 	// Render activity log with last 10 entries
 	const maxLogEntries = 10
+
+	// Calculate right column width (40% of total width)
 
 	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }
@@ -510,20 +545,24 @@ func (s SummaryScreen) renderCompleteView() string {
 
 	timeline := shared.RenderTimeline(phase)
 
-	// Calculate left column width (60% of total width)
-	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Calculate content width (accounting for outer box overhead)
+	contentWidth := s.width - shared.BoxOverhead
+
+	// Calculate left column width (60% of content width)
+	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
+	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
 
 	// Build left and right column content
 	leftContent := s.renderCompleteLeftColumn(leftWidth)
 	rightContent := s.renderCompleteRightColumn()
 
 	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
 
 	// Final assembly: timeline + main content wrapped in box
 	output := timeline + "\n\n" + mainContent
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 // ============================================================================
@@ -559,6 +598,14 @@ func (s SummaryScreen) renderErrorLeftColumn(leftWidth int) string {
 
 	// Title
 	content = shared.RenderError(shared.ErrorSymbol()+" Sync Failed") + "\n\n"
+
+	// Source/Dest/Filter context (Design Principle #1, #2)
+	content += shared.RenderSourceDestContext(
+		s.sourcePath,
+		s.destPath,
+		s.filePattern,
+		leftWidth,
+	)
 
 	// Widget: Error Details
 	errorDetailsContent := s.renderErrorDetailsContent()
@@ -598,6 +645,8 @@ func (s SummaryScreen) renderErrorRightColumn() string {
 	// Render activity log with last 10 entries
 	const maxLogEntries = 10
 
+	// Calculate right column width (40% of total width)
+
 	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }
 
@@ -609,20 +658,24 @@ func (s SummaryScreen) renderErrorView() string {
 	// Timeline shows "done_error" phase for error view
 	timeline := shared.RenderTimeline("done_error")
 
-	// Calculate left column width (60% of total width)
-	leftWidth := int(float64(s.width) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Calculate content width (accounting for outer box overhead)
+	contentWidth := s.width - shared.BoxOverhead
+
+	// Calculate left column width (60% of content width)
+	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
+	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
 
 	// Build left and right column content
 	leftContent := s.renderErrorLeftColumn(leftWidth)
 	rightContent := s.renderErrorRightColumn()
 
 	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, s.width, s.height)
+	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
 
 	// Final assembly: timeline + main content wrapped in box
 	output := timeline + "\n\n" + mainContent
 
-	return shared.RenderBox(output, s.width, s.height)
+	return shared.RenderBox(output, s.width)
 }
 
 // renderPartialProgressContent builds the content for the Partial Progress widget box
@@ -654,12 +707,15 @@ func (s SummaryScreen) renderReadWriteSpeeds(builder *strings.Builder) {
 		shared.FormatBytes(int64(writeSpeed)))
 }
 
-// renderRecentlyCompletedContent builds the content for the Recently Completed widget box
+// renderRecentlyCompletedContent builds the content for the Recently Completed widget box.
+// Displays files in REVERSE chronological order (newest first, oldest last).
 func (s SummaryScreen) renderRecentlyCompletedContent() string {
 	var builder strings.Builder
 
 	maxWidth := s.getMaxPathWidth()
-	for _, file := range s.status.RecentlyCompleted {
+	// Iterate backwards to show newest completed files first
+	for i := len(s.status.RecentlyCompleted) - 1; i >= 0; i-- {
+		file := s.status.RecentlyCompleted[i]
 		fmt.Fprintf(&builder, "%s %s\n",
 			shared.SuccessSymbol(),
 			shared.RenderPath(file, shared.FileItemCompleteStyle(), maxWidth))
