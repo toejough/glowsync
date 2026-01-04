@@ -278,16 +278,8 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 	s.width = msg.Width
 	s.height = msg.Height
 
-	// Calculate available width for progress bars inside widget boxes
-	// Widget boxes are in the left column (60% of content width)
-	// and have their own overhead (4 chars for borders + padding)
-	contentWidth := msg.Width - shared.BoxOverhead
-	leftColumnWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split
-	const widgetBoxOverhead = 4                         // Widget box borders (2) + padding (2)
-	availableWidth := leftColumnWidth - widgetBoxOverhead
-
-	// Set progress bar widths to fit within widget box
-	progressWidth := max(availableWidth-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
+	// Set progress bar widths
+	progressWidth := max(msg.Width-shared.ProgressUpdateInterval, shared.ProgressLogThreshold)
 	progressWidth = min(progressWidth, shared.MaxProgressBarWidth)
 
 	s.overallProgress.Width = progressWidth
@@ -305,6 +297,10 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 
 func (s SyncScreen) renderCancellationProgress() string {
 	var builder strings.Builder
+
+	// Timeline header (show sync phase, since cancellation happens during sync)
+	builder.WriteString(shared.RenderTimeline("sync"))
+	builder.WriteString("\n\n")
 
 	// Header with spinner
 	builder.WriteString(shared.RenderTitle("🚫 Cancelling Sync"))
@@ -351,7 +347,7 @@ func (s SyncScreen) renderCancellationProgress() string {
 	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
 	builder.WriteString("\n")
 
-	return shared.RenderBox(builder.String(), s.width)
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 //nolint:cyclop,gocognit,funlen // Complex rendering logic for file status display with multiple formatting cases
@@ -486,15 +482,6 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 	}
 }
 
-// renderErrorsContent builds the content for the Errors widget box
-func (s SyncScreen) renderErrorsContent() string {
-	var builder strings.Builder
-
-	s.renderSyncingErrors(&builder)
-
-	return builder.String()
-}
-
 func (s SyncScreen) renderFileList(builder *strings.Builder) {
 	maxFilesToShow := s.calculateMaxFilesToShow()
 
@@ -506,94 +493,15 @@ func (s SyncScreen) renderFileList(builder *strings.Builder) {
 	}
 }
 
-// renderFileListContent builds the content for the File List widget box
-func (s SyncScreen) renderFileListContent() string {
-	var builder strings.Builder
-
-	s.renderFileList(&builder)
-
-	return builder.String()
-}
-
-// renderLeftColumn builds the left column content with widget boxes
-func (s SyncScreen) renderLeftColumn(leftWidth int) string {
-	var content string
-
-	// Get current status (use cached status or fetch from engine)
-	// This ensures widget boxes render even before first tick
-	if s.status == nil && s.engine != nil {
-		s.status = s.engine.GetStatus()
-	}
-
-	// Show different title based on finalization phase
-	if s.status != nil && s.status.FinalizationPhase == statusComplete {
-		content = shared.RenderTitle("📦 Finalizing...") + "\n\n"
-	} else {
-		content = shared.RenderTitle("📦 Syncing Files") + "\n\n"
-	}
-
-	// Source/Dest/Filter context (Design Principle #1, #2)
-	if s.engine != nil {
-		content += shared.RenderSourceDestContext(
-			s.engine.SourcePath,
-			s.engine.DestPath,
-			s.engine.FilePattern,
-			leftWidth,
-		)
-	}
-
-	// Early return if status not available yet
-	if s.status == nil {
-		content += s.spinner.View() + " Starting sync...\n\n"
-		content += shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately")
-
-		return content
-	}
-
-	// Progress widget box
-	progressContent := s.renderProgressContent()
-	content += shared.RenderWidgetBox("Progress", progressContent, leftWidth) + "\n\n"
-
-	// Worker Stats widget box
-	workerStatsContent := s.renderWorkerStatsContent()
-	content += shared.RenderWidgetBox("Worker Stats", workerStatsContent, leftWidth) + "\n\n"
-
-	// File List widget box
-	fileListContent := s.renderFileListContent()
-	content += shared.RenderWidgetBox("File List", fileListContent, leftWidth) + "\n\n"
-
-	// Errors widget box (conditional - only if errors exist)
-	if len(s.status.Errors) > 0 {
-		errorsContent := s.renderErrorsContent()
-		content += shared.RenderWidgetBox("Errors", errorsContent, leftWidth) + "\n\n"
-	}
-
-	// Help text at bottom of left column
-	content += shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately")
-
-	return content
-}
-
-// renderProgressContent builds the content for the Progress widget box
-func (s SyncScreen) renderProgressContent() string {
-	var builder strings.Builder
-
-	s.renderUnifiedProgress(&builder)
-
-	return builder.String()
-}
-
 func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow int) {
 	// Show recent files when nothing is currently copying
-	builder.WriteString(shared.RenderLabel("Recent Files:"))
-	builder.WriteString("\n")
-
+	// Only show header if there are files to display
 	if len(s.status.FilesToSync) == 0 {
-		// Show empty state message
-		builder.WriteString(shared.RenderDim("  (no files synced yet)\n"))
-
 		return
 	}
+
+	builder.WriteString(shared.RenderLabel("Recent Files:"))
+	builder.WriteString("\n")
 
 	maxFiles := min(maxRecentFilesToShow, maxFilesToShow)
 	startIdx := max(len(s.status.FilesToSync)-maxFiles, 0)
@@ -625,23 +533,6 @@ func (s SyncScreen) renderRecentFiles(builder *strings.Builder, maxFilesToShow i
 	}
 }
 
-// renderRightColumn builds the right column content with activity log
-func (s SyncScreen) renderRightColumn() string {
-	// Use status activity log if available, otherwise empty
-	// Note: Status struct currently only has AnalysisLog, not a separate SyncLog field
-	var activityEntries []string
-	if s.status != nil {
-		activityEntries = s.status.AnalysisLog
-	}
-
-	// Render activity log with last 10 entries
-	const maxLogEntries = 10
-
-	// Calculate right column width (40% of total width)
-
-	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
-}
-
 func (s SyncScreen) renderStatistics(builder *strings.Builder) {
 	// Worker count with bottleneck info and read/write percentage
 	bottleneckInfo := s.getBottleneckInfo()
@@ -663,7 +554,10 @@ func (s SyncScreen) renderStatistics(builder *strings.Builder) {
 		fmt.Fprintf(builder, "Speed: %s/worker • %s total",
 			shared.FormatRate(s.status.Workers.PerWorkerRate),
 			shared.FormatRate(s.status.Workers.TotalRate))
+		builder.WriteString("\n")
 	}
+
+	builder.WriteString("\n")
 }
 
 func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
@@ -672,6 +566,7 @@ func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 		return
 	}
 
+	builder.WriteString("\n")
 	builder.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors (%d):", len(s.status.Errors))))
 	builder.WriteString("\n")
 
@@ -688,36 +583,61 @@ func (s SyncScreen) renderSyncingErrors(builder *strings.Builder) {
 }
 
 func (s SyncScreen) renderSyncingView() string {
-	// If cancelled, show cancellation progress view (single-column, no timeline)
+	// If cancelled, show cancellation progress view
 	if s.cancelled {
 		return s.renderCancellationProgress()
 	}
 
-	// Render timeline header showing "sync" phase as active
-	timeline := shared.RenderTimeline("sync")
+	var builder strings.Builder
 
-	// Calculate content width (accounting for outer box overhead)
-	contentWidth := s.width - shared.BoxOverhead
+	// Timeline header
+	builder.WriteString(shared.RenderTimeline("sync"))
+	builder.WriteString("\n\n")
 
-	// Calculate left column width (60% of content width)
-	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
-	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	// Show different title based on finalization phase
+	if s.status != nil && s.status.FinalizationPhase == statusComplete {
+		builder.WriteString(shared.RenderTitle("📦 Finalizing..."))
+		builder.WriteString("\n\n")
+		builder.WriteString(shared.RenderLabel("Updating destination cache..."))
+		builder.WriteString("\n")
+		builder.WriteString(shared.RenderDim("(This helps the next sync run faster)"))
+		builder.WriteString("\n\n")
+	} else {
+		builder.WriteString(shared.RenderTitle("📦 Syncing Files"))
+		builder.WriteString("\n\n")
+	}
 
-	// Build left and right column content
-	leftContent := s.renderLeftColumn(leftWidth)
-	rightContent := s.renderRightColumn()
+	if s.status == nil {
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" Starting sync...\n\n")
 
-	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
+		return shared.RenderBox(builder.String(), s.width, s.height)
+	}
 
-	// Final assembly: timeline + main content wrapped in box
-	output := timeline + "\n\n" + mainContent
+	// Unified progress (replaces separate overall and session progress)
+	s.renderUnifiedProgress(&builder)
 
-	return shared.RenderBox(output, s.width)
+	// Statistics
+	s.renderStatistics(&builder)
+
+	// File list
+	s.renderFileList(&builder)
+
+	// Errors
+	s.renderSyncingErrors(&builder)
+
+	// Help text
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
+
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
 	// Unified progress bar - shows average of files%, bytes%, and time%
+	builder.WriteString(shared.RenderLabel("Progress:"))
+	builder.WriteString("\n")
+
 	// Render progress bar using overall percentage (average of three metrics)
 	builder.WriteString(shared.RenderProgress(s.overallProgress, s.status.Progress.OverallPercent))
 	builder.WriteString("\n")
@@ -752,15 +672,8 @@ func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
 		shared.FormatDuration(elapsed),
 		shared.FormatDuration(totalEstimated),
 		s.status.Progress.TimePercent*shared.ProgressPercentageScale)
-}
 
-// renderWorkerStatsContent builds the content for the Worker Stats widget box
-func (s SyncScreen) renderWorkerStatsContent() string {
-	var builder strings.Builder
-
-	s.renderStatistics(&builder)
-
-	return builder.String()
+	builder.WriteString("\n\n")
 }
 
 // ============================================================================

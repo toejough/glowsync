@@ -2,6 +2,7 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -43,6 +44,184 @@ func TestGetAnalysisPhaseText(t *testing.T) {
 
 	screen.status.AnalysisPhase = "unknown"
 	g.Expect(screen.getAnalysisPhaseText()).Should(ContainSubstring("Initializing"))
+}
+
+func TestRenderAnalysisLog(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	screen := &AnalysisScreen{
+		status: &syncengine.Status{
+			AnalysisLog: []string{"log entry 1", "log entry 2"},
+		},
+	}
+
+	var builder strings.Builder
+	screen.renderAnalysisLog(&builder)
+	result := builder.String()
+	g.Expect(result).Should(ContainSubstring("Activity Log"))
+	g.Expect(result).Should(ContainSubstring("log entry 1"))
+
+	// Test with empty log
+	screen.status.AnalysisLog = []string{}
+
+	builder.Reset()
+	screen.renderAnalysisLog(&builder)
+	result = builder.String()
+	g.Expect(result).Should(BeEmpty())
+}
+
+func TestRenderAnalysisProgress(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := &syncengine.Engine{
+		Status: &syncengine.Status{
+			AnalysisStartTime: time.Now().Add(-5 * time.Second),
+		},
+	}
+
+	screen := &AnalysisScreen{
+		engine:          engine,
+		status:          engine.Status,
+		overallProgress: newTestProgressBar(),
+	}
+
+	// Test counting phase
+	screen.status.AnalysisPhase = "counting_source"
+	screen.status.ScannedFiles = 100
+
+	var builder strings.Builder
+	screen.renderAnalysisProgress(&builder)
+	result := builder.String()
+	g.Expect(result).Should(ContainSubstring("Found"))
+
+	// Test scanning phase with total
+	screen.status.AnalysisPhase = "scanning_source"
+	screen.status.TotalFilesToScan = 1000
+	screen.status.TotalBytesToScan = 10_000_000
+	screen.status.ScannedFiles = 500
+	screen.status.ScannedBytes = 5_000_000
+
+	builder.Reset()
+	screen.renderAnalysisProgress(&builder)
+	result = builder.String()
+	g.Expect(result).ShouldNot(BeEmpty())
+	g.Expect(result).Should(ContainSubstring("Files:"))
+
+	// Test scanning phase without total (still in counting mode)
+	screen.status.AnalysisPhase = "counting_dest"
+	screen.status.TotalFilesToScan = 0
+	screen.status.TotalBytesToScan = 0
+	screen.status.ScannedFiles = 50
+	screen.status.ScannedBytes = 0
+
+	builder.Reset()
+	screen.renderAnalysisProgress(&builder)
+	result = builder.String()
+	g.Expect(result).Should(ContainSubstring("Found"))
+}
+
+// TestRenderAnalysisProgress_CountingPhase verifies counting phase routing
+func TestRenderAnalysisProgress_CountingPhase(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := &syncengine.Engine{
+		Status: &syncengine.Status{
+			AnalysisPhase:     "counting_source",
+			ScannedFiles:      50,
+			AnalysisStartTime: time.Now().Add(-5 * time.Second),
+		},
+	}
+
+	screen := &AnalysisScreen{
+		engine:          engine,
+		status:          engine.Status,
+		overallProgress: newTestProgressBar(),
+	}
+
+	var builder strings.Builder
+	screen.renderAnalysisProgress(&builder)
+	result := builder.String()
+
+	// Should use counting progress renderer
+	g.Expect(result).Should(ContainSubstring("Found"))
+	g.Expect(result).ShouldNot(ContainSubstring("Files:")) // Processing format
+}
+
+// TestRenderAnalysisProgress_PhaseTransition verifies correct routing during phase changes
+func TestRenderAnalysisProgress_PhaseTransition(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := &syncengine.Engine{
+		Status: &syncengine.Status{
+			ScannedFiles:      100,
+			AnalysisStartTime: time.Now().Add(-10 * time.Second),
+		},
+	}
+
+	screen := &AnalysisScreen{
+		engine:          engine,
+		status:          engine.Status,
+		overallProgress: newTestProgressBar(),
+	}
+
+	// Start in counting phase
+	screen.status.AnalysisPhase = "counting_source"
+
+	var builder strings.Builder
+	screen.renderAnalysisProgress(&builder)
+	resultCounting := builder.String()
+
+	g.Expect(resultCounting).Should(ContainSubstring("Found"))
+
+	// Transition to processing phase
+	screen.status.AnalysisPhase = "scanning_source"
+	screen.status.TotalFilesToScan = 1000
+	screen.status.TotalBytesToScan = 10_000_000
+	screen.status.ScannedBytes = 1_000_000
+
+	builder.Reset()
+	screen.renderAnalysisProgress(&builder)
+	resultProcessing := builder.String()
+
+	g.Expect(resultProcessing).Should(ContainSubstring("Files:"))
+	g.Expect(resultProcessing).ShouldNot(ContainSubstring("Found"))
+}
+
+// TestRenderAnalysisProgress_ProcessingPhase verifies processing phase routing
+func TestRenderAnalysisProgress_ProcessingPhase(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	engine := &syncengine.Engine{
+		Status: &syncengine.Status{
+			AnalysisPhase:     "scanning_source",
+			ScannedFiles:      100,
+			TotalFilesToScan:  1000,
+			ScannedBytes:      1_000_000,
+			TotalBytesToScan:  10_000_000,
+			AnalysisStartTime: time.Now().Add(-10 * time.Second),
+		},
+	}
+
+	screen := &AnalysisScreen{
+		engine:          engine,
+		status:          engine.Status,
+		overallProgress: newTestProgressBar(),
+	}
+
+	var builder strings.Builder
+	screen.renderAnalysisProgress(&builder)
+	result := builder.String()
+
+	// Should use processing progress renderer
+	g.Expect(result).Should(ContainSubstring("Files:"))
+	g.Expect(result).Should(ContainSubstring("Bytes:"))
+	g.Expect(result).Should(ContainSubstring("Time:"))
+	g.Expect(result).ShouldNot(ContainSubstring("Found")) // Counting format
 }
 
 // TestRenderCountingProgress_ElapsedTime verifies time calculation
@@ -120,44 +299,33 @@ func TestRenderCountingProgress_ZeroFiles(t *testing.T) {
 	g.Expect(result).ShouldNot(BeEmpty())
 }
 
-// TestRenderErrorContent verifies error content formatting
-func TestRenderErrorContent(t *testing.T) {
+func TestRenderCurrentPathWithTruncation(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
+	// Create screen with a known width
 	screen := &AnalysisScreen{
 		status: &syncengine.Status{
-			Errors: []syncengine.FileError{
-				{FilePath: "/path/one", Error: nil},
-				{FilePath: "/path/two", Error: nil},
-			},
+			CurrentPath: "very/long/path/that/will/need/to/be/truncated/because/it/exceeds/width.txt",
 		},
+		width: 80, // Terminal width
 	}
 
-	result := screen.renderErrorContent()
+	var builder strings.Builder
+	screen.renderCurrentPathSection(&builder)
+	result := builder.String()
 
-	// Should return formatted error count
-	g.Expect(result).ShouldNot(BeEmpty())
-	g.Expect(result).Should(ContainSubstring("2"))
-}
+	// Path should be in the output
+	g.Expect(result).Should(ContainSubstring("Current:"))
 
-// TestRenderPathContent verifies path content formatting
-func TestRenderPathContent(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
+	// Path should be truncated (not contain the full path)
+	fullPath := "very/long/path/that/will/need/to/be/truncated/because/it/exceeds/width.txt"
+	g.Expect(result).ShouldNot(ContainSubstring(fullPath))
 
-	screen := &AnalysisScreen{
-		status: &syncengine.Status{
-			CurrentPath: "/some/test/path/file.txt",
-		},
-		width: 80,
+	// Should contain ellipsis indicating truncation
+	if len(screen.status.CurrentPath) > screen.width {
+		g.Expect(result).Should(ContainSubstring("..."))
 	}
-
-	result := screen.renderPathContent()
-
-	// Should return formatted path
-	g.Expect(result).ShouldNot(BeEmpty())
-	g.Expect(result).Should(ContainSubstring("path"))
 }
 
 // TestRenderProcessingProgress_ETA verifies time estimation display

@@ -187,26 +187,6 @@ func TestRenderCurrentlyCopying_ShowsOpeningAndFinalizingFiles(t *testing.T) {
 	g.Expect(result).Should(ContainSubstring("Currently Copying"))
 }
 
-func TestRenderErrorsContent(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	testErr := errors.New("test error")
-
-	screen := &SyncScreen{
-		status: &syncengine.Status{
-			Errors: []syncengine.FileError{
-				{FilePath: "/path/to/file1.txt", Error: testErr},
-			},
-		},
-		width: 100,
-	}
-
-	// Test helper method that wraps renderSyncingErrors
-	result := screen.renderErrorsContent()
-	g.Expect(result).Should(ContainSubstring("Errors"))
-}
-
 func TestRenderFileList(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -260,9 +240,8 @@ func TestRenderRecentFiles_Empty(t *testing.T) {
 	screen.renderRecentFiles(&builder, 5)
 	result := builder.String()
 
-	// Should show "Recent Files:" header with empty state message
-	g.Expect(result).Should(ContainSubstring("Recent Files"))
-	g.Expect(result).Should(ContainSubstring("(no files synced yet)"))
+	// Should NOT show "Recent Files:" header when list is empty
+	g.Expect(result).ShouldNot(ContainSubstring("Recent Files"))
 }
 
 func TestRenderStatistics(t *testing.T) {
@@ -498,20 +477,18 @@ func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
 
 	result := screen.View()
 
-	// Verify unified progress bar is present (widget box title)
-	g.Expect(result).Should(ContainSubstring("Progress"))
+	// Verify unified progress bar is present
+	g.Expect(result).Should(ContainSubstring("Progress:"))
 	g.Expect(result).Should(ContainSubstring("Files: 50 / 100"))
 	g.Expect(result).Should(ContainSubstring("2 failed"))
 	g.Expect(result).Should(ContainSubstring("Bytes: 5.0 MB / 10.0 MB"))
 	g.Expect(result).Should(ContainSubstring("Time:"))
 
-	// Verify statistics are present (widget box title)
-	g.Expect(result).Should(ContainSubstring("Worker Stats"))
+	// Verify statistics are present
 	g.Expect(result).Should(ContainSubstring("Workers:"))
 	// Elapsed/ETA removed - moved to time progress line instead
 
-	// Verify file list is present (widget box title and content)
-	g.Expect(result).Should(ContainSubstring("File List"))
+	// Verify file list is present
 	g.Expect(result).Should(ContainSubstring("Recent Files:"))
 
 	// Verify no old progress bars
@@ -544,8 +521,8 @@ func TestRenderSyncingView_UsesUnifiedProgress(t *testing.T) {
 
 	result := screen.renderSyncingView()
 
-	// Should use unified progress (widget box title "Progress")
-	g.Expect(result).Should(ContainSubstring("Progress"))
+	// Should use unified progress (single "Progress:" label)
+	g.Expect(result).Should(ContainSubstring("Progress:"))
 
 	// Should NOT have separate "Overall Progress" and "This Session" sections
 	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))

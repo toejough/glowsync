@@ -264,28 +264,88 @@ func (s AnalysisScreen) initializeEngine() tea.Cmd {
 	}
 }
 
+func (s AnalysisScreen) renderAnalysisLog(builder *strings.Builder) {
+	if len(s.status.AnalysisLog) == 0 {
+		return
+	}
+
+	builder.WriteString(shared.RenderLabel("Activity Log:"))
+	builder.WriteString("\n")
+
+	// Show last 10 log entries
+	startIdx := 0
+	if len(s.status.AnalysisLog) > shared.ProgressUpdateInterval {
+		startIdx = len(s.status.AnalysisLog) - shared.ProgressUpdateInterval
+	}
+
+	for i := startIdx; i < len(s.status.AnalysisLog); i++ {
+		fmt.Fprintf(builder, "  %s\n", s.status.AnalysisLog[i])
+	}
+}
+
+func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
+	if s.engine == nil || s.status == nil {
+		return
+	}
+
+	// Calculate progress metrics
+	progress := s.status.CalculateAnalysisProgress()
+
+	// Route to appropriate renderer based on phase
+	if progress.IsCounting {
+		builder.WriteString(s.renderCountingProgress(s.status))
+	} else {
+		builder.WriteString(s.renderProcessingProgress(s.status, progress))
+	}
+}
+
 func (s AnalysisScreen) renderAnalyzingView() string {
-	// Render timeline header showing "scan" phase as active
-	timeline := shared.RenderTimeline("scan")
+	var builder strings.Builder
 
-	// Calculate content width (accounting for outer box overhead)
-	contentWidth := s.width - shared.BoxOverhead
+	// Timeline header
+	builder.WriteString(shared.RenderTimeline("scan"))
+	builder.WriteString("\n\n")
 
-	// Calculate left column width (60% of content width)
-	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
-	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	builder.WriteString(shared.RenderTitle("🔍 Analyzing Files"))
+	builder.WriteString("\n\n")
 
-	// Build left and right column content
-	leftContent := s.renderLeftColumn(leftWidth)
-	rightContent := s.renderRightColumn()
+	if s.status == nil {
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" Scanning directories and comparing files...\n\n")
 
-	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
+		return shared.RenderBox(builder.String(), s.width, s.height)
+	}
 
-	// Final assembly: timeline + main content wrapped in box
-	output := timeline + "\n\n" + mainContent
+	// Show current phase
+	phaseText := s.getAnalysisPhaseText()
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" ")
+	builder.WriteString(shared.RenderLabel(phaseText))
+	builder.WriteString("\n\n")
 
-	return shared.RenderBox(output, s.width)
+	// Show scan progress with progress bar or count
+	s.renderAnalysisProgress(&builder)
+
+	// Show current path being scanned
+	if s.status.CurrentPath != "" {
+		s.renderCurrentPathSection(&builder)
+		builder.WriteString("\n")
+	}
+
+	// Show errors if any
+	if len(s.status.Errors) > 0 {
+		builder.WriteString(shared.RenderError(fmt.Sprintf("⚠ Errors: %d", len(s.status.Errors))))
+		builder.WriteString("\n\n")
+	}
+
+	// Show analysis log
+	s.renderAnalysisLog(&builder)
+
+	// Show help text
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
+
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
@@ -319,9 +379,10 @@ func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string
 	return builder.String()
 }
 
-// renderErrorContent builds the content for the errors widget box
-func (s AnalysisScreen) renderErrorContent() string {
-	return shared.RenderError(fmt.Sprintf("⚠ Errors: %d", len(s.status.Errors)))
+func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
+	maxWidth := shared.CalculateMaxPathWidth(s.width)
+	truncatedPath := shared.RenderPathPlain(s.status.CurrentPath, maxWidth)
+	fmt.Fprintf(builder, "Current: %s\n", truncatedPath)
 }
 
 // ============================================================================
@@ -329,77 +390,26 @@ func (s AnalysisScreen) renderErrorContent() string {
 // ============================================================================
 
 func (s AnalysisScreen) renderInitializingView() string {
-	// Render timeline header showing "scan" phase as active
-	timeline := shared.RenderTimeline("scan")
+	var builder strings.Builder
 
-	// Build simple single-column content (no two-column layout for initializing)
-	output := timeline + "\n\n" +
-		shared.RenderTitle("🚀 Starting Copy Files") + "\n\n" +
-		s.spinner.View() + " " + shared.RenderLabel("Initializing...") + "\n\n" +
-		shared.RenderDim("Setting up file logging and preparing to analyze directories") + "\n\n" +
-		shared.RenderDim("Press Esc to change paths • Ctrl+C to exit")
+	// Timeline header
+	builder.WriteString(shared.RenderTimeline("scan"))
+	builder.WriteString("\n\n")
 
-	return shared.RenderBox(output, s.width)
-}
+	builder.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
+	builder.WriteString("\n\n")
 
-// renderLeftColumn builds the left column content for analyzing view with widget boxes
-func (s AnalysisScreen) renderLeftColumn(leftWidth int) string {
-	var content string
+	builder.WriteString(s.spinner.View())
+	builder.WriteString(" ")
+	builder.WriteString(shared.RenderLabel("Initializing..."))
+	builder.WriteString("\n\n")
 
-	// Title
-	content = shared.RenderTitle("🔍 Analyzing Files") + "\n\n"
+	builder.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
+	builder.WriteString("\n\n")
 
-	// Source/Dest/Filter context (Design Principle #1, #2)
-	content += shared.RenderSourceDestContext(
-		s.config.SourcePath,
-		s.config.DestPath,
-		s.config.FilePattern,
-		leftWidth,
-	)
+	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
-	// Phase widget box
-	phaseContent := s.renderPhaseContent()
-	content += shared.RenderWidgetBox("Current Phase", phaseContent, leftWidth) + "\n\n"
-
-	// Progress widget box
-	progressContent := s.renderProgressContent()
-	content += shared.RenderWidgetBox("Progress", progressContent, leftWidth) + "\n\n"
-
-	// Current path widget box (conditional - only if path is set)
-	if s.status != nil && s.status.CurrentPath != "" {
-		pathContent := s.renderPathContent()
-		content += shared.RenderWidgetBox("Current Path", pathContent, leftWidth) + "\n\n"
-	}
-
-	// Errors widget box (conditional - only if errors exist)
-	if s.status != nil && len(s.status.Errors) > 0 {
-		errorContent := s.renderErrorContent()
-		content += shared.RenderWidgetBox("Errors", errorContent, leftWidth) + "\n\n"
-	}
-
-	// Help text at bottom of left column
-	content += shared.RenderDim("Press Esc to change paths • Ctrl+C to exit")
-
-	return content
-}
-
-// renderPathContent builds the content for the current path widget box
-func (s AnalysisScreen) renderPathContent() string {
-	maxWidth := shared.CalculateMaxPathWidth(s.width)
-	truncatedPath := shared.RenderPathPlain(s.status.CurrentPath, maxWidth)
-
-	return truncatedPath
-}
-
-// renderPhaseContent builds the content for the phase widget box
-func (s AnalysisScreen) renderPhaseContent() string {
-	if s.status == nil {
-		return s.spinner.View() + " Scanning directories and comparing files..."
-	}
-
-	phaseText := s.getAnalysisPhaseText()
-
-	return s.spinner.View() + " " + shared.RenderLabel(phaseText)
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s AnalysisScreen) renderProcessingProgress(
@@ -437,37 +447,4 @@ func (s AnalysisScreen) renderProcessingProgress(
 		progress.TimePercent)
 
 	return builder.String()
-}
-
-// renderProgressContent builds the content for the progress widget box
-func (s AnalysisScreen) renderProgressContent() string {
-	if s.engine == nil || s.status == nil {
-		return ""
-	}
-
-	// Calculate progress metrics
-	progress := s.status.CalculateAnalysisProgress()
-
-	// Route to appropriate renderer based on phase
-	if progress.IsCounting {
-		return s.renderCountingProgress(s.status)
-	}
-
-	return s.renderProcessingProgress(s.status, progress)
-}
-
-// renderRightColumn builds the right column content with activity log
-func (s AnalysisScreen) renderRightColumn() string {
-	// Use status.AnalysisLog directly if available, otherwise empty
-	var activityEntries []string
-	if s.status != nil {
-		activityEntries = s.status.AnalysisLog
-	}
-
-	// Render activity log with last 10 entries
-	const maxLogEntries = 10
-
-	// Calculate right column width (40% of total width)
-
-	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
 }

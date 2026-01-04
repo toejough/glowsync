@@ -13,37 +13,26 @@ import (
 
 // SummaryScreen displays the final results
 type SummaryScreen struct {
-	status      *syncengine.Status
-	finalState  string // "complete", "cancelled", "error"
-	err         error
-	width       int
-	height      int
-	logPath     string
-	sourcePath  string
-	destPath    string
-	filePattern string
+	status     *syncengine.Status
+	finalState string // "complete", "cancelled", "error"
+	err        error
+	width      int
+	height     int
+	logPath    string
 }
 
 // NewSummaryScreen creates a new summary screen
 func NewSummaryScreen(engine *syncengine.Engine, finalState string, err error, logPath string) *SummaryScreen {
 	var status *syncengine.Status
-	var sourcePath, destPath, filePattern string
-
 	if engine != nil {
 		status = engine.GetStatus()
-		sourcePath = engine.SourcePath
-		destPath = engine.DestPath
-		filePattern = engine.FilePattern
 	}
 
 	return &SummaryScreen{
-		status:      status,
-		finalState:  finalState,
-		err:         err,
-		logPath:     logPath,
-		sourcePath:  sourcePath,
-		destPath:    destPath,
-		filePattern: filePattern,
+		status:     status,
+		finalState: finalState,
+		err:        err,
+		logPath:    logPath,
 	}
 }
 
@@ -98,7 +87,7 @@ func (s SummaryScreen) View() string {
 	case shared.StateError:
 		return s.renderErrorView()
 	default:
-		return shared.RenderBox("Unknown state", s.width)
+		return shared.RenderBox("Unknown state", s.width, s.height)
 	}
 }
 
@@ -110,11 +99,16 @@ func (s SummaryScreen) getMaxPathWidth() int {
 	return shared.CalculateMaxPathWidth(s.width)
 }
 
-// renderAdaptiveStatsContent builds the content for the Adaptive Concurrency widget box
-func (s SummaryScreen) renderAdaptiveStatsContent() string {
-	var builder strings.Builder
+func (s SummaryScreen) renderAdaptiveStats(builder *strings.Builder) {
+	// Show adaptive concurrency stats if used
+	if !s.status.AdaptiveMode || s.status.MaxWorkers == 0 {
+		return
+	}
 
-	fmt.Fprintf(&builder, "Max workers used: %d\n", s.status.MaxWorkers)
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Adaptive Concurrency:"))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "Max workers used: %d\n", s.status.MaxWorkers)
 
 	// Show bottleneck analysis
 	if s.status.TotalReadTime > 0 || s.status.TotalWriteTime > 0 {
@@ -122,7 +116,7 @@ func (s SummaryScreen) renderAdaptiveStatsContent() string {
 		readPercent := float64(s.status.TotalReadTime) / float64(totalIOTime) * shared.ProgressPercentageScale
 		writePercent := float64(s.status.TotalWriteTime) / float64(totalIOTime) * shared.ProgressPercentageScale
 
-		fmt.Fprintf(&builder, "I/O breakdown: %.1f%% read, %.1f%% write", readPercent, writePercent)
+		fmt.Fprintf(builder, "I/O breakdown: %.1f%% read, %.1f%% write", readPercent, writePercent)
 
 		if s.status.Bottleneck != "" {
 			switch s.status.Bottleneck {
@@ -134,108 +128,33 @@ func (s SummaryScreen) renderAdaptiveStatsContent() string {
 				builder.WriteString(" (balanced)")
 			}
 		}
+
+		builder.WriteString("\n")
+	}
+}
+
+func (s SummaryScreen) renderCancelledErrors(builder *strings.Builder) {
+	// Show error details if any
+	if len(s.status.Errors) == 0 {
+		return
 	}
 
-	return builder.String()
-}
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderError("Errors:"))
+	builder.WriteString("\n")
 
-// renderAdditionalErrorsContent builds the content for the Additional Errors widget box
-func (s SummaryScreen) renderAdditionalErrorsContent() string {
-	// Use shared helper with other context (5 error limit for error state)
-	errorList := shared.RenderErrorList(shared.ErrorListConfig{
-		Errors:  s.status.Errors,
-		Context: shared.ContextOther,
-	})
-
-	return errorList
-}
-
-// renderCancelledErrorsContent builds the content for the Errors widget box
-func (s SummaryScreen) renderCancelledErrorsContent() string {
 	// Use shared helper with other context (5 error limit for cancelled state)
 	errorList := shared.RenderErrorList(shared.ErrorListConfig{
 		Errors:  s.status.Errors,
 		Context: shared.ContextOther,
 	})
-
-	return errorList
+	builder.WriteString(errorList)
 }
 
-// renderCancelledLeftColumn builds the left column content with widget boxes for cancelled view
-func (s SummaryScreen) renderCancelledLeftColumn(leftWidth int) string {
-	var content string
-
-	// Title
-	content = shared.RenderWarning("⚠ Sync Cancelled") + "\n\n"
-
-	// Source/Dest/Filter context (Design Principle #1, #2)
-	content += shared.RenderSourceDestContext(
-		s.sourcePath,
-		s.destPath,
-		s.filePattern,
-		leftWidth,
-	)
-
-	// Early return if no status
-	if s.status == nil {
-		content += shared.RenderDim("No status information available") + "\n\n"
-		content += shared.RenderDim("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit")
-
-		return content
-	}
-
-	// Calculate elapsed time for widget content
-	endTime := s.status.EndTime
-	if endTime.IsZero() {
-		endTime = time.Now()
-	}
-
-	elapsed := endTime.Sub(s.status.StartTime)
-
-	// Widget: Summary
-	summaryContent := s.renderCancelledSummaryContent(elapsed)
-	content += shared.RenderWidgetBox("Summary", summaryContent, leftWidth) + "\n\n"
-
-	// Widget: Statistics
-	statisticsContent := s.renderCancelledStatisticsContent()
-	content += shared.RenderWidgetBox("Statistics", statisticsContent, leftWidth) + "\n\n"
-
-	// Widget: Errors (conditional)
-	if len(s.status.Errors) > 0 {
-		errorsContent := s.renderCancelledErrorsContent()
-		content += shared.RenderWidgetBox("Errors", errorsContent, leftWidth) + "\n\n"
-	}
-
-	// Help text at bottom of left column
-	content += shared.RenderDim("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit") + "\n"
-
-	// Clickable log path
-	if s.logPath != "" {
-		content += shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath))
-	}
-
-	return content
-}
-
-// renderCancelledRightColumn builds the right column content with activity log for cancelled view
-func (s SummaryScreen) renderCancelledRightColumn() string {
-	// Use status activity log if available, otherwise empty
-	var activityEntries []string
-	if s.status != nil {
-		activityEntries = s.status.AnalysisLog
-	}
-
-	// Render activity log with last 10 entries
-	const maxLogEntries = 10
-
-	// Calculate right column width (40% of total width)
-
-	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
-}
-
-// renderCancelledStatisticsContent builds the content for the Statistics widget box
-func (s SummaryScreen) renderCancelledStatisticsContent() string {
-	var builder strings.Builder
+func (s SummaryScreen) renderCancelledStatistics(builder *strings.Builder) {
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Statistics:"))
+	builder.WriteString("\n")
 
 	// Show worker count with bottleneck info
 	if s.status.AdaptiveMode {
@@ -252,47 +171,38 @@ func (s SummaryScreen) renderCancelledStatisticsContent() string {
 			}
 		}
 
-		fmt.Fprintf(&builder, "Workers: %d (max: %d)%s",
+		fmt.Fprintf(builder, "Workers: %d (max: %d)%s\n",
 			s.status.ActiveWorkers,
 			s.status.MaxWorkers,
 			bottleneckInfo)
 	} else {
-		fmt.Fprintf(&builder, "Workers: %d", s.status.ActiveWorkers)
+		fmt.Fprintf(builder, "Workers: %d\n", s.status.ActiveWorkers)
 	}
-
-	return builder.String()
 }
 
-// ============================================================================
-// Widget Content Helpers - Cancelled View
-// ============================================================================
-
-// renderCancelledSummaryContent builds the content for the Summary widget box
-func (s SummaryScreen) renderCancelledSummaryContent(elapsed time.Duration) string {
-	var builder strings.Builder
-
-	fmt.Fprintf(&builder, "Files completed: %d / %d\n", s.status.ProcessedFiles, s.status.TotalFiles)
-	fmt.Fprintf(&builder, "Bytes transferred: %s / %s\n",
+func (s SummaryScreen) renderCancelledSummary(builder *strings.Builder, elapsed time.Duration) {
+	builder.WriteString(shared.RenderLabel("Summary:"))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "Files completed: %d / %d\n", s.status.ProcessedFiles, s.status.TotalFiles)
+	fmt.Fprintf(builder, "Bytes transferred: %s / %s\n",
 		shared.FormatBytes(s.status.TransferredBytes),
 		shared.FormatBytes(s.status.TotalBytes))
 
 	if s.status.CancelledFiles > 0 {
-		fmt.Fprintf(&builder, "Files cancelled: %d\n", s.status.CancelledFiles)
+		fmt.Fprintf(builder, "Files cancelled: %d\n", s.status.CancelledFiles)
 	}
 
 	if s.status.FailedFiles > 0 {
-		fmt.Fprintf(&builder, "Files failed: %d\n", s.status.FailedFiles)
+		fmt.Fprintf(builder, "Files failed: %d\n", s.status.FailedFiles)
 	}
 
-	fmt.Fprintf(&builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
+	fmt.Fprintf(builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
 
 	// Calculate average speed
 	if elapsed.Seconds() > 0 && s.status.TransferredBytes > 0 {
 		avgSpeed := float64(s.status.TransferredBytes) / elapsed.Seconds()
-		fmt.Fprintf(&builder, "Average speed: %s/s", shared.FormatBytes(int64(avgSpeed)))
+		fmt.Fprintf(builder, "Average speed: %s/s\n", shared.FormatBytes(int64(avgSpeed)))
 	}
-
-	return builder.String()
 }
 
 // ============================================================================
@@ -300,200 +210,117 @@ func (s SummaryScreen) renderCancelledSummaryContent(elapsed time.Duration) stri
 // ============================================================================
 
 func (s SummaryScreen) renderCancelledView() string {
-	// Timeline shows "done" phase for cancelled view
-	timeline := shared.RenderTimeline("done")
+	var builder strings.Builder
 
-	// Calculate content width (accounting for outer box overhead)
-	contentWidth := s.width - shared.BoxOverhead
+	// Timeline header - show sync phase with error
+	builder.WriteString(shared.RenderTimeline("sync_error"))
+	builder.WriteString("\n\n")
 
-	// Calculate left column width (60% of content width)
-	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
-	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
+	builder.WriteString(shared.RenderWarning("⚠ Sync Cancelled"))
+	builder.WriteString("\n\n")
 
-	// Build left and right column content
-	leftContent := s.renderCancelledLeftColumn(leftWidth)
-	rightContent := s.renderCancelledRightColumn()
+	if s.status != nil {
+		// Use EndTime if available, otherwise fall back to current time
+		endTime := s.status.EndTime
+		if endTime.IsZero() {
+			endTime = time.Now()
+		}
 
-	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
+		elapsed := endTime.Sub(s.status.StartTime)
 
-	// Final assembly: timeline + main content wrapped in box
-	output := timeline + "\n\n" + mainContent
+		s.renderCancelledSummary(&builder, elapsed)
+		s.renderCancelledStatistics(&builder)
+		s.renderCancelledErrors(&builder)
+	}
 
-	return shared.RenderBox(output, s.width)
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
+	builder.WriteString("\n")
+
+	if s.logPath != "" {
+		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
+	}
+
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
-// renderCompleteErrorsContent builds the content for the Errors widget box
-func (s SummaryScreen) renderCompleteErrorsContent() string {
+func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
+	// Show error details if any
+	if len(s.status.Errors) == 0 {
+		return
+	}
+
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderError("Errors:"))
+	builder.WriteString("\n")
+
 	// Use shared helper with complete state context (10 error limit)
 	errorList := shared.RenderErrorList(shared.ErrorListConfig{
 		Errors:  s.status.Errors,
 		Context: shared.ContextComplete,
 	})
-
-	return errorList
+	builder.WriteString(errorList)
 }
 
-// renderCompleteLeftColumn builds the left column content with widget boxes for complete view
-func (s SummaryScreen) renderCompleteLeftColumn(leftWidth int) string {
-	var content string
-
-	// Title (celebratory message or error title)
-	var titleBuilder strings.Builder
-	s.renderCompleteTitle(&titleBuilder)
-	content = titleBuilder.String() + "\n\n"
-
-	// Source/Dest/Filter context (Design Principle #1, #2)
-	content += shared.RenderSourceDestContext(
-		s.sourcePath,
-		s.destPath,
-		s.filePattern,
-		leftWidth,
-	)
-
-	// Early return if no status
-	if s.status == nil {
-		content += shared.RenderDim("No status information available") + "\n\n"
-		content += shared.RenderDim("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit")
-
-		return content
-	}
-
-	// Calculate elapsed time for widget content
-	endTime := s.status.EndTime
-	if endTime.IsZero() {
-		endTime = time.Now()
-	}
-
-	elapsed := endTime.Sub(s.status.StartTime)
-
-	// Widget: Summary
-	summaryContent := s.renderCompleteSummaryContent(elapsed)
-	content += shared.RenderWidgetBox("Summary", summaryContent, leftWidth) + "\n\n"
-
-	// Widget: This Session
-	thisSessionContent := s.renderCompleteThisSessionContent(elapsed)
-	content += shared.RenderWidgetBox("This Session", thisSessionContent, leftWidth) + "\n\n"
-
-	// Widget: Statistics
-	statisticsContent := s.renderCompleteStatisticsContent()
-	content += shared.RenderWidgetBox("Statistics", statisticsContent, leftWidth) + "\n\n"
-
-	// Widget: Recently Completed (conditional)
-	if len(s.status.RecentlyCompleted) > 0 {
-		recentlyCompletedContent := s.renderRecentlyCompletedContent()
-		content += shared.RenderWidgetBox("Recently Completed", recentlyCompletedContent, leftWidth) + "\n\n"
-	}
-
-	// Widget: Adaptive Concurrency (conditional)
-	if s.status.AdaptiveMode && s.status.MaxWorkers > 0 {
-		adaptiveStatsContent := s.renderAdaptiveStatsContent()
-		content += shared.RenderWidgetBox("Adaptive Concurrency", adaptiveStatsContent, leftWidth) + "\n\n"
-	}
-
-	// Widget: Errors (conditional)
-	if len(s.status.Errors) > 0 {
-		errorsContent := s.renderCompleteErrorsContent()
-		content += shared.RenderWidgetBox("Errors", errorsContent, leftWidth) + "\n\n"
-	}
-
-	// Help text at bottom of left column
-	content += shared.RenderDim("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit") + "\n"
-
-	// Clickable log path
-	if s.logPath != "" {
-		content += shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath))
-	}
-
-	return content
-}
-
-// renderCompleteRightColumn builds the right column content with activity log for complete view
-func (s SummaryScreen) renderCompleteRightColumn() string {
-	// Use status activity log if available, otherwise empty
-	var activityEntries []string
-	if s.status != nil {
-		activityEntries = s.status.AnalysisLog
-	}
-
-	// Render activity log with last 10 entries
-	const maxLogEntries = 10
-
-	// Calculate right column width (40% of total width)
-
-	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
-}
-
-// renderCompleteStatisticsContent builds the content for the Statistics widget box
-func (s SummaryScreen) renderCompleteStatisticsContent() string {
-	var builder strings.Builder
+func (s SummaryScreen) renderCompleteStatistics(builder *strings.Builder) {
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Statistics:"))
+	builder.WriteString("\n")
 
 	// Show worker count
 	if s.status.AdaptiveMode && s.status.MaxWorkers > 0 {
-		fmt.Fprintf(&builder, "Workers: %d (max: %d)\n", s.status.ActiveWorkers, s.status.MaxWorkers)
+		fmt.Fprintf(builder, "Workers: %d (max: %d)\n", s.status.ActiveWorkers, s.status.MaxWorkers)
 	} else {
-		fmt.Fprintf(&builder, "Workers: %d\n", s.status.ActiveWorkers)
+		fmt.Fprintf(builder, "Workers: %d\n", s.status.ActiveWorkers)
 	}
 
 	// Show read/write speeds if available
-	s.renderReadWriteSpeeds(&builder)
-
-	return builder.String()
+	s.renderReadWriteSpeeds(builder)
 }
 
-// ============================================================================
-// Widget Content Helpers - Complete View
-// ============================================================================
-
-// renderCompleteSummaryContent builds the content for the Summary widget box
-func (s SummaryScreen) renderCompleteSummaryContent(elapsed time.Duration) string {
-	var builder strings.Builder
-
-	fmt.Fprintf(&builder, "Total files in source: %d (%s)\n",
+func (s SummaryScreen) renderCompleteSummary(builder *strings.Builder, elapsed time.Duration) {
+	// Overall summary
+	builder.WriteString(shared.RenderLabel("Summary:"))
+	builder.WriteString("\n")
+	fmt.Fprintf(builder, "Total files in source: %d (%s)\n",
 		s.status.TotalFilesInSource,
 		shared.FormatBytes(s.status.TotalBytesInSource))
 
 	if s.status.AlreadySyncedFiles > 0 {
-		fmt.Fprintf(&builder, "Already up-to-date: %d files (%s)",
+		fmt.Fprintf(builder, "Already up-to-date: %d files (%s)\n",
 			s.status.AlreadySyncedFiles,
 			shared.FormatBytes(s.status.AlreadySyncedBytes))
 	}
 
-	return builder.String()
-}
-
-// renderCompleteThisSessionContent builds the content for the This Session widget box
-func (s SummaryScreen) renderCompleteThisSessionContent(elapsed time.Duration) string {
-	var builder strings.Builder
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("This Session:"))
+	builder.WriteString("\n")
 
 	// Show helpful message when zero files were synced
 	if s.status.ProcessedFiles == 0 && s.status.TotalFiles == 0 {
 		builder.WriteString(shared.RenderEmptyListPlaceholder("All files already up-to-date"))
+		builder.WriteString("\n")
+	} else {
+		fmt.Fprintf(builder, "Files synced successfully: %d\n", s.status.ProcessedFiles)
 
-		return builder.String()
+		if s.status.CancelledFiles > 0 {
+			fmt.Fprintf(builder, "Files cancelled: %d\n", s.status.CancelledFiles)
+		}
+
+		if s.status.FailedFiles > 0 {
+			fmt.Fprintf(builder, "Files failed: %d\n", s.status.FailedFiles)
+		}
+
+		fmt.Fprintf(builder, "Total files to copy: %d\n", s.status.TotalFiles)
+		fmt.Fprintf(builder, "Total bytes to copy: %s\n", shared.FormatBytes(s.status.TotalBytes))
 	}
-
-	fmt.Fprintf(&builder, "Files synced successfully: %d\n", s.status.ProcessedFiles)
-
-	if s.status.CancelledFiles > 0 {
-		fmt.Fprintf(&builder, "Files cancelled: %d\n", s.status.CancelledFiles)
-	}
-
-	if s.status.FailedFiles > 0 {
-		fmt.Fprintf(&builder, "Files failed: %d\n", s.status.FailedFiles)
-	}
-
-	fmt.Fprintf(&builder, "Total files to copy: %d\n", s.status.TotalFiles)
-	fmt.Fprintf(&builder, "Total bytes to copy: %s\n", shared.FormatBytes(s.status.TotalBytes))
-	fmt.Fprintf(&builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
+	fmt.Fprintf(builder, "Time elapsed: %s\n", shared.FormatDuration(elapsed))
 
 	// Calculate average speed based on actual elapsed time
 	if elapsed.Seconds() > 0 {
 		avgSpeed := float64(s.status.TotalBytes) / elapsed.Seconds()
-		fmt.Fprintf(&builder, "Average speed: %s/s", shared.FormatBytes(int64(avgSpeed)))
+		fmt.Fprintf(builder, "Average speed: %s/s\n", shared.FormatBytes(int64(avgSpeed)))
 	}
-
-	return builder.String()
 }
 
 func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
@@ -537,46 +364,65 @@ func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
 // ============================================================================
 
 func (s SummaryScreen) renderCompleteView() string {
-	// Determine timeline phase based on errors
-	phase := "done"
-	if s.status != nil && s.status.FailedFiles > 0 {
-		phase = "done_error"
+	var builder strings.Builder
+
+	// Timeline header - show done phase
+	builder.WriteString(shared.RenderTimeline("done"))
+	builder.WriteString("\n\n")
+
+	// Show different title based on whether there were errors
+	s.renderCompleteTitle(&builder)
+
+	builder.WriteString("\n\n")
+
+	if s.status != nil {
+		// Use EndTime if available, otherwise fall back to current time
+		endTime := s.status.EndTime
+		if endTime.IsZero() {
+			endTime = time.Now()
+		}
+
+		elapsed := endTime.Sub(s.status.StartTime)
+
+		s.renderCompleteSummary(&builder, elapsed)
+		s.renderCompleteStatistics(&builder)
+		s.renderRecentlyCompleted(&builder)
+		s.renderAdaptiveStats(&builder)
+		s.renderCompleteErrors(&builder)
 	}
 
-	timeline := shared.RenderTimeline(phase)
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
+	builder.WriteString("\n")
 
-	// Calculate content width (accounting for outer box overhead)
-	contentWidth := s.width - shared.BoxOverhead
+	if s.logPath != "" {
+		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
+	}
 
-	// Calculate left column width (60% of content width)
-	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
-	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
-
-	// Build left and right column content
-	leftContent := s.renderCompleteLeftColumn(leftWidth)
-	rightContent := s.renderCompleteRightColumn()
-
-	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
-
-	// Final assembly: timeline + main content wrapped in box
-	output := timeline + "\n\n" + mainContent
-
-	return shared.RenderBox(output, s.width)
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 // ============================================================================
-// Widget Content Helpers - Error View
+// Rendering - Error
 // ============================================================================
 
-// renderErrorDetailsContent builds the content for the Error Details widget box
-func (s SummaryScreen) renderErrorDetailsContent() string {
+func (s SummaryScreen) renderErrorView() string {
 	var builder strings.Builder
+
+	// Timeline header - show done phase with error
+	builder.WriteString(shared.RenderTimeline("done_error"))
+	builder.WriteString("\n\n")
+
+	builder.WriteString(shared.RenderError(shared.ErrorSymbol() + " Sync Failed"))
+	builder.WriteString("\n\n")
 
 	// Create enricher for actionable error messages
 	enricher := errors.NewEnricher()
 
 	if s.err != nil {
+		builder.WriteString(shared.RenderLabel("Error:"))
+		builder.WriteString("\n")
+
 		// Enrich the main error
 		enrichedErr := enricher.Enrich(s.err, "")
 
@@ -586,106 +432,46 @@ func (s SummaryScreen) renderErrorDetailsContent() string {
 		suggestions := errors.FormatSuggestions(enrichedErr)
 		if suggestions != "" {
 			builder.WriteString(suggestions)
+			builder.WriteString("\n")
+		}
+
+		builder.WriteString("\n")
+	}
+
+	if s.status != nil {
+		// Show partial progress if any
+		if s.status.ProcessedFiles > 0 {
+			builder.WriteString(shared.RenderLabel("Partial Progress:"))
+			builder.WriteString("\n")
+			builder.WriteString(fmt.Sprintf("Files completed: %d\n", s.status.ProcessedFiles))
+			builder.WriteString(fmt.Sprintf("Bytes transferred: %s\n", shared.FormatBytes(s.status.TransferredBytes)))
+			builder.WriteString("\n")
+		}
+
+		// Show errors if any
+		if len(s.status.Errors) > 0 {
+			builder.WriteString(shared.RenderError("Additional Errors:"))
+			builder.WriteString("\n")
+
+			// Use shared helper with other context (5 error limit for error state)
+			errorList := shared.RenderErrorList(shared.ErrorListConfig{
+				Errors:  s.status.Errors,
+				Context: shared.ContextOther,
+			})
+			builder.WriteString(errorList)
+
+			builder.WriteString("\n")
 		}
 	}
 
-	return builder.String()
-}
+	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
+	builder.WriteString("\n")
 
-// renderErrorLeftColumn builds the left column content with widget boxes for error view
-func (s SummaryScreen) renderErrorLeftColumn(leftWidth int) string {
-	var content string
-
-	// Title
-	content = shared.RenderError(shared.ErrorSymbol()+" Sync Failed") + "\n\n"
-
-	// Source/Dest/Filter context (Design Principle #1, #2)
-	content += shared.RenderSourceDestContext(
-		s.sourcePath,
-		s.destPath,
-		s.filePattern,
-		leftWidth,
-	)
-
-	// Widget: Error Details
-	errorDetailsContent := s.renderErrorDetailsContent()
-	content += shared.RenderWidgetBox("Error Details", errorDetailsContent, leftWidth) + "\n\n"
-
-	// Widget: Partial Progress (conditional)
-	if s.status != nil && s.status.ProcessedFiles > 0 {
-		partialProgressContent := s.renderPartialProgressContent()
-		content += shared.RenderWidgetBox("Partial Progress", partialProgressContent, leftWidth) + "\n\n"
-	}
-
-	// Widget: Additional Errors (conditional)
-	if s.status != nil && len(s.status.Errors) > 0 {
-		additionalErrorsContent := s.renderAdditionalErrorsContent()
-		content += shared.RenderWidgetBox("Additional Errors", additionalErrorsContent, leftWidth) + "\n\n"
-	}
-
-	// Help text at bottom of left column
-	content += shared.RenderDim("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit") + "\n"
-
-	// Clickable log path
 	if s.logPath != "" {
-		content += shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath))
+		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return content
-}
-
-// renderErrorRightColumn builds the right column content with activity log for error view
-func (s SummaryScreen) renderErrorRightColumn() string {
-	// Use status activity log if available, otherwise empty
-	var activityEntries []string
-	if s.status != nil {
-		activityEntries = s.status.AnalysisLog
-	}
-
-	// Render activity log with last 10 entries
-	const maxLogEntries = 10
-
-	// Calculate right column width (40% of total width)
-
-	return shared.RenderActivityLog("Activity", activityEntries, maxLogEntries)
-}
-
-// ============================================================================
-// Rendering - Error
-// ============================================================================
-
-func (s SummaryScreen) renderErrorView() string {
-	// Timeline shows "done_error" phase for error view
-	timeline := shared.RenderTimeline("done_error")
-
-	// Calculate content width (accounting for outer box overhead)
-	contentWidth := s.width - shared.BoxOverhead
-
-	// Calculate left column width (60% of content width)
-	// IMPORTANT: Must match the width calculation in RenderTwoColumnLayout
-	leftWidth := int(float64(contentWidth) * 0.6) //nolint:mnd // 60-40 split is standard layout ratio from design
-
-	// Build left and right column content
-	leftContent := s.renderErrorLeftColumn(leftWidth)
-	rightContent := s.renderErrorRightColumn()
-
-	// Combine columns using two-column layout
-	mainContent := shared.RenderTwoColumnLayout(leftContent, rightContent, contentWidth, s.height)
-
-	// Final assembly: timeline + main content wrapped in box
-	output := timeline + "\n\n" + mainContent
-
-	return shared.RenderBox(output, s.width)
-}
-
-// renderPartialProgressContent builds the content for the Partial Progress widget box
-func (s SummaryScreen) renderPartialProgressContent() string {
-	var builder strings.Builder
-
-	fmt.Fprintf(&builder, "Files completed: %d\n", s.status.ProcessedFiles)
-	fmt.Fprintf(&builder, "Bytes transferred: %s", shared.FormatBytes(s.status.TransferredBytes))
-
-	return builder.String()
+	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
 func (s SummaryScreen) renderReadWriteSpeeds(builder *strings.Builder) {
@@ -707,19 +493,19 @@ func (s SummaryScreen) renderReadWriteSpeeds(builder *strings.Builder) {
 		shared.FormatBytes(int64(writeSpeed)))
 }
 
-// renderRecentlyCompletedContent builds the content for the Recently Completed widget box.
-// Displays files in REVERSE chronological order (newest first, oldest last).
-func (s SummaryScreen) renderRecentlyCompletedContent() string {
-	var builder strings.Builder
+func (s SummaryScreen) renderRecentlyCompleted(builder *strings.Builder) {
+	if len(s.status.RecentlyCompleted) == 0 {
+		return
+	}
+
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderLabel("Recently Completed:"))
+	builder.WriteString("\n")
 
 	maxWidth := s.getMaxPathWidth()
-	// Iterate backwards to show newest completed files first
-	for i := len(s.status.RecentlyCompleted) - 1; i >= 0; i-- {
-		file := s.status.RecentlyCompleted[i]
-		fmt.Fprintf(&builder, "%s %s\n",
+	for _, file := range s.status.RecentlyCompleted {
+		fmt.Fprintf(builder, "  %s %s\n",
 			shared.SuccessSymbol(),
 			shared.RenderPath(file, shared.FileItemCompleteStyle(), maxWidth))
 	}
-
-	return builder.String()
 }
