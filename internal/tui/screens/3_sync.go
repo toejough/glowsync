@@ -376,15 +376,6 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 	// Calculate available width for path
 	maxPathWidth := max(contentWidth-fixedWidth, syncengine.MinPathDisplayWidth)
 
-	// Check if any files are finalizing (for SMB contention detection)
-	hasFinalizingFiles := false
-	for _, file := range s.status.FilesToSync {
-		if file.Status == statusFinalizing {
-			hasFinalizingFiles = true
-			break
-		}
-	}
-
 	// Debug logging: Track worker vs file display mismatch (Issue #7)
 	var activeWorkers int
 	if s.status != nil {
@@ -412,64 +403,39 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 	}
 
 	// Display up to maxFilesToShow files
+	// Consistent format: [progress bar] [percentage] [path] [status]
 	for _, file := range s.status.FilesToSync {
-		//nolint:gocritic,nestif,staticcheck,lll // if-else chain is acceptable for file status display with substantial logic per branch
-		if file.Status == statusCopying {
+		if file.Status == statusCopying || file.Status == statusFinalizing || file.Status == statusOpening {
 			totalCopying++
 
 			if filesDisplayed < maxFilesToShow {
-				// Calculate file progress percentage
+				// Calculate file progress percentage based on status
 				var filePercent float64
-				if file.Size > 0 {
-					filePercent = float64(file.Transferred) / float64(file.Size)
+				var statusMsg string
+
+				switch file.Status {
+				case statusOpening:
+					filePercent = 0
+					statusMsg = "waiting for dest"
+				case statusCopying:
+					if file.Size > 0 {
+						filePercent = float64(file.Transferred) / float64(file.Size)
+					}
+					statusMsg = "copying"
+				case statusFinalizing:
+					filePercent = 1.0
+					statusMsg = "finalizing"
 				}
 
 				// Truncate path to fit available width
 				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
 
-				// Single line: [spinner] [progress bar] [percentage] [path]
-				fmt.Fprintf(builder, "%s %s (%.1f%%) %s\n",
-					s.spinner.View(),
+				// Consistent format: [progress bar] [percentage] [path] [status]
+				fmt.Fprintf(builder, "%s %5.1f%% %s %s\n",
 					shared.RenderProgress(s.fileProgress, filePercent),
 					filePercent*shared.ProgressPercentageScale,
-					shared.FileItemCopyingStyle().Render(truncPath))
-
-				filesDisplayed++
-			}
-		} else if file.Status == statusFinalizing {
-			totalCopying++
-
-			if filesDisplayed < maxFilesToShow {
-				// Truncate path to fit available width
-				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
-
-				// Single line: [spinner] Finalizing [path]
-				fmt.Fprintf(builder, "%s Finalizing %s\n",
-					s.spinner.View(),
-					shared.FileItemCopyingStyle().Render(truncPath))
-
-				filesDisplayed++
-			}
-		} else if file.Status == statusOpening {
-			totalCopying++
-
-			if filesDisplayed < maxFilesToShow {
-				// Truncate path to fit available width
-				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
-
-				// Show SMB contention message if other files are finalizing
-				var statusMsg string
-				if hasFinalizingFiles {
-					statusMsg = "Waiting (SMB busy)"
-				} else {
-					statusMsg = "Opening file"
-				}
-
-				// Single line: [spinner] [status message] [path]
-				fmt.Fprintf(builder, "%s %s %s\n",
-					s.spinner.View(),
-					statusMsg,
-					shared.FileItemCopyingStyle().Render(truncPath))
+					shared.FileItemCopyingStyle().Render(truncPath),
+					shared.RenderDim(statusMsg))
 
 				filesDisplayed++
 			}
