@@ -2,6 +2,8 @@
 
 A beautiful, fast file synchronization CLI tool with a rich Terminal User Interface (TUI) built with Go and Bubbletea.
 
+![GlowSync Screenshot](docs/screenshot.png)
+
 ## Features
 
 - 🚀 **Fast file synchronization** - Efficiently copies files from source to destination
