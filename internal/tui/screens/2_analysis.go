@@ -27,8 +27,9 @@ type AnalysisScreen struct {
 	logPath         string
 	width           int
 	height          int
-	completedPhases []string // Phases that have completed, shown with checkmarks
-	lastPhase       string   // Last seen phase, to detect transitions
+	completedPhases []string        // Phases that have completed, shown with checkmarks
+	seenPhases      map[string]int  // Track how many times we've seen each phase (for context labels)
+	lastPhase       string          // Last seen phase, to detect transitions
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -45,6 +46,7 @@ func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
 		spinner:         spin,
 		overallProgress: overallProg,
 		lastUpdate:      time.Now(),
+		seenPhases:      make(map[string]int),
 	}
 }
 
@@ -230,8 +232,13 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 			if s.status != nil {
 				currentPhase := s.status.AnalysisPhase
 				if currentPhase != s.lastPhase && s.lastPhase != "" {
-					// Phase changed - mark previous phase as complete
-					s.completedPhases = append(s.completedPhases, s.getPhaseDisplayText(s.lastPhase))
+					// Phase changed - mark previous phase as complete with context
+					phaseText := s.getPhaseDisplayText(s.lastPhase)
+					s.seenPhases[phaseText]++
+
+					// Add context label based on occurrence
+					labeledText := s.addPhaseContext(phaseText, s.seenPhases[phaseText])
+					s.completedPhases = append(s.completedPhases, labeledText)
 				}
 				s.lastPhase = currentPhase
 			}
@@ -239,6 +246,26 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 	}
 
 	return s, shared.TickCmd()
+}
+
+// addPhaseContext adds context labels to phase text for repeated phases.
+// First occurrence = quick check (monotonic optimization), second = full scan.
+func (s AnalysisScreen) addPhaseContext(phaseText string, occurrence int) string {
+	// Only counting phases get repeated (monotonic check then full scan)
+	isCountingPhase := strings.HasPrefix(phaseText, "Counting")
+
+	if !isCountingPhase {
+		return phaseText
+	}
+
+	switch occurrence {
+	case 1:
+		return phaseText + " (quick check)"
+	case 2:
+		return phaseText + " (full scan)"
+	default:
+		return phaseText
+	}
 }
 
 // ============================================================================
