@@ -27,6 +27,8 @@ type AnalysisScreen struct {
 	logPath         string
 	width           int
 	height          int
+	completedPhases []string // Phases that have completed, shown with checkmarks
+	lastPhase       string   // Last seen phase, to detect transitions
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -89,23 +91,28 @@ func (s AnalysisScreen) RenderContent() string {
 }
 
 func (s AnalysisScreen) getAnalysisPhaseText() string {
-	switch s.status.AnalysisPhase {
+	return s.getPhaseDisplayText(s.status.AnalysisPhase) + "..."
+}
+
+// getPhaseDisplayText returns the display text for a phase without trailing ellipsis.
+func (s AnalysisScreen) getPhaseDisplayText(phase string) string {
+	switch phase {
 	case shared.PhaseCountingSource:
-		return "Counting files in source..."
+		return "Counting files in source"
 	case shared.PhaseScanningSource:
-		return "Scanning source directory..."
+		return "Scanning source directory"
 	case shared.PhaseCountingDest:
-		return "Counting files in destination..."
+		return "Counting files in destination"
 	case shared.PhaseScanningDest:
-		return "Scanning destination directory..."
+		return "Scanning destination directory"
 	case shared.PhaseComparing:
-		return "Comparing files to determine sync plan..."
+		return "Comparing files"
 	case shared.PhaseDeleting:
-		return "Checking for files to delete..."
+		return "Checking for files to delete"
 	case shared.StateComplete:
-		return "Analysis complete!"
+		return "Analysis complete"
 	default:
-		return "Initializing..."
+		return "Initializing"
 	}
 }
 
@@ -218,6 +225,16 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 		if now.Sub(s.lastUpdate) >= shared.StatusUpdateThrottleMs*time.Millisecond {
 			s.status = s.engine.GetStatus()
 			s.lastUpdate = now
+
+			// Track phase transitions
+			if s.status != nil {
+				currentPhase := s.status.AnalysisPhase
+				if currentPhase != s.lastPhase && s.lastPhase != "" {
+					// Phase changed - mark previous phase as complete
+					s.completedPhases = append(s.completedPhases, s.getPhaseDisplayText(s.lastPhase))
+				}
+				s.lastPhase = currentPhase
+			}
 		}
 	}
 
@@ -314,16 +331,24 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 
 	if s.status == nil {
 		builder.WriteString(s.spinner.View())
-		builder.WriteString(" Scanning directories and comparing files...\n\n")
+		builder.WriteString(" Initializing...\n\n")
 
 		return builder.String()
 	}
 
-	// Show current phase
+	// Show completed phases with checkmarks
+	for _, phase := range s.completedPhases {
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(phase))
+		builder.WriteString("\n")
+	}
+
+	// Show current phase with spinner
 	phaseText := s.getAnalysisPhaseText()
 	builder.WriteString(s.spinner.View())
 	builder.WriteString(" ")
-	builder.WriteString(shared.RenderLabel(phaseText))
+	builder.WriteString(phaseText)
 	builder.WriteString("\n\n")
 
 	// Show scan progress with progress bar or count
