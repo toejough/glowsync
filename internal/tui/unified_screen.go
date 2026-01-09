@@ -83,10 +83,16 @@ func NewUnifiedScreen(cfg *config.Config) *UnifiedScreen {
 
 // Init implements tea.Model
 func (u *UnifiedScreen) Init() tea.Cmd {
+	var cmds []tea.Cmd
+
 	if u.hasInput {
-		return u.input.Init()
+		cmds = append(cmds, u.input.Init())
 	}
-	return nil
+	if u.hasAnalysis {
+		cmds = append(cmds, u.analysis.Init())
+	}
+
+	return tea.Batch(cmds...)
 }
 
 // Update implements tea.Model
