@@ -272,7 +272,23 @@ func (s *AnalysisScreen) updatePhaseTracking() {
 
 // recordCompletedPhase adds a completed phase to the appropriate list with its result.
 func (s *AnalysisScreen) recordCompletedPhase(phase string, count int) {
-	result := fmt.Sprintf("%d files", count)
+	// For counting phases, if we didn't capture a count (polling missed it),
+	// try to get the count from the status totals set by the engine
+	actualCount := count
+	if count == 0 && s.status != nil {
+		switch phase {
+		case shared.PhaseCountingSource:
+			if s.status.TotalFilesInSource > 0 {
+				actualCount = s.status.TotalFilesInSource
+			}
+		case shared.PhaseCountingDest:
+			if s.status.TotalFilesInDest > 0 {
+				actualCount = s.status.TotalFilesInDest
+			}
+		}
+	}
+
+	result := fmt.Sprintf("%d files", actualCount)
 
 	// Determine phase category and label
 	switch phase {

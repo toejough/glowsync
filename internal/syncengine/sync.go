@@ -299,6 +299,7 @@ func (e *Engine) GetStatus() *Status {
 		EstimatedTimeLeft:  e.Status.EstimatedTimeLeft,
 		CompletionTime:     e.Status.CompletionTime,
 		TotalFilesInSource: e.Status.TotalFilesInSource,
+		TotalFilesInDest:   e.Status.TotalFilesInDest,
 		TotalBytesInSource: e.Status.TotalBytesInSource,
 		AlreadySyncedFiles: e.Status.AlreadySyncedFiles,
 		AlreadySyncedBytes: e.Status.AlreadySyncedBytes,
@@ -2068,6 +2069,11 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 
 	e.logAnalysis(fmt.Sprintf("Source file count: %d", sourceCount))
 
+	// Store source count immediately so TUI can display it
+	e.Status.mu.Lock()
+	e.Status.TotalFilesInSource = sourceCount
+	e.Status.mu.Unlock()
+
 	// Count destination files
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = phaseCountingDest
@@ -2099,7 +2105,12 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 
 	e.logAnalysis(fmt.Sprintf("Destination file count: %d", destCount))
 
-	// Update status with counts
+	// Store dest count immediately so TUI can display it
+	e.Status.mu.Lock()
+	e.Status.TotalFilesInDest = destCount
+	e.Status.mu.Unlock()
+
+	// Update status with counts (TotalFilesInSource was already set above)
 	e.Status.mu.Lock()
 	e.Status.TotalFilesInSource = sourceCount
 	e.Status.mu.Unlock()
@@ -2280,6 +2291,7 @@ type Status struct {
 
 	// Overall statistics (including already-synced files)
 	TotalFilesInSource int   // Total files found in source
+	TotalFilesInDest   int   // Total files found in destination
 	TotalBytesInSource int64 // Total bytes in source
 	AlreadySyncedFiles int   // Files that were already up-to-date
 	AlreadySyncedBytes int64 // Bytes that were already up-to-date

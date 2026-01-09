@@ -207,3 +207,48 @@ func toAnalysisScreen(model tea.Model) *AnalysisScreen {
 	s := model.(AnalysisScreen)
 	return &s
 }
+
+// TestQuickCheckZeroFiles tests the scenario where we poll a phase
+// when it has 0 files and it transitions before we see any files.
+// The fix uses TotalFilesInSource/Dest from the engine status.
+func TestQuickCheckZeroFiles(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/test/source",
+		DestPath:   "/test/dest",
+	}
+
+	engine, err := syncengine.NewEngine("/tmp", "/tmp")
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	screen := NewAnalysisScreen(cfg)
+	screen.engine = engine
+	screen.lastUpdate = time.Now().Add(-time.Second)
+
+	// Scenario: First poll sees counting_source with 0 files (just started)
+	engine.Status.AnalysisPhase = shared.PhaseCountingSource
+	engine.Status.ScannedFiles = 0
+
+	model, _ := screen.Update(shared.TickMsg{})
+	screen = toAnalysisScreen(model)
+
+	g.Expect(screen.lastPhase).To(Equal(shared.PhaseCountingSource))
+	g.Expect(screen.lastCount).To(Equal(0)) // We saw 0 files
+
+	// Now the engine quickly transitions to counting_dest (quick check moved fast)
+	// The engine counted 500 files but we never saw that count via polling
+	// However, the engine stored the result in TotalFilesInSource
+	screen.lastUpdate = time.Now().Add(-time.Second)
+	engine.Status.AnalysisPhase = shared.PhaseCountingDest
+	engine.Status.ScannedFiles = 0               // Engine reset count for new phase
+	engine.Status.TotalFilesInSource = 500       // Engine stored the final count
+
+	model, _ = screen.Update(shared.TickMsg{})
+	screen = toAnalysisScreen(model)
+
+	// counting_source should be recorded with 500 files (from TotalFilesInSource)
+	g.Expect(screen.sourcePhases).To(HaveLen(1))
+	g.Expect(screen.sourcePhases[0].result).To(Equal("500 files"))
+}
