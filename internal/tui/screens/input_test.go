@@ -613,7 +613,7 @@ func TestInputScreenView(t *testing.T) {
 
 	// Test View rendering
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("File Sync Tool"))
+	g.Expect(view).Should(ContainSubstring("GlowSync"))
 	g.Expect(view).Should(ContainSubstring("Source Path"))
 	g.Expect(view).Should(ContainSubstring("Destination Path"))
 }

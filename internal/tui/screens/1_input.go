@@ -422,7 +422,7 @@ func (s InputScreen) renderInputView() string {
 
 // renderInputContent returns just the input fields content without timeline or box.
 func (s InputScreen) renderInputContent() string {
-	content := shared.RenderTitle("🚀 File Sync Tool") + "\n\n" +
+	content := shared.RenderTitle("🚀 GlowSync") + "\n\n" +
 		shared.RenderSubtitle("Configure your sync operation") + "\n\n" +
 		shared.RenderLabel("Source Path:") + "\n" +
 		s.sourceInput.View() + "\n"
