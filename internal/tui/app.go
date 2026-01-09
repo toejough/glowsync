@@ -8,7 +8,7 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-// AppModel is the top-level router that manages screen transitions
+// AppModel is the top-level model that uses UnifiedScreen for single-screen flow
 type AppModel struct {
 	config        *config.Config
 	currentScreen tea.Model
@@ -18,20 +18,22 @@ type AppModel struct {
 	height        int
 }
 
-// NewAppModel creates a new app model
+// NewAppModel creates a new app model with UnifiedScreen
 func NewAppModel(cfg *config.Config) *AppModel {
-	var initialScreen tea.Model
+	// Use unified screen for single-screen flow
+	unifiedScreen := NewUnifiedScreen(cfg)
 
-	// If paths are provided via command-line flags, skip input screen
-	if cfg.InteractiveMode {
-		initialScreen = screens.NewInputScreen(cfg)
-	} else {
-		initialScreen = screens.NewAnalysisScreen(cfg)
+	// If not interactive mode, auto-transition to analysis
+	if !cfg.InteractiveMode {
+		// Trigger transition to analysis phase
+		unifiedScreen.phase = PhaseScan
+		unifiedScreen.analysis = *screens.NewAnalysisScreen(cfg)
+		unifiedScreen.hasAnalysis = true
 	}
 
 	return &AppModel{
 		config:        cfg,
-		currentScreen: initialScreen,
+		currentScreen: unifiedScreen,
 	}
 }
 
@@ -52,32 +54,24 @@ func (a AppModel) LogPath() string {
 
 // Update implements tea.Model
 func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Capture window size to pass to new screens during transitions
+	// Capture window size
 	if windowMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		a.width = windowMsg.Width
 		a.height = windowMsg.Height
 	}
 
-	// Check for transition messages first
+	// Track engine and logPath from transitions (for LogPath() getter)
 	switch msg := msg.(type) {
-	case shared.TransitionToAnalysisMsg:
-		return a.transitionToAnalysis(msg)
 	case shared.TransitionToConfirmationMsg:
-		return a.transitionToConfirmation(msg)
-	case shared.TransitionToInputMsg:
-		return a.transitionToInput()
+		a.engine = msg.Engine
+		a.logPath = msg.LogPath
 	case shared.TransitionToSyncMsg:
-		return a.transitionToSync(msg)
-	case shared.TransitionToSummaryMsg:
-		return a.transitionToSummary(msg)
-	case shared.ConfirmSyncMsg:
-		// Convert ConfirmSyncMsg to TransitionToSyncMsg
-		return a.transitionToSync(shared.TransitionToSyncMsg(msg))
+		a.engine = msg.Engine
+		a.logPath = msg.LogPath
 	}
 
-	// Otherwise, pass the message to the current screen
+	// Delegate everything to the unified screen
 	var cmd tea.Cmd
-
 	a.currentScreen, cmd = a.currentScreen.Update(msg)
 
 	return a, cmd
@@ -86,85 +80,4 @@ func (a AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View implements tea.Model
 func (a AppModel) View() string {
 	return a.currentScreen.View()
-}
-
-// ============================================================================
-// Screen Transitions
-// ============================================================================
-
-func (a AppModel) transitionToAnalysis(msg shared.TransitionToAnalysisMsg) (tea.Model, tea.Cmd) {
-	// Update config with paths
-	a.config.SourcePath = msg.SourcePath
-	a.config.DestPath = msg.DestPath
-
-	// Create analysis screen
-	a.currentScreen = screens.NewAnalysisScreen(a.config)
-
-	// Send window size to new screen immediately, then initialize
-	return a, tea.Batch(
-		a.currentScreen.Init(),
-		func() tea.Msg {
-			return tea.WindowSizeMsg{Width: a.width, Height: a.height}
-		},
-	)
-}
-
-func (a AppModel) transitionToConfirmation(msg shared.TransitionToConfirmationMsg) (tea.Model, tea.Cmd) {
-	// Store engine and log path references
-	a.engine = msg.Engine
-	a.logPath = msg.LogPath
-
-	// Create confirmation screen
-	a.currentScreen = screens.NewConfirmationScreen(msg.Engine, msg.LogPath)
-
-	// Send window size to new screen immediately, then initialize
-	return a, tea.Batch(
-		a.currentScreen.Init(),
-		func() tea.Msg {
-			return tea.WindowSizeMsg{Width: a.width, Height: a.height}
-		},
-	)
-}
-
-func (a AppModel) transitionToInput() (tea.Model, tea.Cmd) {
-	// Create input screen with current config (preserves existing paths)
-	a.currentScreen = screens.NewInputScreen(a.config)
-
-	// Send window size to new screen immediately, then initialize
-	return a, tea.Batch(
-		a.currentScreen.Init(),
-		func() tea.Msg {
-			return tea.WindowSizeMsg{Width: a.width, Height: a.height}
-		},
-	)
-}
-
-func (a AppModel) transitionToSummary(msg shared.TransitionToSummaryMsg) (tea.Model, tea.Cmd) {
-	// Create summary screen with log path
-	a.currentScreen = screens.NewSummaryScreen(a.engine, msg.FinalState, msg.Err, a.logPath)
-
-	// Send window size to new screen immediately, then initialize
-	return a, tea.Batch(
-		a.currentScreen.Init(),
-		func() tea.Msg {
-			return tea.WindowSizeMsg{Width: a.width, Height: a.height}
-		},
-	)
-}
-
-func (a AppModel) transitionToSync(msg shared.TransitionToSyncMsg) (tea.Model, tea.Cmd) {
-	// Store engine and log path references
-	a.engine = msg.Engine
-	a.logPath = msg.LogPath
-
-	// Create sync screen
-	a.currentScreen = screens.NewSyncScreen(a.engine)
-
-	// Send window size to new screen immediately, then initialize
-	return a, tea.Batch(
-		a.currentScreen.Init(),
-		func() tea.Msg {
-			return tea.WindowSizeMsg{Width: a.width, Height: a.height}
-		},
-	)
 }

@@ -88,6 +88,16 @@ func (s AnalysisScreen) View() string {
 	return s.renderAnalyzingView()
 }
 
+// RenderContent returns just the content without timeline header or box wrapper.
+// Used by UnifiedScreen to compose multiple screen contents together.
+func (s AnalysisScreen) RenderContent() string {
+	if s.state == "initializing" {
+		return s.renderInitializingContent()
+	}
+
+	return s.renderAnalyzingContent()
+}
+
 func (s AnalysisScreen) getAnalysisPhaseText() string {
 	switch s.status.AnalysisPhase {
 	case shared.PhaseCountingSource:
@@ -300,11 +310,17 @@ func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 }
 
 func (s AnalysisScreen) renderAnalyzingView() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header
 	builder.WriteString(shared.RenderTimeline("scan"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderAnalyzingContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderAnalyzingContent returns just the analysis content without timeline or box.
+func (s AnalysisScreen) renderAnalyzingContent() string {
+	var builder strings.Builder
 
 	builder.WriteString(shared.RenderTitle("🔍 Analyzing Files"))
 	builder.WriteString("\n\n")
@@ -313,7 +329,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 		builder.WriteString(s.spinner.View())
 		builder.WriteString(" Scanning directories and comparing files...\n\n")
 
-		return shared.RenderBox(builder.String(), s.width, s.height)
+		return builder.String()
 	}
 
 	// Show current phase
@@ -345,7 +361,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
@@ -390,11 +406,17 @@ func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
 // ============================================================================
 
 func (s AnalysisScreen) renderInitializingView() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header
 	builder.WriteString(shared.RenderTimeline("scan"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderInitializingContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderInitializingContent returns just the initializing content without timeline or box.
+func (s AnalysisScreen) renderInitializingContent() string {
+	var builder strings.Builder
 
 	builder.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
 	builder.WriteString("\n\n")
@@ -409,7 +431,7 @@ func (s AnalysisScreen) renderInitializingView() string {
 
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 func (s AnalysisScreen) renderProcessingProgress(

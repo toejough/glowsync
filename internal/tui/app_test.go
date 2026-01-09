@@ -9,7 +9,6 @@ import (
 	"github.com/joe/copy-files/internal/config"
 	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui"
-	"github.com/joe/copy-files/internal/tui/screens"
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
@@ -37,7 +36,7 @@ func TestAppModelStoresLogPath(t *testing.T) {
 	appModel, ok := updatedModel.(tui.AppModel)
 	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel")
 
-	// Verify the log path was stored (we'll need a getter method)
+	// Verify the log path was stored
 	g.Expect(appModel.LogPath()).Should(Equal("/tmp/test-debug.log"))
 }
 
@@ -65,9 +64,10 @@ func TestAppModelTransitionToAnalysis(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we transitioned to AnalysisScreen
-	_, isAnalysisScreen := model.CurrentScreen().(*screens.AnalysisScreen)
-	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen after TransitionToAnalysisMsg")
+	// Verify we transitioned to scan phase (UnifiedScreen handles analysis internally)
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseScan), "Expected scan phase after TransitionToAnalysisMsg")
 }
 
 func TestAppModelTransitionToConfirmation(t *testing.T) {
@@ -98,9 +98,10 @@ func TestAppModelTransitionToConfirmation(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we transitioned to ConfirmationScreen
-	_, isConfirmationScreen := model.CurrentScreen().(*screens.ConfirmationScreen)
-	g.Expect(isConfirmationScreen).Should(BeTrue(), "Expected ConfirmationScreen after TransitionToConfirmationMsg")
+	// Verify we transitioned to compare phase
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseCompare), "Expected compare phase after TransitionToConfirmationMsg")
 }
 
 func TestAppModelTransitionToInput(t *testing.T) {
@@ -116,7 +117,12 @@ func TestAppModelTransitionToInput(t *testing.T) {
 
 	model := tui.NewAppModel(cfg)
 
-	// Transition to analysis first
+	// Verify we start at input phase
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseInput), "Expected input phase initially")
+
+	// Transition to analysis
 	analysisMsg := shared.TransitionToAnalysisMsg{
 		SourcePath: "/source",
 		DestPath:   "/dest",
@@ -127,21 +133,13 @@ func TestAppModelTransitionToInput(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we're on analysis screen
-	_, isAnalysisScreen := model.CurrentScreen().(*screens.AnalysisScreen)
-	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen after TransitionToAnalysisMsg")
+	// Verify we're on scan phase
+	unifiedScreen, isUnifiedScreen = model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseScan), "Expected scan phase after TransitionToAnalysisMsg")
 
-	// Now transition back to input with Esc
-	inputMsg := shared.TransitionToInputMsg{}
-	updatedModel, _ = model.Update(inputMsg)
-	appModel, ok = updatedModel.(tui.AppModel)
-	g.Expect(ok).Should(BeTrue(), "Expected updatedModel to be AppModel after input transition")
-
-	model = &appModel
-
-	// Verify we're back on input screen
-	_, isInputScreen := model.CurrentScreen().(*screens.InputScreen)
-	g.Expect(isInputScreen).Should(BeTrue(), "Expected InputScreen after TransitionToInputMsg")
+	// In unified mode, TransitionToInputMsg is a no-op (we don't go back)
+	// The input content remains visible, we just don't change phase
 }
 
 func TestAppModelTransitionToSummary(t *testing.T) {
@@ -183,9 +181,10 @@ func TestAppModelTransitionToSummary(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we transitioned to SummaryScreen
-	_, isSummaryScreen := model.CurrentScreen().(*screens.SummaryScreen)
-	g.Expect(isSummaryScreen).Should(BeTrue(), "Expected SummaryScreen after TransitionToSummaryMsg")
+	// Verify we transitioned to done phase
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseDone), "Expected done phase after TransitionToSummaryMsg")
 }
 
 func TestAppModelTransitionToSync(t *testing.T) {
@@ -214,25 +213,27 @@ func TestAppModelTransitionToSync(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we transitioned to SyncScreen
-	_, isSyncScreen := model.CurrentScreen().(*screens.SyncScreen)
-	g.Expect(isSyncScreen).Should(BeTrue(), "Expected SyncScreen after TransitionToSyncMsg")
+	// Verify we transitioned to sync phase
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseSync), "Expected sync phase after TransitionToSyncMsg")
 }
 
 func TestNewAppModelInteractiveMode(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	// Test: When InteractiveMode is true, should start with InputScreen
+	// Test: When InteractiveMode is true, should start at input phase
 	cfg := &config.Config{
 		InteractiveMode: true,
 	}
 
 	model := tui.NewAppModel(cfg)
 
-	// Verify the initial screen is an InputScreen
-	_, isInputScreen := model.CurrentScreen().(*screens.InputScreen)
-	g.Expect(isInputScreen).Should(BeTrue(), "Expected InputScreen when InteractiveMode is true")
+	// Verify the initial screen is UnifiedScreen at input phase
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseInput), "Expected input phase when InteractiveMode is true")
 
 	// Call methods to ensure coverage
 	_ = model.Init()
@@ -244,7 +245,7 @@ func TestNewAppModelNonInteractiveMode(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
-	// Test: When InteractiveMode is false, should start with AnalysisScreen
+	// Test: When InteractiveMode is false, should start at scan phase
 	cfg := &config.Config{
 		InteractiveMode: false,
 		SourcePath:      "/source",
@@ -253,9 +254,10 @@ func TestNewAppModelNonInteractiveMode(t *testing.T) {
 
 	model := tui.NewAppModel(cfg)
 
-	// Verify the initial screen is an AnalysisScreen
-	_, isAnalysisScreen := model.CurrentScreen().(*screens.AnalysisScreen)
-	g.Expect(isAnalysisScreen).Should(BeTrue(), "Expected AnalysisScreen when InteractiveMode is false")
+	// Verify the initial screen is UnifiedScreen at scan phase
+	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
+	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseScan), "Expected scan phase when InteractiveMode is false")
 
 	// Call methods to ensure coverage
 	_ = model.Init()

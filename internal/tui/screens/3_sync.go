@@ -79,6 +79,16 @@ func (s SyncScreen) View() string {
 	return s.renderSyncingView()
 }
 
+// RenderContent returns just the content without timeline header or box wrapper.
+// Used by UnifiedScreen to compose multiple screen contents together.
+func (s SyncScreen) RenderContent() string {
+	if s.cancelled {
+		return s.renderCancellationContent()
+	}
+
+	return s.renderSyncingContent()
+}
+
 func (s SyncScreen) calculateMaxFilesToShow() int {
 	// Calculate how many file progress bars we can show based on available screen height
 	// Count lines used by fixed UI elements based on actual rendering
@@ -296,11 +306,17 @@ func (s SyncScreen) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd)
 // ============================================================================
 
 func (s SyncScreen) renderCancellationProgress() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header (show sync phase, since cancellation happens during sync)
 	builder.WriteString(shared.RenderTimeline("sync"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderCancellationContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderCancellationContent returns just the cancellation content without timeline or box.
+func (s SyncScreen) renderCancellationContent() string {
+	var builder strings.Builder
 
 	// Header with spinner
 	builder.WriteString(shared.RenderTitle("🚫 Cancelling Sync"))
@@ -347,7 +363,7 @@ func (s SyncScreen) renderCancellationProgress() string {
 	builder.WriteString(shared.RenderDim("Press Ctrl+C to force quit"))
 	builder.WriteString("\n")
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 //nolint:cyclop,gocognit,funlen // Complex rendering logic for file status display with multiple formatting cases
@@ -554,11 +570,17 @@ func (s SyncScreen) renderSyncingView() string {
 		return s.renderCancellationProgress()
 	}
 
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header
 	builder.WriteString(shared.RenderTimeline("sync"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderSyncingContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderSyncingContent returns just the sync content without timeline or box.
+func (s SyncScreen) renderSyncingContent() string {
+	var builder strings.Builder
 
 	// Show different title based on finalization phase
 	if s.status != nil && s.status.FinalizationPhase == statusComplete {
@@ -577,7 +599,7 @@ func (s SyncScreen) renderSyncingView() string {
 		builder.WriteString(s.spinner.View())
 		builder.WriteString(" Starting sync...\n\n")
 
-		return shared.RenderBox(builder.String(), s.width, s.height)
+		return builder.String()
 	}
 
 	// Unified progress (replaces separate overall and session progress)
@@ -596,7 +618,7 @@ func (s SyncScreen) renderSyncingView() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {

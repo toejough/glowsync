@@ -91,6 +91,21 @@ func (s SummaryScreen) View() string {
 	}
 }
 
+// RenderContent returns just the content without timeline header or box wrapper.
+// Used by UnifiedScreen to compose multiple screen contents together.
+func (s SummaryScreen) RenderContent() string {
+	switch s.finalState {
+	case shared.StateComplete:
+		return s.renderCompleteContent()
+	case shared.StateCancelled:
+		return s.renderCancelledContent()
+	case shared.StateError:
+		return s.renderErrorContent()
+	default:
+		return "Unknown state"
+	}
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -210,11 +225,17 @@ func (s SummaryScreen) renderCancelledSummary(builder *strings.Builder, elapsed 
 // ============================================================================
 
 func (s SummaryScreen) renderCancelledView() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header - show sync phase with error
 	builder.WriteString(shared.RenderTimeline("sync_error"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderCancelledContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderCancelledContent returns just the cancelled content without timeline or box.
+func (s SummaryScreen) renderCancelledContent() string {
+	var builder strings.Builder
 
 	builder.WriteString(shared.RenderWarning("⚠ Sync Cancelled"))
 	builder.WriteString("\n\n")
@@ -241,7 +262,7 @@ func (s SummaryScreen) renderCancelledView() string {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 func (s SummaryScreen) renderCompleteErrors(builder *strings.Builder) {
@@ -364,11 +385,17 @@ func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
 // ============================================================================
 
 func (s SummaryScreen) renderCompleteView() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header - show done phase
 	builder.WriteString(shared.RenderTimeline("done"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderCompleteContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderCompleteContent returns just the complete content without timeline or box.
+func (s SummaryScreen) renderCompleteContent() string {
+	var builder strings.Builder
 
 	// Show different title based on whether there were errors
 	s.renderCompleteTitle(&builder)
@@ -399,7 +426,7 @@ func (s SummaryScreen) renderCompleteView() string {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 // ============================================================================
@@ -407,11 +434,17 @@ func (s SummaryScreen) renderCompleteView() string {
 // ============================================================================
 
 func (s SummaryScreen) renderErrorView() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header - show done phase with error
 	builder.WriteString(shared.RenderTimeline("done_error"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.renderErrorContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// renderErrorContent returns just the error content without timeline or box.
+func (s SummaryScreen) renderErrorContent() string {
+	var builder strings.Builder
 
 	builder.WriteString(shared.RenderError(shared.ErrorSymbol() + " Sync Failed"))
 	builder.WriteString("\n\n")
@@ -471,7 +504,7 @@ func (s SummaryScreen) renderErrorView() string {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 func (s SummaryScreen) renderReadWriteSpeeds(builder *strings.Builder) {

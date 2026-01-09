@@ -48,11 +48,18 @@ func (s ConfirmationScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the confirmation screen
 func (s ConfirmationScreen) View() string {
+	// Timeline header + content + box wrapper
 	var builder strings.Builder
-
-	// Timeline header
 	builder.WriteString(shared.RenderTimeline("compare"))
 	builder.WriteString("\n\n")
+	builder.WriteString(s.RenderContent())
+	return shared.RenderBox(builder.String(), s.width, s.height)
+}
+
+// RenderContent returns just the content without timeline header or box wrapper.
+// Used by UnifiedScreen to compose multiple screen contents together.
+func (s ConfirmationScreen) RenderContent() string {
+	var builder strings.Builder
 
 	// Get status from engine
 	status := s.engine.GetStatus()
@@ -109,7 +116,7 @@ func (s ConfirmationScreen) View() string {
 	builder.WriteString("\n")
 	builder.WriteString(shared.RenderDim("Press Enter to begin sync • Esc to cancel • Ctrl+C to exit"))
 
-	return shared.RenderBox(builder.String(), s.width, s.height)
+	return builder.String()
 }
 
 func (s ConfirmationScreen) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

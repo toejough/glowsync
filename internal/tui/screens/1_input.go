@@ -87,6 +87,12 @@ func (s InputScreen) View() string {
 	return s.renderInputView()
 }
 
+// RenderContent returns just the content without timeline header or box wrapper.
+// Used by UnifiedScreen to compose multiple screen contents together.
+func (s InputScreen) RenderContent() string {
+	return s.renderInputContent()
+}
+
 func (s InputScreen) applyCompletion(completion string) InputScreen {
 	switch s.focusIndex {
 	case 0:
@@ -409,10 +415,14 @@ func (s InputScreen) moveToPreviousField() (tea.Model, tea.Cmd) {
 // ============================================================================
 
 func (s InputScreen) renderInputView() string {
-	// Timeline header
-	content := shared.RenderTimeline("input") + "\n\n"
+	// Timeline header + content + box wrapper
+	content := shared.RenderTimeline("input") + "\n\n" + s.renderInputContent()
+	return shared.RenderBox(content, s.width, s.height)
+}
 
-	content += shared.RenderTitle("🚀 File Sync Tool") + "\n\n" +
+// renderInputContent returns just the input fields content without timeline or box.
+func (s InputScreen) renderInputContent() string {
+	content := shared.RenderTitle("🚀 File Sync Tool") + "\n\n" +
 		shared.RenderSubtitle("Configure your sync operation") + "\n\n" +
 		shared.RenderLabel("Source Path:") + "\n" +
 		s.sourceInput.View() + "\n"
@@ -462,7 +472,7 @@ func (s InputScreen) renderInputView() string {
 		shared.RenderDim("Actions: → to accept & continue • Enter to submit") + "\n" +
 		shared.RenderDim("Other: Esc to clear field • Ctrl+C to exit")
 
-	return shared.RenderBox(content, s.width, s.height)
+	return content
 }
 
 // setFocus sets the focus to the specified field index and updates all prompts accordingly.
