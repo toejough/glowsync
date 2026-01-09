@@ -1576,6 +1576,13 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 
 		e.logAnalysis("Destination directory does not exist (will be created)")
 	} else {
+		// Update TotalFilesInDest so TUI can use it as fallback if polling missed final count
+		e.Status.mu.Lock()
+		e.Status.TotalFilesInDest = len(destFiles)
+		e.Status.ScannedFiles = len(destFiles) // Ensure final count is visible before phase change
+		e.Status.mu.Unlock()
+		e.notifyStatusUpdate()
+
 		e.logAnalysis(fmt.Sprintf("Destination scan complete: %d items found", len(destFiles)))
 	}
 
@@ -1659,6 +1666,13 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 	e.Status.mu.Lock()
 	e.Status.TotalBytesToScan = totalBytes
 	e.Status.mu.Unlock()
+
+	// Update TotalFilesInSource so TUI can use it as fallback if polling missed final count
+	e.Status.mu.Lock()
+	e.Status.TotalFilesInSource = len(sourceFiles)
+	e.Status.ScannedFiles = len(sourceFiles) // Ensure final count is visible before phase change
+	e.Status.mu.Unlock()
+	e.notifyStatusUpdate()
 
 	e.logAnalysis(fmt.Sprintf("Source scan complete: %d items found, %s total",
 		len(sourceFiles), formatters.FormatBytes(totalBytes)))

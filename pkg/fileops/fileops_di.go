@@ -492,6 +492,11 @@ func (fo *FileOps) scanDirectoryWithProgressFS(fs filesystem.FileSystem, rootPat
 		return files, fmt.Errorf("failed to scan directory %s: %w", rootPath, err)
 	}
 
+	// Diagnostic: detect duplicate relative paths (map overwrites would cause fileCount > len(files))
+	if fileCount != len(files) {
+		return files, fmt.Errorf("scan integrity error: iterated %d items but map has %d entries (duplicate paths?)", fileCount, len(files))
+	}
+
 	return files, nil
 }
 
