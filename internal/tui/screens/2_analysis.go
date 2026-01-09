@@ -238,29 +238,36 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 		if now.Sub(s.lastUpdate) >= shared.StatusUpdateThrottleMs*time.Millisecond {
 			s.status = s.engine.GetStatus()
 			s.lastUpdate = now
-
-			// Track phase transitions
-			if s.status != nil {
-				currentPhase := s.status.AnalysisPhase
-				if currentPhase != s.lastPhase {
-					if s.lastPhase != "" {
-						// Record completed phase with the count we tracked
-						s.recordCompletedPhase(s.lastPhase, s.lastCount)
-					}
-					// Reset count tracking for new phase
-					s.lastCount = 0
-					s.lastPhase = currentPhase
-				} else {
-					// Same phase - track the highest count seen
-					if s.status.ScannedFiles > s.lastCount {
-						s.lastCount = s.status.ScannedFiles
-					}
-				}
-			}
+			s.updatePhaseTracking()
 		}
 	}
 
 	return s, shared.TickCmd()
+}
+
+// updatePhaseTracking tracks phase transitions and captures file counts.
+// Extracted for testability.
+func (s *AnalysisScreen) updatePhaseTracking() {
+	if s.status == nil {
+		return
+	}
+
+	currentPhase := s.status.AnalysisPhase
+	if currentPhase != s.lastPhase {
+		if s.lastPhase != "" {
+			// Record completed phase with the count we tracked
+			s.recordCompletedPhase(s.lastPhase, s.lastCount)
+		}
+		// Start tracking count for new phase - capture current count
+		// (don't reset to 0, as the status might already have a count)
+		s.lastCount = s.status.ScannedFiles
+		s.lastPhase = currentPhase
+	} else {
+		// Same phase - track the highest count seen
+		if s.status.ScannedFiles > s.lastCount {
+			s.lastCount = s.status.ScannedFiles
+		}
+	}
 }
 
 // recordCompletedPhase adds a completed phase to the appropriate list with its result.
