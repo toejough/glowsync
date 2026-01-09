@@ -146,9 +146,9 @@ var _ = Describe("UnifiedScreen", func() {
 
 			view := screen.View()
 
-			// Input content should still be present
-			Expect(view).To(ContainSubstring("Source Path"))
-			Expect(view).To(ContainSubstring("Destination Path"))
+			// Input summary should still be present (shows compact form after input phase)
+			Expect(view).To(ContainSubstring("Source:"))
+			Expect(view).To(ContainSubstring("Dest:"))
 		})
 	})
 

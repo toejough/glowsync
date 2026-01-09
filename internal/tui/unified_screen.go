@@ -300,7 +300,11 @@ func (u *UnifiedScreen) renderInputSection() string {
 	if !u.hasInput {
 		return ""
 	}
-	return u.input.RenderContent()
+	// Show full input form during input phase, compact summary after
+	if u.phase == PhaseInput {
+		return u.input.RenderContent()
+	}
+	return u.input.RenderSummary()
 }
 
 func (u *UnifiedScreen) renderAnalysisSection() string {

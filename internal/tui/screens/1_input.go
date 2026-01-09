@@ -93,6 +93,33 @@ func (s InputScreen) RenderContent() string {
 	return s.renderInputContent()
 }
 
+// RenderSummary returns a compact read-only display of the configured paths.
+// Used by UnifiedScreen after the input phase is complete.
+func (s InputScreen) RenderSummary() string {
+	var builder strings.Builder
+
+	builder.WriteString(shared.RenderTitle("🚀 GlowSync"))
+	builder.WriteString("\n\n")
+
+	// Source path
+	builder.WriteString(shared.RenderLabel("Source: "))
+	builder.WriteString(s.config.SourcePath)
+	builder.WriteString("\n")
+
+	// Destination path
+	builder.WriteString(shared.RenderLabel("Dest: "))
+	builder.WriteString(s.config.DestPath)
+
+	// Filter pattern (only if set)
+	if s.config.FilePattern != "" {
+		builder.WriteString("\n")
+		builder.WriteString(shared.RenderLabel("Filter: "))
+		builder.WriteString(s.config.FilePattern)
+	}
+
+	return builder.String()
+}
+
 func (s InputScreen) applyCompletion(completion string) InputScreen {
 	switch s.focusIndex {
 	case 0:
