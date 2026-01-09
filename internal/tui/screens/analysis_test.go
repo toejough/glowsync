@@ -172,7 +172,7 @@ func TestAnalysisScreenRenderingWithStatus(t *testing.T) {
 
 	// Get the view which should now show analysis state
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Analyzing Files"))
+	g.Expect(view).Should(ContainSubstring("Scanning Files"))
 }
 
 func TestAnalysisScreenSpinnerTick(t *testing.T) {

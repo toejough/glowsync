@@ -322,7 +322,7 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 func (s AnalysisScreen) renderAnalyzingContent() string {
 	var builder strings.Builder
 
-	builder.WriteString(shared.RenderTitle("🔍 Analyzing Files"))
+	builder.WriteString(shared.RenderTitle("🔍 Scanning Files"))
 	builder.WriteString("\n\n")
 
 	if s.status == nil {
