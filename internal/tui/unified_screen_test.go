@@ -126,19 +126,19 @@ var _ = Describe("UnifiedScreen", func() {
 			Expect(view).To(ContainSubstring("Input"))
 		})
 
-		It("accumulates input and analysis at scan phase", func() {
+		It("shows analysis section at scan phase", func() {
 			screen.phase = PhaseScan
 			screen.analysis = *screens.NewAnalysisScreen(cfg)
 			screen.hasAnalysis = true
 
 			view := screen.View()
 
-			// Both sections should be present
-			Expect(view).To(ContainSubstring("Source"))         // From input
+			// Analysis section should show paths and scanning status
+			Expect(view).To(ContainSubstring("Source:"))        // From analysis
 			Expect(view).To(ContainSubstring("Scanning Files")) // From analysis
 		})
 
-		It("shows input section even after advancing phases", func() {
+		It("analysis section shows paths after advancing phases", func() {
 			// Advance to scan phase
 			screen.phase = PhaseScan
 			screen.analysis = *screens.NewAnalysisScreen(cfg)
@@ -146,7 +146,7 @@ var _ = Describe("UnifiedScreen", func() {
 
 			view := screen.View()
 
-			// Input summary should still be present (shows compact form after input phase)
+			// Analysis screen now shows paths (input section hidden to avoid duplication)
 			Expect(view).To(ContainSubstring("Source:"))
 			Expect(view).To(ContainSubstring("Dest:"))
 		})

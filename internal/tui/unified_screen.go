@@ -306,11 +306,11 @@ func (u *UnifiedScreen) renderInputSection() string {
 	if !u.hasInput {
 		return ""
 	}
-	// Show full input form during input phase, compact summary after
+	// Only show input during input phase - analysis screen shows paths after
 	if u.phase == PhaseInput {
 		return u.input.RenderContent()
 	}
-	return u.input.RenderSummary()
+	return ""
 }
 
 func (u *UnifiedScreen) renderAnalysisSection() string {

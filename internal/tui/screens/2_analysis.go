@@ -16,6 +16,12 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
+// completedPhase tracks a completed phase with its result
+type completedPhase struct {
+	text   string // e.g., "Counting files (quick check)"
+	result string // e.g., "1,234 files"
+}
+
 // AnalysisScreen handles engine initialization and file analysis
 type AnalysisScreen struct {
 	config          *config.Config
@@ -27,9 +33,14 @@ type AnalysisScreen struct {
 	logPath         string
 	width           int
 	height          int
-	completedPhases []string        // Phases that have completed, shown with checkmarks
-	seenPhases      map[string]int  // Track how many times we've seen each phase (for context labels)
-	lastPhase       string          // Last seen phase, to detect transitions
+
+	// Phase tracking - grouped by source/dest for display
+	sourcePhases []completedPhase // Counting phases for source
+	destPhases   []completedPhase // Counting phases for dest
+	otherPhases  []string         // Scanning, comparing, etc.
+	seenPhases   map[string]int   // Track occurrences for context labels
+	lastPhase    string           // Last seen phase, to detect transitions
+	lastCount    int              // File count when phase started (to capture result)
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -93,19 +104,7 @@ func (s AnalysisScreen) RenderContent() string {
 }
 
 func (s AnalysisScreen) getAnalysisPhaseText() string {
-	phaseText := s.getPhaseDisplayText(s.status.AnalysisPhase)
-
-	// Add context for counting phases (seenPhases tracks completed occurrences,
-	// so 0 means first time = quick check, 1+ means subsequent = full scan)
-	if strings.HasPrefix(phaseText, "Counting") {
-		if s.seenPhases[phaseText] == 0 {
-			phaseText += " (quick check)"
-		} else {
-			phaseText += " (full scan)"
-		}
-	}
-
-	return phaseText + "..."
+	return s.getPhaseDisplayText(s.status.AnalysisPhase) + "..."
 }
 
 // getPhaseDisplayText returns the display text for a phase without trailing ellipsis.
@@ -243,16 +242,14 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 			// Track phase transitions
 			if s.status != nil {
 				currentPhase := s.status.AnalysisPhase
-				if currentPhase != s.lastPhase && s.lastPhase != "" {
-					// Phase changed - mark previous phase as complete with context
-					phaseText := s.getPhaseDisplayText(s.lastPhase)
-					s.seenPhases[phaseText]++
-
-					// Add context label based on occurrence
-					labeledText := s.addPhaseContext(phaseText, s.seenPhases[phaseText])
-					s.completedPhases = append(s.completedPhases, labeledText)
+				if currentPhase != s.lastPhase {
+					if s.lastPhase != "" {
+						s.recordCompletedPhase(s.lastPhase)
+					}
+					// Capture count at start of new phase (for result when it completes)
+					s.lastCount = s.status.ScannedFiles
+					s.lastPhase = currentPhase
 				}
-				s.lastPhase = currentPhase
 			}
 		}
 	}
@@ -260,23 +257,47 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 	return s, shared.TickCmd()
 }
 
-// addPhaseContext adds context labels to phase text for repeated phases.
-// First occurrence = quick check (monotonic optimization), second = full scan.
-func (s AnalysisScreen) addPhaseContext(phaseText string, occurrence int) string {
-	// Only counting phases get repeated (monotonic check then full scan)
-	isCountingPhase := strings.HasPrefix(phaseText, "Counting")
-
-	if !isCountingPhase {
-		return phaseText
+// recordCompletedPhase adds a completed phase to the appropriate list with its result.
+func (s *AnalysisScreen) recordCompletedPhase(phase string) {
+	// Get the result (file count at completion)
+	result := ""
+	if s.status != nil {
+		result = fmt.Sprintf("%d files", s.status.ScannedFiles)
 	}
 
+	// Determine phase category and label
+	switch phase {
+	case shared.PhaseCountingSource:
+		s.seenPhases["source"]++
+		label := s.getCountingLabel(s.seenPhases["source"])
+		s.sourcePhases = append(s.sourcePhases, completedPhase{text: label, result: result})
+
+	case shared.PhaseCountingDest:
+		s.seenPhases["dest"]++
+		label := s.getCountingLabel(s.seenPhases["dest"])
+		s.destPhases = append(s.destPhases, completedPhase{text: label, result: result})
+
+	case shared.PhaseScanningSource:
+		s.sourcePhases = append(s.sourcePhases, completedPhase{text: "Scanning", result: result})
+
+	case shared.PhaseScanningDest:
+		s.destPhases = append(s.destPhases, completedPhase{text: "Scanning", result: result})
+
+	default:
+		// Other phases (comparing, deleting, etc.)
+		s.otherPhases = append(s.otherPhases, s.getPhaseDisplayText(phase))
+	}
+}
+
+// getCountingLabel returns the label for a counting phase based on occurrence.
+func (s AnalysisScreen) getCountingLabel(occurrence int) string {
 	switch occurrence {
 	case 1:
-		return phaseText + " (quick check)"
+		return "Counting (quick check)"
 	case 2:
-		return phaseText + " (full scan)"
+		return "Counting (full scan)"
 	default:
-		return phaseText
+		return "Counting"
 	}
 }
 
@@ -368,6 +389,12 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	builder.WriteString(shared.RenderTitle("🔍 Scanning Files"))
 	builder.WriteString("\n\n")
 
+	// Always show source section with its phases (even while initializing)
+	s.renderPathSection(&builder, "Source", s.config.SourcePath, s.sourcePhases, s.isSourcePhaseActive())
+
+	// Always show dest section with its phases
+	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive())
+
 	if s.status == nil {
 		builder.WriteString(s.spinner.View())
 		builder.WriteString(" Initializing...\n\n")
@@ -375,20 +402,24 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 		return builder.String()
 	}
 
-	// Show completed phases with checkmarks
-	for _, phase := range s.completedPhases {
+	// Other completed phases (comparing, deleting, etc.)
+	for _, phase := range s.otherPhases {
 		builder.WriteString(shared.SuccessSymbol())
 		builder.WriteString(" ")
 		builder.WriteString(shared.RenderDim(phase))
 		builder.WriteString("\n")
 	}
 
-	// Show current phase with spinner
-	phaseText := s.getAnalysisPhaseText()
-	builder.WriteString(s.spinner.View())
-	builder.WriteString(" ")
-	builder.WriteString(phaseText)
-	builder.WriteString("\n\n")
+	// Show current phase if it's not a source/dest phase
+	if s.isOtherPhaseActive() {
+		phaseText := s.getAnalysisPhaseText()
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" ")
+		builder.WriteString(phaseText)
+		builder.WriteString("\n")
+	}
+
+	builder.WriteString("\n")
 
 	// Show scan progress with progress bar or count
 	s.renderAnalysisProgress(&builder)
@@ -413,6 +444,82 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
 	return builder.String()
+}
+
+// renderPathSection renders a path with its associated phases.
+func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path string, phases []completedPhase, isActive bool) {
+	// Path header
+	builder.WriteString(shared.RenderLabel(label + ": "))
+	builder.WriteString(path)
+	builder.WriteString("\n")
+
+	// Completed phases for this path
+	for _, phase := range phases {
+		builder.WriteString("  ")
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(phase.text))
+		builder.WriteString(shared.RenderDim(" → "))
+		builder.WriteString(shared.RenderDim(phase.result))
+		builder.WriteString("\n")
+	}
+
+	// Current active phase for this path
+	if isActive {
+		builder.WriteString("  ")
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" ")
+		builder.WriteString(s.getCurrentPhaseLabel())
+		if s.status != nil {
+			builder.WriteString(fmt.Sprintf("... %d files", s.status.ScannedFiles))
+		}
+		builder.WriteString("\n")
+	}
+}
+
+// isSourcePhaseActive returns true if the current phase is a source phase.
+func (s AnalysisScreen) isSourcePhaseActive() bool {
+	if s.status == nil {
+		return false
+	}
+	return s.status.AnalysisPhase == shared.PhaseCountingSource ||
+		s.status.AnalysisPhase == shared.PhaseScanningSource
+}
+
+// isDestPhaseActive returns true if the current phase is a dest phase.
+func (s AnalysisScreen) isDestPhaseActive() bool {
+	if s.status == nil {
+		return false
+	}
+	return s.status.AnalysisPhase == shared.PhaseCountingDest ||
+		s.status.AnalysisPhase == shared.PhaseScanningDest
+}
+
+// isOtherPhaseActive returns true if the current phase is not source/dest specific.
+func (s AnalysisScreen) isOtherPhaseActive() bool {
+	if s.status == nil {
+		return false
+	}
+	return !s.isSourcePhaseActive() && !s.isDestPhaseActive() &&
+		s.status.AnalysisPhase != shared.StateComplete
+}
+
+// getCurrentPhaseLabel returns the label for the current active phase.
+func (s AnalysisScreen) getCurrentPhaseLabel() string {
+	if s.status == nil {
+		return "Initializing"
+	}
+
+	switch s.status.AnalysisPhase {
+	case shared.PhaseCountingSource:
+		return s.getCountingLabel(s.seenPhases["source"] + 1)
+	case shared.PhaseCountingDest:
+		return s.getCountingLabel(s.seenPhases["dest"] + 1)
+	case shared.PhaseScanningSource, shared.PhaseScanningDest:
+		return "Scanning"
+	default:
+		return s.getPhaseDisplayText(s.status.AnalysisPhase)
+	}
 }
 
 func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
