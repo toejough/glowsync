@@ -23,7 +23,6 @@ type AnalysisScreen struct {
 	status          *syncengine.Status
 	spinner         spinner.Model
 	overallProgress progress.Model
-	state           string // "initializing" or "analyzing"
 	lastUpdate      time.Time
 	logPath         string
 	width           int
@@ -43,7 +42,6 @@ func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
 		config:          cfg,
 		spinner:         spin,
 		overallProgress: overallProg,
-		state:           "initializing",
 		lastUpdate:      time.Now(),
 	}
 }
@@ -81,20 +79,12 @@ func (s AnalysisScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model
 func (s AnalysisScreen) View() string {
-	if s.state == "initializing" {
-		return s.renderInitializingView()
-	}
-
 	return s.renderAnalyzingView()
 }
 
 // RenderContent returns just the content without timeline header or box wrapper.
 // Used by UnifiedScreen to compose multiple screen contents together.
 func (s AnalysisScreen) RenderContent() string {
-	if s.state == "initializing" {
-		return s.renderInitializingContent()
-	}
-
 	return s.renderAnalyzingContent()
 }
 
@@ -154,9 +144,6 @@ func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg)
 
 	// Capture engine in local variable for closures
 	engine := s.engine
-
-	// Start analysis
-	s.state = "analyzing"
 
 	// Determine log path
 	s.logPath = os.Getenv("COPY_FILES_LOG")
@@ -404,35 +391,6 @@ func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
 // ============================================================================
 // Rendering
 // ============================================================================
-
-func (s AnalysisScreen) renderInitializingView() string {
-	// Timeline header + content + box wrapper
-	var builder strings.Builder
-	builder.WriteString(shared.RenderTimeline("scan"))
-	builder.WriteString("\n\n")
-	builder.WriteString(s.renderInitializingContent())
-	return shared.RenderBox(builder.String(), s.width, s.height)
-}
-
-// renderInitializingContent returns just the initializing content without timeline or box.
-func (s AnalysisScreen) renderInitializingContent() string {
-	var builder strings.Builder
-
-	builder.WriteString(shared.RenderTitle("🚀 Starting Copy Files"))
-	builder.WriteString("\n\n")
-
-	builder.WriteString(s.spinner.View())
-	builder.WriteString(" ")
-	builder.WriteString(shared.RenderLabel("Initializing..."))
-	builder.WriteString("\n\n")
-
-	builder.WriteString(shared.RenderDim("Setting up file logging and preparing to analyze directories"))
-	builder.WriteString("\n\n")
-
-	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
-
-	return builder.String()
-}
 
 func (s AnalysisScreen) renderProcessingProgress(
 	status *syncengine.Status,

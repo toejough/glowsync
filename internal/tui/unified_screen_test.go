@@ -134,8 +134,8 @@ var _ = Describe("UnifiedScreen", func() {
 			view := screen.View()
 
 			// Both sections should be present
-			Expect(view).To(ContainSubstring("Source"))       // From input
-			Expect(view).To(ContainSubstring("Initializing")) // From analysis
+			Expect(view).To(ContainSubstring("Source"))         // From input
+			Expect(view).To(ContainSubstring("Scanning Files")) // From analysis
 		})
 
 		It("shows input section even after advancing phases", func() {

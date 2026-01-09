@@ -234,9 +234,9 @@ func TestAnalysisScreenView(t *testing.T) {
 	}
 	screen := screens.NewAnalysisScreen(cfg)
 
-	// Test View rendering in initializing state
+	// Test View rendering - always shows scanning view now
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Starting Copy Files"))
+	g.Expect(view).Should(ContainSubstring("Scanning Files"))
 
 	// Initialize the screen
 	_ = screen.Init()
