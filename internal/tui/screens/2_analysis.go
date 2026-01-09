@@ -93,7 +93,19 @@ func (s AnalysisScreen) RenderContent() string {
 }
 
 func (s AnalysisScreen) getAnalysisPhaseText() string {
-	return s.getPhaseDisplayText(s.status.AnalysisPhase) + "..."
+	phaseText := s.getPhaseDisplayText(s.status.AnalysisPhase)
+
+	// Add context for counting phases (seenPhases tracks completed occurrences,
+	// so 0 means first time = quick check, 1+ means subsequent = full scan)
+	if strings.HasPrefix(phaseText, "Counting") {
+		if s.seenPhases[phaseText] == 0 {
+			phaseText += " (quick check)"
+		} else {
+			phaseText += " (full scan)"
+		}
+	}
+
+	return phaseText + "..."
 }
 
 // getPhaseDisplayText returns the display text for a phase without trailing ellipsis.
