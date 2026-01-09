@@ -244,11 +244,17 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 				currentPhase := s.status.AnalysisPhase
 				if currentPhase != s.lastPhase {
 					if s.lastPhase != "" {
-						s.recordCompletedPhase(s.lastPhase)
+						// Record completed phase with the count we tracked
+						s.recordCompletedPhase(s.lastPhase, s.lastCount)
 					}
-					// Capture count at start of new phase (for result when it completes)
-					s.lastCount = s.status.ScannedFiles
+					// Reset count tracking for new phase
+					s.lastCount = 0
 					s.lastPhase = currentPhase
+				} else {
+					// Same phase - track the highest count seen
+					if s.status.ScannedFiles > s.lastCount {
+						s.lastCount = s.status.ScannedFiles
+					}
 				}
 			}
 		}
@@ -258,12 +264,8 @@ func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
 }
 
 // recordCompletedPhase adds a completed phase to the appropriate list with its result.
-func (s *AnalysisScreen) recordCompletedPhase(phase string) {
-	// Get the result (file count at completion)
-	result := ""
-	if s.status != nil {
-		result = fmt.Sprintf("%d files", s.status.ScannedFiles)
-	}
+func (s *AnalysisScreen) recordCompletedPhase(phase string, count int) {
+	result := fmt.Sprintf("%d files", count)
 
 	// Determine phase category and label
 	switch phase {
