@@ -8,108 +8,160 @@ import (
 	_reflect "reflect"
 )
 
+// WrapScanDirectoryCallHandle represents a single call to the wrapped function.
+type WrapScanDirectoryCallHandle struct {
+	*_imptest.CallableController[WrapScanDirectoryReturnsReturn]
+	controller        *_imptest.TargetController
+	pendingCompletion *_imptest.PendingCompletion
+	// Eventually is the async version of this call handle for registering non-blocking expectations.
+	Eventually *WrapScanDirectoryCallHandleEventually
+}
+
+// ExpectPanicEquals verifies the function panics with the expected value.
+func (h *WrapScanDirectoryCallHandle) ExpectPanicEquals(expected any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, expected)
+		if !ok {
+			h.T.Fatalf("panic value: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// ExpectPanicMatches verifies the function panics with a value matching the given matcher.
+func (h *WrapScanDirectoryCallHandle) ExpectPanicMatches(matcher any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, matcher)
+		if !ok {
+			h.T.Fatalf("panic value: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// ExpectReturnsEqual verifies the function returned the expected values.
+func (h *WrapScanDirectoryCallHandle) ExpectReturnsEqual(v0 map[string]*fileops.FileInfo, v1 error) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Returned != nil {
+		if !_reflect.DeepEqual(h.Returned.Result0, v0) {
+			h.T.Fatalf("expected return value 0 to be %v, got %v", v0, h.Returned.Result0)
+		}
+		if !_reflect.DeepEqual(h.Returned.Result1, v1) {
+			h.T.Fatalf("expected return value 1 to be %v, got %v", v1, h.Returned.Result1)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to return, but it panicked with: %v", h.Panicked)
+}
+
+// ExpectReturnsMatch verifies the return values match the given matchers.
+func (h *WrapScanDirectoryCallHandle) ExpectReturnsMatch(v0 any, v1 any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Returned != nil {
+		var ok bool
+		var msg string
+		ok, msg = _imptest.MatchValue(h.Returned.Result0, v0)
+		if !ok {
+			h.T.Fatalf("return value 0: %s", msg)
+		}
+		ok, msg = _imptest.MatchValue(h.Returned.Result1, v1)
+		if !ok {
+			h.T.Fatalf("return value 1: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to return, but it panicked with: %v", h.Panicked)
+}
+
+// WrapScanDirectoryCallHandleEventually wraps a call handle for async expectation registration.
+type WrapScanDirectoryCallHandleEventually struct {
+	h *WrapScanDirectoryCallHandle
+}
+
+// ExpectPanicEquals registers an async expectation for a panic value.
+func (e *WrapScanDirectoryCallHandleEventually) ExpectPanicEquals(value any) {
+	e.ensureStarted().ExpectPanicEquals(value)
+}
+
+// ExpectReturnsEqual registers an async expectation for return values.
+func (e *WrapScanDirectoryCallHandleEventually) ExpectReturnsEqual(values ...any) {
+	e.ensureStarted().ExpectReturnsEqual(values...)
+}
+
+func (e *WrapScanDirectoryCallHandleEventually) ensureStarted() *_imptest.PendingCompletion {
+	if e.h.pendingCompletion == nil {
+		e.h.pendingCompletion = e.h.controller.RegisterPendingCompletion()
+		go func() {
+			e.h.WaitForResponse()
+			e.h.pendingCompletion.SetCompleted(e.h.Returned, e.h.Panicked)
+		}()
+	}
+	return e.h.pendingCompletion
+}
+
 // WrapScanDirectoryReturnsReturn holds the return values from the wrapped function.
 type WrapScanDirectoryReturnsReturn struct {
 	Result0 map[string]*fileops.FileInfo
 	Result1 error
 }
 
-// WrapScanDirectoryWrapper wraps a function for testing.
-type WrapScanDirectoryWrapper struct {
-	*_imptest.CallableController[WrapScanDirectoryReturnsReturn]
-	callable func(string) (map[string]*fileops.FileInfo, error)
+// WrapScanDirectoryWrapperHandle is the test handle for a wrapped function.
+type WrapScanDirectoryWrapperHandle struct {
+	Method     *WrapScanDirectoryWrapperMethod
+	Controller *_imptest.TargetController
 }
 
-// ExpectPanicEquals verifies the function panics with the expected value.
-func (w *WrapScanDirectoryWrapper) ExpectPanicEquals(expected any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, expected)
-		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to panic, but it returned")
-}
-
-// ExpectPanicMatches verifies the function panics with a value matching the given matcher.
-func (w *WrapScanDirectoryWrapper) ExpectPanicMatches(matcher any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, matcher)
-		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to panic, but it returned")
-}
-
-// ExpectReturnsEqual verifies the function returned the expected values.
-func (w *WrapScanDirectoryWrapper) ExpectReturnsEqual(v0 map[string]*fileops.FileInfo, v1 error) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Returned != nil {
-		if !_reflect.DeepEqual(w.Returned.Result0, v0) {
-			w.T.Fatalf("expected return value 0 to be %v, got %v", v0, w.Returned.Result0)
-		}
-		if !_reflect.DeepEqual(w.Returned.Result1, v1) {
-			w.T.Fatalf("expected return value 1 to be %v, got %v", v1, w.Returned.Result1)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to return, but it panicked with: %v", w.Panicked)
-}
-
-// ExpectReturnsMatch verifies the return values match the given matchers.
-func (w *WrapScanDirectoryWrapper) ExpectReturnsMatch(v0 any, v1 any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Returned != nil {
-		var ok bool
-		var msg string
-		ok, msg = _imptest.MatchValue(w.Returned.Result0, v0)
-		if !ok {
-			w.T.Fatalf("return value 0: %s", msg)
-		}
-		ok, msg = _imptest.MatchValue(w.Returned.Result1, v1)
-		if !ok {
-			w.T.Fatalf("return value 1: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to return, but it panicked with: %v", w.Panicked)
+// WrapScanDirectoryWrapperMethod wraps a function for testing.
+type WrapScanDirectoryWrapperMethod struct {
+	t          _imptest.TestReporter
+	controller *_imptest.TargetController
+	callable   func(string) (map[string]*fileops.FileInfo, error)
 }
 
 // Start executes the wrapped function in a goroutine.
-func (w *WrapScanDirectoryWrapper) Start(rootPath string) *WrapScanDirectoryWrapper {
+func (m *WrapScanDirectoryWrapperMethod) Start(rootPath string) *WrapScanDirectoryCallHandle {
+	handle := &WrapScanDirectoryCallHandle{
+		CallableController: _imptest.NewCallableController[WrapScanDirectoryReturnsReturn](m.t),
+		controller:         m.controller,
+	}
+	handle.Eventually = &WrapScanDirectoryCallHandleEventually{h: handle}
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				w.PanicChan <- r
+				handle.PanicChan <- r
 			}
 		}()
-		ret0, ret1 := w.callable(rootPath)
-		w.ReturnChan <- WrapScanDirectoryReturnsReturn{Result0: ret0, Result1: ret1}
+		ret0, ret1 := m.callable(rootPath)
+		handle.ReturnChan <- WrapScanDirectoryReturnsReturn{Result0: ret0, Result1: ret1}
 	}()
-	return w
+	return handle
 }
 
 // WrapScanDirectory wraps a function for testing.
-func WrapScanDirectory(t _imptest.TestReporter, fn func(string) (map[string]*fileops.FileInfo, error)) *WrapScanDirectoryWrapper {
-	return &WrapScanDirectoryWrapper{
-		CallableController: _imptest.NewCallableController[WrapScanDirectoryReturnsReturn](t),
-		callable:           fn,
+func WrapScanDirectory(t _imptest.TestReporter, fn func(string) (map[string]*fileops.FileInfo, error)) *WrapScanDirectoryWrapperHandle {
+	ctrl := _imptest.NewTargetController(t)
+	return &WrapScanDirectoryWrapperHandle{
+		Method: &WrapScanDirectoryWrapperMethod{
+			t:          t,
+			controller: ctrl,
+			callable:   fn,
+		},
+		Controller: ctrl,
 	}
 }

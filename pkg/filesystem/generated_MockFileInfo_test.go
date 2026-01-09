@@ -8,20 +8,11 @@ import (
 	time "time"
 )
 
-// FileInfoMock is the mock for FileInfo.
-type FileInfoMock struct {
-	imp     *_imptest.Imp
-	Name    *_imptest.DependencyMethod
-	Size    *_imptest.DependencyMethod
-	Mode    *_imptest.DependencyMethod
-	ModTime *_imptest.DependencyMethod
-	IsDir   *_imptest.DependencyMethod
-	Sys     *_imptest.DependencyMethod
-}
-
-// Interface returns the FileInfo implementation that can be passed to code under test.
-func (m *FileInfoMock) Interface() fs.FileInfo {
-	return &mockFileInfoImpl{mock: m}
+// FileInfoMockHandle is the test handle for FileInfo.
+type FileInfoMockHandle struct {
+	Mock       fs.FileInfo
+	Method     *FileInfoMockMethods
+	Controller *_imptest.Imp
 }
 
 // FileInfoMockIsDirCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
@@ -32,6 +23,16 @@ type FileInfoMockIsDirCall struct {
 // InjectReturnValues specifies the typed values the mock should return.
 func (c *FileInfoMockIsDirCall) InjectReturnValues(result0 bool) {
 	c.DependencyCall.InjectReturnValues(result0)
+}
+
+// FileInfoMockMethods holds method wrappers for setting expectations.
+type FileInfoMockMethods struct {
+	Name    *_imptest.DependencyMethod
+	Size    *_imptest.DependencyMethod
+	Mode    *_imptest.DependencyMethod
+	ModTime *_imptest.DependencyMethod
+	IsDir   *_imptest.DependencyMethod
+	Sys     *_imptest.DependencyMethod
 }
 
 // FileInfoMockModTimeCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
@@ -84,23 +85,28 @@ func (c *FileInfoMockSysCall) InjectReturnValues(result0 any) {
 	c.DependencyCall.InjectReturnValues(result0)
 }
 
-// MockFileInfo creates a new FileInfoMock for testing.
-func MockFileInfo(t _imptest.TestReporter) *FileInfoMock {
-	imp := _imptest.NewImp(t)
-	return &FileInfoMock{
-		imp:     imp,
-		Name:    _imptest.NewDependencyMethod(imp, "Name"),
-		Size:    _imptest.NewDependencyMethod(imp, "Size"),
-		Mode:    _imptest.NewDependencyMethod(imp, "Mode"),
-		ModTime: _imptest.NewDependencyMethod(imp, "ModTime"),
-		IsDir:   _imptest.NewDependencyMethod(imp, "IsDir"),
-		Sys:     _imptest.NewDependencyMethod(imp, "Sys"),
+// MockFileInfo creates a new FileInfoMockHandle for testing.
+func MockFileInfo(t _imptest.TestReporter) *FileInfoMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &FileInfoMockMethods{
+		Name:    _imptest.NewDependencyMethod(ctrl, "Name"),
+		Size:    _imptest.NewDependencyMethod(ctrl, "Size"),
+		Mode:    _imptest.NewDependencyMethod(ctrl, "Mode"),
+		ModTime: _imptest.NewDependencyMethod(ctrl, "ModTime"),
+		IsDir:   _imptest.NewDependencyMethod(ctrl, "IsDir"),
+		Sys:     _imptest.NewDependencyMethod(ctrl, "Sys"),
 	}
+	h := &FileInfoMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockFileInfoImpl{handle: h}
+	return h
 }
 
 // mockFileInfoImpl implements fs.FileInfo.
 type mockFileInfoImpl struct {
-	mock *FileInfoMock
+	handle *FileInfoMockHandle
 }
 
 // IsDir implements fs.FileInfo.IsDir.
@@ -110,7 +116,7 @@ func (impl *mockFileInfoImpl) IsDir() bool {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -133,7 +139,7 @@ func (impl *mockFileInfoImpl) ModTime() time.Time {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -156,7 +162,7 @@ func (impl *mockFileInfoImpl) Mode() fs.FileMode {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -179,7 +185,7 @@ func (impl *mockFileInfoImpl) Name() string {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -202,7 +208,7 @@ func (impl *mockFileInfoImpl) Size() int64 {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -225,7 +231,7 @@ func (impl *mockFileInfoImpl) Sys() any {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)

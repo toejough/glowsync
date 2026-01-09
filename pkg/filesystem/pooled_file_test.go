@@ -31,14 +31,14 @@ func TestImptestV2APIValidation(t *testing.T) {
 		t.Parallel()
 
 		mockFile := MockSftpFile(t)
-		reader := mockFile.Interface().(io.Reader) //nolint:forcetypeassert // Test code - mock always implements io.Reader
+		reader := mockFile.Mock.(io.Reader) //nolint:forcetypeassert // Test code - mock always implements io.Reader
 
 		// Set up expectation in goroutine
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
 			// For Read, we accept any buffer since we don't control it
-			readCall := mockFile.Read.ExpectCalledWithMatches(imptest.Any())
+			readCall := mockFile.Method.Read.ExpectCalledWithMatches(imptest.Any())
 			readCall.InjectReturnValues(9, nil)
 		}()
 
@@ -60,7 +60,7 @@ func TestImptestV2APIValidation(t *testing.T) {
 		t.Parallel()
 
 		mockFile := MockSftpFile(t)
-		writer := mockFile.Interface().(io.Writer) //nolint:forcetypeassert // Test code - mock always implements io.Writer
+		writer := mockFile.Mock.(io.Writer) //nolint:forcetypeassert // Test code - mock always implements io.Writer
 
 		testData := []byte("test data")
 		var writeCall *SftpFileMockWriteCall
@@ -70,7 +70,7 @@ func TestImptestV2APIValidation(t *testing.T) {
 		go func() {
 			defer close(done)
 			// Accept any byte slice - we'll verify using GetArgs
-			writeCall = mockFile.Write.ExpectCalledWithMatches(imptest.Any())
+			writeCall = mockFile.Method.Write.ExpectCalledWithMatches(imptest.Any())
 			writeCall.InjectReturnValues(len(testData), nil)
 		}()
 
@@ -97,7 +97,7 @@ func TestImptestV2APIValidation(t *testing.T) {
 		t.Parallel()
 
 		mockFile := MockSftpFile(t)
-		closer := mockFile.Interface().(io.Closer) //nolint:forcetypeassert // Test code - mock always implements io.Closer
+		closer := mockFile.Mock.(io.Closer) //nolint:forcetypeassert // Test code - mock always implements io.Closer
 
 		expectedErr := errors.New("close failed")
 
@@ -105,7 +105,7 @@ func TestImptestV2APIValidation(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			closeCall := mockFile.Close.ExpectCalledWithExactly()
+			closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 			closeCall.InjectReturnValues(expectedErr)
 		}()
 
@@ -135,15 +135,15 @@ func TestPooledSFTPFile_Close_ClosesFileAndReleasesClient(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect file.Close() to be called
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(nil)
 
 		// Expect pool.Release() to be called
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -170,15 +170,15 @@ func TestPooledSFTPFile_Close_ReleasesClientEvenWhenFileCloseErrors(t *testing.T
 	go func() {
 		defer close(done)
 		// Expect file.Close() to return error
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(closeErr)
 
 		// Expect pool.Release() still called despite error
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -205,15 +205,15 @@ func TestPooledSFTPFile_Close_ReturnsFileCloseError(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect file.Close() to return error
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(closeErr)
 
 		// Expect pool.Release() still called despite error
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -239,15 +239,15 @@ func TestPooledSFTPFile_Close_WhenPoolClosed_StillClosesFile(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect file.Close() to be called
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(nil)
 
 		// Expect pool.Release() to be called (even if pool is closed, it's still called)
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -274,16 +274,16 @@ func TestPooledSFTPFile_ConcurrentClose_IsSafe(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect exactly one Close() even though 10 goroutines call pooledFile.Close()
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		time.Sleep(10 * time.Millisecond) // Simulate slow close
 		closeCall.InjectReturnValues(nil)
 
 		// Expect exactly one Release()
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -312,19 +312,19 @@ func TestPooledSFTPFile_DeferPattern_WorksCorrectly(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect Write() to be called
-		writeCall := mockFile.Write.ExpectCalledWithMatches(imptest.Any())
+		writeCall := mockFile.Method.Write.ExpectCalledWithMatches(imptest.Any())
 		writeCall.InjectReturnValues(9, nil)
 
 		// Expect Close() and Release() from defer
-		closeCall := mockFile.Close.Eventually().ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.Eventually.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(nil)
 
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
 	func() {
-		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 		if err != nil {
 			t.Fatalf("NewPooledSFTPFile failed: %v", err)
 		}
@@ -387,14 +387,14 @@ func TestPooledSFTPFile_DoubleClose_IsSafe(t *testing.T) {
 		defer close(done)
 		// Expect exactly one call to Close() and one to Release()
 		// If called again, the expectations will fail
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(nil)
 
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -428,18 +428,18 @@ func TestPooledSFTPFile_ErrorDuringRead_ClientStillReleasedOnClose(t *testing.T)
 	go func() {
 		defer close(done)
 		// Expect Read() to be called and return error
-		readCall := mockFile.Read.ExpectCalledWithMatches(imptest.Any())
+		readCall := mockFile.Method.Read.ExpectCalledWithMatches(imptest.Any())
 		readCall.InjectReturnValues(0, readErr)
 
 		// Expect Close() and Release() to still be called despite read error
-		closeCall := mockFile.Close.Eventually().ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.Eventually.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(nil)
 
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -483,33 +483,33 @@ func TestPooledSFTPFile_MultipleReadsWrites_WorkCorrectly(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect first write ("hello ")
-		write1 := mockFile.Write.Eventually().ExpectCalledWithMatches(imptest.Any())
+		write1 := mockFile.Method.Write.Eventually.ExpectCalledWithMatches(imptest.Any())
 		args1 := write1.GetArgs()
 		buffer = append(buffer, args1.P...)
 		write1.InjectReturnValues(len(args1.P), nil)
 
 		// Expect second write ("world")
-		write2 := mockFile.Write.Eventually().ExpectCalledWithMatches(imptest.Any())
+		write2 := mockFile.Method.Write.Eventually.ExpectCalledWithMatches(imptest.Any())
 		args2 := write2.GetArgs()
 		buffer = append(buffer, args2.P...)
 		write2.InjectReturnValues(len(args2.P), nil)
 
 		// Expect read - copy buffer to the read buffer
-		read1 := mockFile.Read.Eventually().ExpectCalledWithMatches(imptest.Any())
+		read1 := mockFile.Method.Read.Eventually.ExpectCalledWithMatches(imptest.Any())
 		readArgs := read1.GetArgs()
 		n := copy(readArgs.P, buffer)
 		read1.InjectReturnValues(n, nil)
 
 		// Expect Close from defer
-		close1 := mockFile.Close.Eventually().ExpectCalledWithExactly()
+		close1 := mockFile.Method.Close.Eventually.ExpectCalledWithExactly()
 		close1.InjectReturnValues(nil)
 
-		release1 := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		release1 := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		release1.InjectReturnValues()
 	}()
 
 	func() {
-		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+		pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 		if err != nil {
 			t.Fatalf("NewPooledSFTPFile failed: %v", err)
 		}
@@ -549,7 +549,7 @@ func TestPooledSFTPFile_NilSafety_NilClient(t *testing.T) {
 	mockFile := MockSftpFile(t)
 	mockPool := MockClientPool(t)
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), nil, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, nil, mockPool.Mock)
 	if err == nil {
 		t.Error("Should error on nil client")
 	}
@@ -565,7 +565,7 @@ func TestPooledSFTPFile_NilSafety_NilFile(t *testing.T) {
 	mockClient := &sftp.Client{}
 	mockPool := MockClientPool(t)
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(nil, mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(nil, mockClient, mockPool.Mock)
 	if err == nil {
 		t.Error("Should error on nil file")
 	}
@@ -581,7 +581,7 @@ func TestPooledSFTPFile_NilSafety_NilPool(t *testing.T) {
 	mockFile := MockSftpFile(t)
 	mockClient := &sftp.Client{}
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, nil)
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, nil)
 	if err == nil {
 		t.Error("Should error on nil pool")
 	}
@@ -602,15 +602,15 @@ func TestPooledSFTPFile_ReadWrite_AfterClose_ReturnsError(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Only expect Close() to be called
-		closeCall := mockFile.Close.ExpectCalledWithExactly()
+		closeCall := mockFile.Method.Close.ExpectCalledWithExactly()
 		closeCall.InjectReturnValues(nil)
 
-		releaseCall := mockPool.Release.Eventually().ExpectCalledWithMatches(imptest.Any())
+		releaseCall := mockPool.Method.Release.Eventually.ExpectCalledWithMatches(imptest.Any())
 		releaseCall.InjectReturnValues()
 		// Read() and Write() should NOT be called - pooled file should short-circuit
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -642,14 +642,14 @@ func TestPooledSFTPFile_Read_DelegatesToWrappedFile(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		readCall = mockFile.Read.ExpectCalledWithMatches(imptest.Any())
+		readCall = mockFile.Method.Read.ExpectCalledWithMatches(imptest.Any())
 		// Modify buffer (side effect) before returning
 		args := readCall.GetArgs()
 		copy(args.P, []byte("test data"))
 		readCall.InjectReturnValues(9, nil)
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -682,15 +682,15 @@ func TestPooledSFTPFile_Stat_DelegatesToWrappedFile(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Set up file Stat expectation
-		statCall := mockFile.Stat.ExpectCalledWithExactly()
-		statCall.InjectReturnValues(mockFileInfo.Interface(), nil)
+		statCall := mockFile.Method.Stat.ExpectCalledWithExactly()
+		statCall.InjectReturnValues(mockFileInfo.Mock, nil)
 
 		// Set up FileInfo mock expectations (test calls Name and Size)
-		mockFileInfo.Name.Eventually().ExpectCalledWithExactly().InjectReturnValues("test.txt")
-		mockFileInfo.Size.Eventually().ExpectCalledWithExactly().InjectReturnValues(int64(1024))
+		mockFileInfo.Method.Name.Eventually.ExpectCalledWithExactly().InjectReturnValues("test.txt")
+		mockFileInfo.Method.Size.Eventually.ExpectCalledWithExactly().InjectReturnValues(int64(1024))
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}
@@ -724,11 +724,11 @@ func TestPooledSFTPFile_Write_DelegatesToWrappedFile(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Accept any byte slice - we'll verify using GetArgs
-		writeCall = mockFile.Write.ExpectCalledWithMatches(imptest.Any())
+		writeCall = mockFile.Method.Write.ExpectCalledWithMatches(imptest.Any())
 		writeCall.InjectReturnValues(10, nil)
 	}()
 
-	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Interface(), mockClient, mockPool.Interface())
+	pooledFile, err := filesystem.NewPooledSFTPFile(mockFile.Mock, mockClient, mockPool.Mock)
 	if err != nil {
 		t.Fatalf("NewPooledSFTPFile failed: %v", err)
 	}

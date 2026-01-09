@@ -6,76 +6,128 @@ import (
 	_imptest "github.com/toejough/imptest/imptest"
 )
 
-// WrapEngineCloseLogReturnsReturn holds the return values from the wrapped function.
-type WrapEngineCloseLogReturnsReturn struct {
-}
-
-// WrapEngineCloseLogWrapper wraps a function for testing.
-type WrapEngineCloseLogWrapper struct {
+// WrapEngineCloseLogCallHandle represents a single call to the wrapped function.
+type WrapEngineCloseLogCallHandle struct {
 	*_imptest.CallableController[WrapEngineCloseLogReturnsReturn]
-	callable func()
+	controller        *_imptest.TargetController
+	pendingCompletion *_imptest.PendingCompletion
+	// Eventually is the async version of this call handle for registering non-blocking expectations.
+	Eventually *WrapEngineCloseLogCallHandleEventually
 }
 
 // ExpectCompletes verifies the function completes without panicking.
-func (w *WrapEngineCloseLogWrapper) ExpectCompletes() {
-	w.T.Helper()
-	w.WaitForResponse()
+func (h *WrapEngineCloseLogCallHandle) ExpectCompletes() {
+	h.T.Helper()
+	h.WaitForResponse()
 
-	if w.Panicked != nil {
-		w.T.Fatalf("expected function to complete, but it panicked with: %v", w.Panicked)
+	if h.Panicked != nil {
+		h.T.Fatalf("expected function to complete, but it panicked with: %v", h.Panicked)
 	}
 }
 
 // ExpectPanicEquals verifies the function panics with the expected value.
-func (w *WrapEngineCloseLogWrapper) ExpectPanicEquals(expected any) {
-	w.T.Helper()
-	w.WaitForResponse()
+func (h *WrapEngineCloseLogCallHandle) ExpectPanicEquals(expected any) {
+	h.T.Helper()
+	h.WaitForResponse()
 
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, expected)
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, expected)
 		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
+			h.T.Fatalf("panic value: %s", msg)
 		}
 		return
 	}
 
-	w.T.Fatalf("expected function to panic, but it returned")
+	h.T.Fatalf("expected function to panic, but it returned")
 }
 
 // ExpectPanicMatches verifies the function panics with a value matching the given matcher.
-func (w *WrapEngineCloseLogWrapper) ExpectPanicMatches(matcher any) {
-	w.T.Helper()
-	w.WaitForResponse()
+func (h *WrapEngineCloseLogCallHandle) ExpectPanicMatches(matcher any) {
+	h.T.Helper()
+	h.WaitForResponse()
 
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, matcher)
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, matcher)
 		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
+			h.T.Fatalf("panic value: %s", msg)
 		}
 		return
 	}
 
-	w.T.Fatalf("expected function to panic, but it returned")
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// WrapEngineCloseLogCallHandleEventually wraps a call handle for async expectation registration.
+type WrapEngineCloseLogCallHandleEventually struct {
+	h *WrapEngineCloseLogCallHandle
+}
+
+// ExpectPanicEquals registers an async expectation for a panic value.
+func (e *WrapEngineCloseLogCallHandleEventually) ExpectPanicEquals(value any) {
+	e.ensureStarted().ExpectPanicEquals(value)
+}
+
+// ExpectReturnsEqual registers an async expectation for return values.
+func (e *WrapEngineCloseLogCallHandleEventually) ExpectReturnsEqual(values ...any) {
+	e.ensureStarted().ExpectReturnsEqual(values...)
+}
+
+func (e *WrapEngineCloseLogCallHandleEventually) ensureStarted() *_imptest.PendingCompletion {
+	if e.h.pendingCompletion == nil {
+		e.h.pendingCompletion = e.h.controller.RegisterPendingCompletion()
+		go func() {
+			e.h.WaitForResponse()
+			e.h.pendingCompletion.SetCompleted(e.h.Returned, e.h.Panicked)
+		}()
+	}
+	return e.h.pendingCompletion
+}
+
+// WrapEngineCloseLogReturnsReturn holds the return values from the wrapped function.
+type WrapEngineCloseLogReturnsReturn struct {
+}
+
+// WrapEngineCloseLogWrapperHandle is the test handle for a wrapped function.
+type WrapEngineCloseLogWrapperHandle struct {
+	Method     *WrapEngineCloseLogWrapperMethod
+	Controller *_imptest.TargetController
+}
+
+// WrapEngineCloseLogWrapperMethod wraps a function for testing.
+type WrapEngineCloseLogWrapperMethod struct {
+	t          _imptest.TestReporter
+	controller *_imptest.TargetController
+	callable   func()
 }
 
 // Start executes the wrapped function in a goroutine.
-func (w *WrapEngineCloseLogWrapper) Start() *WrapEngineCloseLogWrapper {
+func (m *WrapEngineCloseLogWrapperMethod) Start() *WrapEngineCloseLogCallHandle {
+	handle := &WrapEngineCloseLogCallHandle{
+		CallableController: _imptest.NewCallableController[WrapEngineCloseLogReturnsReturn](m.t),
+		controller:         m.controller,
+	}
+	handle.Eventually = &WrapEngineCloseLogCallHandleEventually{h: handle}
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				w.PanicChan <- r
+				handle.PanicChan <- r
 			}
 		}()
-		w.callable()
-		w.ReturnChan <- WrapEngineCloseLogReturnsReturn{}
+		m.callable()
+		handle.ReturnChan <- WrapEngineCloseLogReturnsReturn{}
 	}()
-	return w
+	return handle
 }
 
 // WrapEngineCloseLog wraps a function for testing.
-func WrapEngineCloseLog(t _imptest.TestReporter, fn func()) *WrapEngineCloseLogWrapper {
-	return &WrapEngineCloseLogWrapper{
-		CallableController: _imptest.NewCallableController[WrapEngineCloseLogReturnsReturn](t),
-		callable:           fn,
+func WrapEngineCloseLog(t _imptest.TestReporter, fn func()) *WrapEngineCloseLogWrapperHandle {
+	ctrl := _imptest.NewTargetController(t)
+	return &WrapEngineCloseLogWrapperHandle{
+		Method: &WrapEngineCloseLogWrapperMethod{
+			t:          t,
+			controller: ctrl,
+			callable:   fn,
+		},
+		Controller: ctrl,
 	}
 }

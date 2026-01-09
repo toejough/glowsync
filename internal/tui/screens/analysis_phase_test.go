@@ -242,8 +242,8 @@ func TestQuickCheckZeroFiles(t *testing.T) {
 	// However, the engine stored the result in TotalFilesInSource
 	screen.lastUpdate = time.Now().Add(-time.Second)
 	engine.Status.AnalysisPhase = shared.PhaseCountingDest
-	engine.Status.ScannedFiles = 0               // Engine reset count for new phase
-	engine.Status.TotalFilesInSource = 500       // Engine stored the final count
+	engine.Status.ScannedFiles = 0         // Engine reset count for new phase
+	engine.Status.TotalFilesInSource = 500 // Engine stored the final count
 
 	model, _ = screen.Update(shared.TickMsg{})
 	screen = toAnalysisScreen(model)

@@ -8,108 +8,160 @@ import (
 	_reflect "reflect"
 )
 
+// WrapCopyFileCallHandle represents a single call to the wrapped function.
+type WrapCopyFileCallHandle struct {
+	*_imptest.CallableController[WrapCopyFileReturnsReturn]
+	controller        *_imptest.TargetController
+	pendingCompletion *_imptest.PendingCompletion
+	// Eventually is the async version of this call handle for registering non-blocking expectations.
+	Eventually *WrapCopyFileCallHandleEventually
+}
+
+// ExpectPanicEquals verifies the function panics with the expected value.
+func (h *WrapCopyFileCallHandle) ExpectPanicEquals(expected any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, expected)
+		if !ok {
+			h.T.Fatalf("panic value: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// ExpectPanicMatches verifies the function panics with a value matching the given matcher.
+func (h *WrapCopyFileCallHandle) ExpectPanicMatches(matcher any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, matcher)
+		if !ok {
+			h.T.Fatalf("panic value: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// ExpectReturnsEqual verifies the function returned the expected values.
+func (h *WrapCopyFileCallHandle) ExpectReturnsEqual(v0 int64, v1 error) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Returned != nil {
+		if !_reflect.DeepEqual(h.Returned.Result0, v0) {
+			h.T.Fatalf("expected return value 0 to be %v, got %v", v0, h.Returned.Result0)
+		}
+		if !_reflect.DeepEqual(h.Returned.Result1, v1) {
+			h.T.Fatalf("expected return value 1 to be %v, got %v", v1, h.Returned.Result1)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to return, but it panicked with: %v", h.Panicked)
+}
+
+// ExpectReturnsMatch verifies the return values match the given matchers.
+func (h *WrapCopyFileCallHandle) ExpectReturnsMatch(v0 any, v1 any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Returned != nil {
+		var ok bool
+		var msg string
+		ok, msg = _imptest.MatchValue(h.Returned.Result0, v0)
+		if !ok {
+			h.T.Fatalf("return value 0: %s", msg)
+		}
+		ok, msg = _imptest.MatchValue(h.Returned.Result1, v1)
+		if !ok {
+			h.T.Fatalf("return value 1: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to return, but it panicked with: %v", h.Panicked)
+}
+
+// WrapCopyFileCallHandleEventually wraps a call handle for async expectation registration.
+type WrapCopyFileCallHandleEventually struct {
+	h *WrapCopyFileCallHandle
+}
+
+// ExpectPanicEquals registers an async expectation for a panic value.
+func (e *WrapCopyFileCallHandleEventually) ExpectPanicEquals(value any) {
+	e.ensureStarted().ExpectPanicEquals(value)
+}
+
+// ExpectReturnsEqual registers an async expectation for return values.
+func (e *WrapCopyFileCallHandleEventually) ExpectReturnsEqual(values ...any) {
+	e.ensureStarted().ExpectReturnsEqual(values...)
+}
+
+func (e *WrapCopyFileCallHandleEventually) ensureStarted() *_imptest.PendingCompletion {
+	if e.h.pendingCompletion == nil {
+		e.h.pendingCompletion = e.h.controller.RegisterPendingCompletion()
+		go func() {
+			e.h.WaitForResponse()
+			e.h.pendingCompletion.SetCompleted(e.h.Returned, e.h.Panicked)
+		}()
+	}
+	return e.h.pendingCompletion
+}
+
 // WrapCopyFileReturnsReturn holds the return values from the wrapped function.
 type WrapCopyFileReturnsReturn struct {
 	Result0 int64
 	Result1 error
 }
 
-// WrapCopyFileWrapper wraps a function for testing.
-type WrapCopyFileWrapper struct {
-	*_imptest.CallableController[WrapCopyFileReturnsReturn]
-	callable func(string, string, fileops.ProgressCallback) (int64, error)
+// WrapCopyFileWrapperHandle is the test handle for a wrapped function.
+type WrapCopyFileWrapperHandle struct {
+	Method     *WrapCopyFileWrapperMethod
+	Controller *_imptest.TargetController
 }
 
-// ExpectPanicEquals verifies the function panics with the expected value.
-func (w *WrapCopyFileWrapper) ExpectPanicEquals(expected any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, expected)
-		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to panic, but it returned")
-}
-
-// ExpectPanicMatches verifies the function panics with a value matching the given matcher.
-func (w *WrapCopyFileWrapper) ExpectPanicMatches(matcher any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, matcher)
-		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to panic, but it returned")
-}
-
-// ExpectReturnsEqual verifies the function returned the expected values.
-func (w *WrapCopyFileWrapper) ExpectReturnsEqual(v0 int64, v1 error) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Returned != nil {
-		if !_reflect.DeepEqual(w.Returned.Result0, v0) {
-			w.T.Fatalf("expected return value 0 to be %v, got %v", v0, w.Returned.Result0)
-		}
-		if !_reflect.DeepEqual(w.Returned.Result1, v1) {
-			w.T.Fatalf("expected return value 1 to be %v, got %v", v1, w.Returned.Result1)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to return, but it panicked with: %v", w.Panicked)
-}
-
-// ExpectReturnsMatch verifies the return values match the given matchers.
-func (w *WrapCopyFileWrapper) ExpectReturnsMatch(v0 any, v1 any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Returned != nil {
-		var ok bool
-		var msg string
-		ok, msg = _imptest.MatchValue(w.Returned.Result0, v0)
-		if !ok {
-			w.T.Fatalf("return value 0: %s", msg)
-		}
-		ok, msg = _imptest.MatchValue(w.Returned.Result1, v1)
-		if !ok {
-			w.T.Fatalf("return value 1: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to return, but it panicked with: %v", w.Panicked)
+// WrapCopyFileWrapperMethod wraps a function for testing.
+type WrapCopyFileWrapperMethod struct {
+	t          _imptest.TestReporter
+	controller *_imptest.TargetController
+	callable   func(string, string, fileops.ProgressCallback) (int64, error)
 }
 
 // Start executes the wrapped function in a goroutine.
-func (w *WrapCopyFileWrapper) Start(src string, dst string, progress fileops.ProgressCallback) *WrapCopyFileWrapper {
+func (m *WrapCopyFileWrapperMethod) Start(src string, dst string, progress fileops.ProgressCallback) *WrapCopyFileCallHandle {
+	handle := &WrapCopyFileCallHandle{
+		CallableController: _imptest.NewCallableController[WrapCopyFileReturnsReturn](m.t),
+		controller:         m.controller,
+	}
+	handle.Eventually = &WrapCopyFileCallHandleEventually{h: handle}
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				w.PanicChan <- r
+				handle.PanicChan <- r
 			}
 		}()
-		ret0, ret1 := w.callable(src, dst, progress)
-		w.ReturnChan <- WrapCopyFileReturnsReturn{Result0: ret0, Result1: ret1}
+		ret0, ret1 := m.callable(src, dst, progress)
+		handle.ReturnChan <- WrapCopyFileReturnsReturn{Result0: ret0, Result1: ret1}
 	}()
-	return w
+	return handle
 }
 
 // WrapCopyFile wraps a function for testing.
-func WrapCopyFile(t _imptest.TestReporter, fn func(string, string, fileops.ProgressCallback) (int64, error)) *WrapCopyFileWrapper {
-	return &WrapCopyFileWrapper{
-		CallableController: _imptest.NewCallableController[WrapCopyFileReturnsReturn](t),
-		callable:           fn,
+func WrapCopyFile(t _imptest.TestReporter, fn func(string, string, fileops.ProgressCallback) (int64, error)) *WrapCopyFileWrapperHandle {
+	ctrl := _imptest.NewTargetController(t)
+	return &WrapCopyFileWrapperHandle{
+		Method: &WrapCopyFileWrapperMethod{
+			t:          t,
+			controller: ctrl,
+			callable:   fn,
+		},
+		Controller: ctrl,
 	}
 }

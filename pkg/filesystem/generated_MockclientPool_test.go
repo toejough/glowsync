@@ -8,19 +8,6 @@ import (
 	_imptest "github.com/toejough/imptest/imptest"
 )
 
-// ClientPoolMock is the mock for ClientPool.
-type ClientPoolMock struct {
-	imp     *_imptest.Imp
-	Acquire *_imptest.DependencyMethod
-	Release *ClientPoolMockReleaseMethod
-	Close   *_imptest.DependencyMethod
-}
-
-// Interface returns the ClientPool implementation that can be passed to code under test.
-func (m *ClientPoolMock) Interface() filesystem.ClientPool {
-	return &mockClientPoolImpl{mock: m}
-}
-
 // ClientPoolMockAcquireCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
 type ClientPoolMockAcquireCall struct {
 	*_imptest.DependencyCall
@@ -39,6 +26,20 @@ type ClientPoolMockCloseCall struct {
 // InjectReturnValues specifies the typed values the mock should return.
 func (c *ClientPoolMockCloseCall) InjectReturnValues(result0 error) {
 	c.DependencyCall.InjectReturnValues(result0)
+}
+
+// ClientPoolMockHandle is the test handle for ClientPool.
+type ClientPoolMockHandle struct {
+	Mock       filesystem.ClientPool
+	Method     *ClientPoolMockMethods
+	Controller *_imptest.Imp
+}
+
+// ClientPoolMockMethods holds method wrappers for setting expectations.
+type ClientPoolMockMethods struct {
+	Acquire *_imptest.DependencyMethod
+	Release *ClientPoolMockReleaseMethod
+	Close   *_imptest.DependencyMethod
 }
 
 // ClientPoolMockReleaseArgs holds typed arguments for Release.
@@ -62,13 +63,8 @@ func (c *ClientPoolMockReleaseCall) GetArgs() ClientPoolMockReleaseArgs {
 // ClientPoolMockReleaseMethod wraps DependencyMethod with typed returns.
 type ClientPoolMockReleaseMethod struct {
 	*_imptest.DependencyMethod
-}
-
-// Eventually switches to unordered mode for concurrent code.
-// Waits indefinitely for a matching call; mismatches are queued.
-// Returns typed wrapper preserving type-safe GetArgs() access.
-func (m *ClientPoolMockReleaseMethod) Eventually() *ClientPoolMockReleaseMethod {
-	return &ClientPoolMockReleaseMethod{DependencyMethod: m.DependencyMethod.Eventually()}
+	// Eventually is the async version of this method for concurrent code.
+	Eventually *ClientPoolMockReleaseMethod
 }
 
 // ExpectCalledWithExactly waits for a call with exactly the specified arguments.
@@ -83,20 +79,25 @@ func (m *ClientPoolMockReleaseMethod) ExpectCalledWithMatches(matchers ...any) *
 	return &ClientPoolMockReleaseCall{DependencyCall: call}
 }
 
-// MockClientPool creates a new ClientPoolMock for testing.
-func MockClientPool(t _imptest.TestReporter) *ClientPoolMock {
-	imp := _imptest.NewImp(t)
-	return &ClientPoolMock{
-		imp:     imp,
-		Acquire: _imptest.NewDependencyMethod(imp, "Acquire"),
-		Release: &ClientPoolMockReleaseMethod{DependencyMethod: _imptest.NewDependencyMethod(imp, "Release")},
-		Close:   _imptest.NewDependencyMethod(imp, "Close"),
+// MockClientPool creates a new ClientPoolMockHandle for testing.
+func MockClientPool(t _imptest.TestReporter) *ClientPoolMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &ClientPoolMockMethods{
+		Acquire: _imptest.NewDependencyMethod(ctrl, "Acquire"),
+		Release: newClientPoolMockReleaseMethod(_imptest.NewDependencyMethod(ctrl, "Release")),
+		Close:   _imptest.NewDependencyMethod(ctrl, "Close"),
 	}
+	h := &ClientPoolMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockClientPoolImpl{handle: h}
+	return h
 }
 
 // mockClientPoolImpl implements filesystem.ClientPool.
 type mockClientPoolImpl struct {
-	mock *ClientPoolMock
+	handle *ClientPoolMockHandle
 }
 
 // Acquire implements filesystem.ClientPool.Acquire.
@@ -106,7 +107,7 @@ func (impl *mockClientPoolImpl) Acquire() (*sftp.Client, error) {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -136,7 +137,7 @@ func (impl *mockClientPoolImpl) Close() error {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -159,10 +160,17 @@ func (impl *mockClientPoolImpl) Release(client *sftp.Client) {
 		Args:         []any{client},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
 	}
 
+}
+
+// newClientPoolMockReleaseMethod creates a typed method wrapper with Eventually initialized.
+func newClientPoolMockReleaseMethod(dm *_imptest.DependencyMethod) *ClientPoolMockReleaseMethod {
+	m := &ClientPoolMockReleaseMethod{DependencyMethod: dm}
+	m.Eventually = &ClientPoolMockReleaseMethod{DependencyMethod: dm.Eventually}
+	return m
 }

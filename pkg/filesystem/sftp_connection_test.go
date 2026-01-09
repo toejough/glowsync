@@ -74,7 +74,7 @@ func TestSFTPConnection_Connect_ConfigurationIsValid(t *testing.T) {
 	mockDialer := MockSSHDialer(t)
 
 	// Inject mock dialer
-	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Interface())
+	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Mock)
 	t.Cleanup(cleanup)
 
 	// Set up expectations in goroutine (imptest V2 pattern)
@@ -83,7 +83,7 @@ func TestSFTPConnection_Connect_ConfigurationIsValid(t *testing.T) {
 	go func() {
 		defer close(done)
 		close(ready) // Signal that goroutine has started
-		mockDialer.Dial.ExpectCalledWithMatches(
+		mockDialer.Method.Dial.ExpectCalledWithMatches(
 			imptest.Any(), // network
 			imptest.Any(), // addr
 			imptest.Any(), // config
@@ -126,7 +126,7 @@ func TestSFTPConnection_Connect_UsesMaxPacket64KB(t *testing.T) {
 	mockDialer := MockSSHDialer(t)
 
 	// Inject mock dialer
-	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Interface())
+	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Mock)
 	t.Cleanup(cleanup)
 
 	// Set up expectations in goroutine (imptest V2 pattern)
@@ -135,7 +135,7 @@ func TestSFTPConnection_Connect_UsesMaxPacket64KB(t *testing.T) {
 	go func() {
 		defer close(done)
 		close(ready) // Signal that goroutine has started
-		mockDialer.Dial.ExpectCalledWithMatches(
+		mockDialer.Method.Dial.ExpectCalledWithMatches(
 			imptest.Any(), // network
 			imptest.Any(), // addr
 			imptest.Any(), // config
@@ -175,7 +175,7 @@ func TestSFTPConnection_Connect_WithConcurrentWritesOption_NoConfigurationError(
 	mockDialer := MockSSHDialer(t)
 
 	// Inject mock dialer
-	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Interface())
+	cleanup := filesystem.SetSSHDialerForTesting(mockDialer.Mock)
 	t.Cleanup(cleanup)
 
 	// Set up expectations in goroutine (imptest V2 pattern)
@@ -184,7 +184,7 @@ func TestSFTPConnection_Connect_WithConcurrentWritesOption_NoConfigurationError(
 	go func() {
 		defer close(done)
 		close(ready) // Signal that goroutine has started
-		mockDialer.Dial.ExpectCalledWithMatches(
+		mockDialer.Method.Dial.ExpectCalledWithMatches(
 			imptest.Any(), // network
 			imptest.Any(), // addr
 			imptest.Any(), // config

@@ -7,100 +7,152 @@ import (
 	_reflect "reflect"
 )
 
+// WrapEngineEnableFileLoggingCallHandle represents a single call to the wrapped function.
+type WrapEngineEnableFileLoggingCallHandle struct {
+	*_imptest.CallableController[WrapEngineEnableFileLoggingReturnsReturn]
+	controller        *_imptest.TargetController
+	pendingCompletion *_imptest.PendingCompletion
+	// Eventually is the async version of this call handle for registering non-blocking expectations.
+	Eventually *WrapEngineEnableFileLoggingCallHandleEventually
+}
+
+// ExpectPanicEquals verifies the function panics with the expected value.
+func (h *WrapEngineEnableFileLoggingCallHandle) ExpectPanicEquals(expected any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, expected)
+		if !ok {
+			h.T.Fatalf("panic value: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// ExpectPanicMatches verifies the function panics with a value matching the given matcher.
+func (h *WrapEngineEnableFileLoggingCallHandle) ExpectPanicMatches(matcher any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Panicked != nil {
+		ok, msg := _imptest.MatchValue(h.Panicked, matcher)
+		if !ok {
+			h.T.Fatalf("panic value: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to panic, but it returned")
+}
+
+// ExpectReturnsEqual verifies the function returned the expected values.
+func (h *WrapEngineEnableFileLoggingCallHandle) ExpectReturnsEqual(v0 error) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Returned != nil {
+		if !_reflect.DeepEqual(h.Returned.Result0, v0) {
+			h.T.Fatalf("expected return value 0 to be %v, got %v", v0, h.Returned.Result0)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to return, but it panicked with: %v", h.Panicked)
+}
+
+// ExpectReturnsMatch verifies the return values match the given matchers.
+func (h *WrapEngineEnableFileLoggingCallHandle) ExpectReturnsMatch(v0 any) {
+	h.T.Helper()
+	h.WaitForResponse()
+
+	if h.Returned != nil {
+		var ok bool
+		var msg string
+		ok, msg = _imptest.MatchValue(h.Returned.Result0, v0)
+		if !ok {
+			h.T.Fatalf("return value 0: %s", msg)
+		}
+		return
+	}
+
+	h.T.Fatalf("expected function to return, but it panicked with: %v", h.Panicked)
+}
+
+// WrapEngineEnableFileLoggingCallHandleEventually wraps a call handle for async expectation registration.
+type WrapEngineEnableFileLoggingCallHandleEventually struct {
+	h *WrapEngineEnableFileLoggingCallHandle
+}
+
+// ExpectPanicEquals registers an async expectation for a panic value.
+func (e *WrapEngineEnableFileLoggingCallHandleEventually) ExpectPanicEquals(value any) {
+	e.ensureStarted().ExpectPanicEquals(value)
+}
+
+// ExpectReturnsEqual registers an async expectation for return values.
+func (e *WrapEngineEnableFileLoggingCallHandleEventually) ExpectReturnsEqual(values ...any) {
+	e.ensureStarted().ExpectReturnsEqual(values...)
+}
+
+func (e *WrapEngineEnableFileLoggingCallHandleEventually) ensureStarted() *_imptest.PendingCompletion {
+	if e.h.pendingCompletion == nil {
+		e.h.pendingCompletion = e.h.controller.RegisterPendingCompletion()
+		go func() {
+			e.h.WaitForResponse()
+			e.h.pendingCompletion.SetCompleted(e.h.Returned, e.h.Panicked)
+		}()
+	}
+	return e.h.pendingCompletion
+}
+
 // WrapEngineEnableFileLoggingReturnsReturn holds the return values from the wrapped function.
 type WrapEngineEnableFileLoggingReturnsReturn struct {
 	Result0 error
 }
 
-// WrapEngineEnableFileLoggingWrapper wraps a function for testing.
-type WrapEngineEnableFileLoggingWrapper struct {
-	*_imptest.CallableController[WrapEngineEnableFileLoggingReturnsReturn]
-	callable func(string) error
+// WrapEngineEnableFileLoggingWrapperHandle is the test handle for a wrapped function.
+type WrapEngineEnableFileLoggingWrapperHandle struct {
+	Method     *WrapEngineEnableFileLoggingWrapperMethod
+	Controller *_imptest.TargetController
 }
 
-// ExpectPanicEquals verifies the function panics with the expected value.
-func (w *WrapEngineEnableFileLoggingWrapper) ExpectPanicEquals(expected any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, expected)
-		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to panic, but it returned")
-}
-
-// ExpectPanicMatches verifies the function panics with a value matching the given matcher.
-func (w *WrapEngineEnableFileLoggingWrapper) ExpectPanicMatches(matcher any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Panicked != nil {
-		ok, msg := _imptest.MatchValue(w.Panicked, matcher)
-		if !ok {
-			w.T.Fatalf("panic value: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to panic, but it returned")
-}
-
-// ExpectReturnsEqual verifies the function returned the expected values.
-func (w *WrapEngineEnableFileLoggingWrapper) ExpectReturnsEqual(v0 error) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Returned != nil {
-		if !_reflect.DeepEqual(w.Returned.Result0, v0) {
-			w.T.Fatalf("expected return value 0 to be %v, got %v", v0, w.Returned.Result0)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to return, but it panicked with: %v", w.Panicked)
-}
-
-// ExpectReturnsMatch verifies the return values match the given matchers.
-func (w *WrapEngineEnableFileLoggingWrapper) ExpectReturnsMatch(v0 any) {
-	w.T.Helper()
-	w.WaitForResponse()
-
-	if w.Returned != nil {
-		var ok bool
-		var msg string
-		ok, msg = _imptest.MatchValue(w.Returned.Result0, v0)
-		if !ok {
-			w.T.Fatalf("return value 0: %s", msg)
-		}
-		return
-	}
-
-	w.T.Fatalf("expected function to return, but it panicked with: %v", w.Panicked)
+// WrapEngineEnableFileLoggingWrapperMethod wraps a function for testing.
+type WrapEngineEnableFileLoggingWrapperMethod struct {
+	t          _imptest.TestReporter
+	controller *_imptest.TargetController
+	callable   func(string) error
 }
 
 // Start executes the wrapped function in a goroutine.
-func (w *WrapEngineEnableFileLoggingWrapper) Start(logPath string) *WrapEngineEnableFileLoggingWrapper {
+func (m *WrapEngineEnableFileLoggingWrapperMethod) Start(logPath string) *WrapEngineEnableFileLoggingCallHandle {
+	handle := &WrapEngineEnableFileLoggingCallHandle{
+		CallableController: _imptest.NewCallableController[WrapEngineEnableFileLoggingReturnsReturn](m.t),
+		controller:         m.controller,
+	}
+	handle.Eventually = &WrapEngineEnableFileLoggingCallHandleEventually{h: handle}
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				w.PanicChan <- r
+				handle.PanicChan <- r
 			}
 		}()
-		ret0 := w.callable(logPath)
-		w.ReturnChan <- WrapEngineEnableFileLoggingReturnsReturn{Result0: ret0}
+		ret0 := m.callable(logPath)
+		handle.ReturnChan <- WrapEngineEnableFileLoggingReturnsReturn{Result0: ret0}
 	}()
-	return w
+	return handle
 }
 
 // WrapEngineEnableFileLogging wraps a function for testing.
-func WrapEngineEnableFileLogging(t _imptest.TestReporter, fn func(string) error) *WrapEngineEnableFileLoggingWrapper {
-	return &WrapEngineEnableFileLoggingWrapper{
-		CallableController: _imptest.NewCallableController[WrapEngineEnableFileLoggingReturnsReturn](t),
-		callable:           fn,
+func WrapEngineEnableFileLogging(t _imptest.TestReporter, fn func(string) error) *WrapEngineEnableFileLoggingWrapperHandle {
+	ctrl := _imptest.NewTargetController(t)
+	return &WrapEngineEnableFileLoggingWrapperHandle{
+		Method: &WrapEngineEnableFileLoggingWrapperMethod{
+			t:          t,
+			controller: ctrl,
+			callable:   fn,
+		},
+		Controller: ctrl,
 	}
 }

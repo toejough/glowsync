@@ -71,13 +71,13 @@ func TestSFTPConnection_Close_BothClientsSucceed(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		mockSFTP.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
-		mockSSH.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
+		mockSFTP.Method.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
+		mockSSH.Method.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	conn := &SFTPConnection{
-		sshClient:  mockSSH.Interface(),
-		sftpClient: mockSFTP.Interface(),
+		sshClient:  mockSSH.Mock,
+		sftpClient: mockSFTP.Mock,
 	}
 
 	err := conn.Close()
@@ -101,13 +101,13 @@ func TestSFTPConnection_Close_BothFail(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		mockSFTP.Close.ExpectCalledWithExactly().InjectReturnValues(sftpErr)
-		mockSSH.Close.ExpectCalledWithExactly().InjectReturnValues(sshErr)
+		mockSFTP.Method.Close.ExpectCalledWithExactly().InjectReturnValues(sftpErr)
+		mockSSH.Method.Close.ExpectCalledWithExactly().InjectReturnValues(sshErr)
 	}()
 
 	conn := &SFTPConnection{
-		sshClient:  mockSSH.Interface(),
-		sftpClient: mockSFTP.Interface(),
+		sshClient:  mockSSH.Mock,
+		sftpClient: mockSFTP.Mock,
 	}
 
 	err := conn.Close()
@@ -131,13 +131,13 @@ func TestSFTPConnection_Close_SFTPClientFails(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		mockSFTP.Close.ExpectCalledWithExactly().InjectReturnValues(sftpErr)
-		mockSSH.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
+		mockSFTP.Method.Close.ExpectCalledWithExactly().InjectReturnValues(sftpErr)
+		mockSSH.Method.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	conn := &SFTPConnection{
-		sshClient:  mockSSH.Interface(),
-		sftpClient: mockSFTP.Interface(),
+		sshClient:  mockSSH.Mock,
+		sftpClient: mockSFTP.Mock,
 	}
 
 	err := conn.Close()
@@ -160,13 +160,13 @@ func TestSFTPConnection_Close_SSHClientFails(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		mockSFTP.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
-		mockSSH.Close.ExpectCalledWithExactly().InjectReturnValues(sshErr)
+		mockSFTP.Method.Close.ExpectCalledWithExactly().InjectReturnValues(nil)
+		mockSSH.Method.Close.ExpectCalledWithExactly().InjectReturnValues(sshErr)
 	}()
 
 	conn := &SFTPConnection{
-		sshClient:  mockSSH.Interface(),
-		sftpClient: mockSFTP.Interface(),
+		sshClient:  mockSSH.Mock,
+		sftpClient: mockSFTP.Mock,
 	}
 
 	err := conn.Close()

@@ -8,16 +8,17 @@ import (
 	time "time"
 )
 
-// TimeProviderMock is the mock for TimeProvider.
-type TimeProviderMock struct {
-	imp       *_imptest.Imp
-	Now       *_imptest.DependencyMethod
-	NewTicker *TimeProviderMockNewTickerMethod
+// TimeProviderMockHandle is the test handle for TimeProvider.
+type TimeProviderMockHandle struct {
+	Mock       syncengine.TimeProvider
+	Method     *TimeProviderMockMethods
+	Controller *_imptest.Imp
 }
 
-// Interface returns the TimeProvider implementation that can be passed to code under test.
-func (m *TimeProviderMock) Interface() syncengine.TimeProvider {
-	return &mockTimeProviderImpl{mock: m}
+// TimeProviderMockMethods holds method wrappers for setting expectations.
+type TimeProviderMockMethods struct {
+	Now       *_imptest.DependencyMethod
+	NewTicker *TimeProviderMockNewTickerMethod
 }
 
 // TimeProviderMockNewTickerArgs holds typed arguments for NewTicker.
@@ -46,13 +47,8 @@ func (c *TimeProviderMockNewTickerCall) InjectReturnValues(result0 syncengine.Ti
 // TimeProviderMockNewTickerMethod wraps DependencyMethod with typed returns.
 type TimeProviderMockNewTickerMethod struct {
 	*_imptest.DependencyMethod
-}
-
-// Eventually switches to unordered mode for concurrent code.
-// Waits indefinitely for a matching call; mismatches are queued.
-// Returns typed wrapper preserving type-safe GetArgs() access.
-func (m *TimeProviderMockNewTickerMethod) Eventually() *TimeProviderMockNewTickerMethod {
-	return &TimeProviderMockNewTickerMethod{DependencyMethod: m.DependencyMethod.Eventually()}
+	// Eventually is the async version of this method for concurrent code.
+	Eventually *TimeProviderMockNewTickerMethod
 }
 
 // ExpectCalledWithExactly waits for a call with exactly the specified arguments.
@@ -77,19 +73,24 @@ func (c *TimeProviderMockNowCall) InjectReturnValues(result0 time.Time) {
 	c.DependencyCall.InjectReturnValues(result0)
 }
 
-// MockTimeProvider creates a new TimeProviderMock for testing.
-func MockTimeProvider(t _imptest.TestReporter) *TimeProviderMock {
-	imp := _imptest.NewImp(t)
-	return &TimeProviderMock{
-		imp:       imp,
-		Now:       _imptest.NewDependencyMethod(imp, "Now"),
-		NewTicker: &TimeProviderMockNewTickerMethod{DependencyMethod: _imptest.NewDependencyMethod(imp, "NewTicker")},
+// MockTimeProvider creates a new TimeProviderMockHandle for testing.
+func MockTimeProvider(t _imptest.TestReporter) *TimeProviderMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &TimeProviderMockMethods{
+		Now:       _imptest.NewDependencyMethod(ctrl, "Now"),
+		NewTicker: newTimeProviderMockNewTickerMethod(_imptest.NewDependencyMethod(ctrl, "NewTicker")),
 	}
+	h := &TimeProviderMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockTimeProviderImpl{handle: h}
+	return h
 }
 
 // mockTimeProviderImpl implements syncengine.TimeProvider.
 type mockTimeProviderImpl struct {
-	mock *TimeProviderMock
+	handle *TimeProviderMockHandle
 }
 
 // NewTicker implements syncengine.TimeProvider.NewTicker.
@@ -99,7 +100,7 @@ func (impl *mockTimeProviderImpl) NewTicker(d time.Duration) syncengine.Ticker {
 		Args:         []any{d},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -122,7 +123,7 @@ func (impl *mockTimeProviderImpl) Now() time.Time {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -136,4 +137,11 @@ func (impl *mockTimeProviderImpl) Now() time.Time {
 	}
 
 	return result1
+}
+
+// newTimeProviderMockNewTickerMethod creates a typed method wrapper with Eventually initialized.
+func newTimeProviderMockNewTickerMethod(dm *_imptest.DependencyMethod) *TimeProviderMockNewTickerMethod {
+	m := &TimeProviderMockNewTickerMethod{DependencyMethod: dm}
+	m.Eventually = &TimeProviderMockNewTickerMethod{DependencyMethod: dm.Eventually}
+	return m
 }

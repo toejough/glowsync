@@ -7,18 +7,6 @@ import (
 	_imptest "github.com/toejough/imptest/imptest"
 )
 
-// FileScannerMock is the mock for FileScanner.
-type FileScannerMock struct {
-	imp  *_imptest.Imp
-	Next *_imptest.DependencyMethod
-	Err  *_imptest.DependencyMethod
-}
-
-// Interface returns the FileScanner implementation that can be passed to code under test.
-func (m *FileScannerMock) Interface() filesystem.FileScanner {
-	return &mockFileScannerImpl{mock: m}
-}
-
 // FileScannerMockErrCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
 type FileScannerMockErrCall struct {
 	*_imptest.DependencyCall
@@ -27,6 +15,19 @@ type FileScannerMockErrCall struct {
 // InjectReturnValues specifies the typed values the mock should return.
 func (c *FileScannerMockErrCall) InjectReturnValues(result0 error) {
 	c.DependencyCall.InjectReturnValues(result0)
+}
+
+// FileScannerMockHandle is the test handle for FileScanner.
+type FileScannerMockHandle struct {
+	Mock       filesystem.FileScanner
+	Method     *FileScannerMockMethods
+	Controller *_imptest.Imp
+}
+
+// FileScannerMockMethods holds method wrappers for setting expectations.
+type FileScannerMockMethods struct {
+	Next *_imptest.DependencyMethod
+	Err  *_imptest.DependencyMethod
 }
 
 // FileScannerMockNextCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
@@ -39,19 +40,24 @@ func (c *FileScannerMockNextCall) InjectReturnValues(result0 filesystem.FileInfo
 	c.DependencyCall.InjectReturnValues(result0, result1)
 }
 
-// MockFileScanner creates a new FileScannerMock for testing.
-func MockFileScanner(t _imptest.TestReporter) *FileScannerMock {
-	imp := _imptest.NewImp(t)
-	return &FileScannerMock{
-		imp:  imp,
-		Next: _imptest.NewDependencyMethod(imp, "Next"),
-		Err:  _imptest.NewDependencyMethod(imp, "Err"),
+// MockFileScanner creates a new FileScannerMockHandle for testing.
+func MockFileScanner(t _imptest.TestReporter) *FileScannerMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &FileScannerMockMethods{
+		Next: _imptest.NewDependencyMethod(ctrl, "Next"),
+		Err:  _imptest.NewDependencyMethod(ctrl, "Err"),
 	}
+	h := &FileScannerMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockFileScannerImpl{handle: h}
+	return h
 }
 
 // mockFileScannerImpl implements filesystem.FileScanner.
 type mockFileScannerImpl struct {
-	mock *FileScannerMock
+	handle *FileScannerMockHandle
 }
 
 // Err implements filesystem.FileScanner.Err.
@@ -61,7 +67,7 @@ func (impl *mockFileScannerImpl) Err() error {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -84,7 +90,7 @@ func (impl *mockFileScannerImpl) Next() (filesystem.FileInfo, bool) {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)

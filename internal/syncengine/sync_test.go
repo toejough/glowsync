@@ -36,7 +36,7 @@ func TestAdaptiveScalingDecrementsDesiredWorkers(t *testing.T) {
 
 	// Create mock ResizablePool and inject it as source filesystem using test helper
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desiredWorkers to 5 using test helper
 	engine.SetDesiredWorkers(5)
@@ -46,7 +46,7 @@ func TestAdaptiveScalingDecrementsDesiredWorkers(t *testing.T) {
 	go func() {
 		// Expect ResizePool to be called with 4 (decremented from 5)
 		// Use Eventually() for async expectations (blocking call)
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(4)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(4)
 		resizeCall.InjectReturnValues() // ResizePool returns nothing
 	}()
 
@@ -57,7 +57,7 @@ func TestAdaptiveScalingDecrementsDesiredWorkers(t *testing.T) {
 	// This should:
 	// 1. Detect speed drop (50000 / 1000000 = 0.05 ratio < 0.98 threshold)
 	// 2. Decrement desiredWorkers from 5 to 4
-	// 3. Call resizePools(4) which calls mockPool.ResizePool(4)
+	// 3. Call resizePools(4) which calls mockPool.Method.ResizePool(4)
 	// 4. NOT send to workerControl channel (scaling down, not up)
 	engine.MakeScalingDecision(
 		1000000.0, // lastPerWorkerSpeed: 1 MB/s per worker
@@ -101,12 +101,12 @@ func TestAdaptiveScalingWithMockedTime(t *testing.T) {
 	analyzeStartTime := time.Now()
 	go func() {
 		// Expect first Now() call (AnalysisStartTime initialization)
-		nowCall1 := timeMock.Now.Eventually().ExpectCalledWithExactly()
+		nowCall1 := timeMock.Method.Now.Eventually.ExpectCalledWithExactly()
 		nowCall1.InjectReturnValues(analyzeStartTime)
 
 		// Expect subsequent Now() calls during progress callbacks (up to 40 total - 20 files x 2 scans)
 		for range 40 {
-			nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+			nowCall := timeMock.Method.Now.Eventually.ExpectCalledWithExactly()
 			nowCall.InjectReturnValues(analyzeStartTime.Add(100 * time.Millisecond)) // Simulate some elapsed time
 		}
 	}()
@@ -291,24 +291,24 @@ func TestEngineAnalyze(t *testing.T) {
 	scannerMock := MockFileScanner(t)
 
 	engine := mustNewEngine(t, "/source", "/dest")
-	engine.FileOps = fileops.NewFileOps(fsMock.Interface())
+	engine.FileOps = fileops.NewFileOps(fsMock.Mock)
 
 	// Set up expectations in a goroutine
 	go func() {
 		// Expect Scan call for source directory
-		fsMock.Scan.ExpectCalledWithExactly("/source").InjectReturnValues(scannerMock.Interface())
+		fsMock.Method.Scan.ExpectCalledWithExactly("/source").InjectReturnValues(scannerMock.Mock)
 
 		// Return empty directory (no files)
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
-		scannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		scannerMock.Method.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 
 		// Expect Scan call for dest directory
 		destScannerMock := MockFileScanner(t)
-		fsMock.Scan.ExpectCalledWithExactly("/dest").InjectReturnValues(destScannerMock.Interface())
+		fsMock.Method.Scan.ExpectCalledWithExactly("/dest").InjectReturnValues(destScannerMock.Mock)
 
 		// Return empty directory (no files)
-		destScannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
-		destScannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
+		destScannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		destScannerMock.Method.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	// Call Analyze
@@ -1065,7 +1065,7 @@ func TestHandleCopyError(t *testing.T) {
 
 	// Now replace FileOps with a mock that returns an error
 	fsMock := MockFileSystem(t)
-	mockFileOps := fileops.NewFileOps(fsMock.Interface())
+	mockFileOps := fileops.NewFileOps(fsMock.Mock)
 	engine.FileOps = mockFileOps
 
 	// Set up the mock to return an error when opening the source file
@@ -1075,7 +1075,7 @@ func TestHandleCopyError(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Expect Open call for the source file
-		fsMock.Open.ExpectCalledWithExactly(testFile).InjectReturnValues(nil, errors.New("mock error: permission denied"))
+		fsMock.Method.Open.ExpectCalledWithExactly(testFile).InjectReturnValues(nil, errors.New("mock error: permission denied"))
 	}()
 
 	// Give the goroutine a moment to set up the expectation
@@ -1213,7 +1213,7 @@ func TestHillClimbingScalingDecision_DirectionContinuity(t *testing.T) {
 
 	// Create mock and inject
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desired workers state
 	engine.SetDesiredWorkers(2)
@@ -1236,7 +1236,7 @@ func TestHillClimbingScalingDecision_DirectionContinuity(t *testing.T) {
 
 	// Set up async expectation for ResizePool(3)
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(3)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(3)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1272,7 +1272,7 @@ func TestHillClimbingScalingDecision_DirectionReversal(t *testing.T) {
 
 	// Create mock and inject
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desired workers state
 	engine.SetDesiredWorkers(3)
@@ -1294,7 +1294,7 @@ func TestHillClimbingScalingDecision_DirectionReversal(t *testing.T) {
 
 	// Set up async expectation for ResizePool(2)
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(2)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(2)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1330,14 +1330,14 @@ func TestHillClimbingScalingDecision_InitialBehavior(t *testing.T) {
 
 	// Create mock ResizablePool and inject it
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desiredWorkers to 1
 	engine.SetDesiredWorkers(1)
 
 	// Set up async expectation handler - expect ResizePool(2) after increment
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(2)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(2)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1392,7 +1392,7 @@ func TestHillClimbingScalingDecision_RemovalContinuity(t *testing.T) {
 
 	// Create mock and inject
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desired workers to 4
 	engine.SetDesiredWorkers(4)
@@ -1416,7 +1416,7 @@ func TestHillClimbingScalingDecision_RemovalContinuity(t *testing.T) {
 
 	// Set up async expectation for ResizePool(3)
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(3)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(3)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1454,7 +1454,7 @@ func TestHillClimbingScalingDecision_ThroughputDegraded(t *testing.T) {
 
 	// Create mock and inject
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desired workers state
 	engine.SetDesiredWorkers(3)
@@ -1477,7 +1477,7 @@ func TestHillClimbingScalingDecision_ThroughputDegraded(t *testing.T) {
 
 	// Set up async expectation for ResizePool(2)
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(2)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(2)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1573,7 +1573,7 @@ func TestHillClimbingScalingDecision_ThroughputImproved(t *testing.T) {
 
 	// Create mock and inject
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desired workers state
 	engine.SetDesiredWorkers(2)
@@ -1596,7 +1596,7 @@ func TestHillClimbingScalingDecision_ThroughputImproved(t *testing.T) {
 
 	// Set up async expectation for ResizePool(3)
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(3)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(3)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1634,7 +1634,7 @@ func TestHillClimbingScalingDecision_TotalThroughputCalculation(t *testing.T) {
 
 	// Create mock and inject
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desired workers to 4
 	engine.SetDesiredWorkers(4)
@@ -1661,7 +1661,7 @@ func TestHillClimbingScalingDecision_TotalThroughputCalculation(t *testing.T) {
 
 	// Set up async expectation for ResizePool(5)
 	go func() {
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(5)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(5)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1734,7 +1734,7 @@ func TestMakeScalingDecision_CallsResizePools_OnWorkerDecrease(t *testing.T) {
 
 	// Create mock ResizablePool and inject it
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desiredWorkers to 5 using test helper
 	engine.SetDesiredWorkers(5)
@@ -1742,7 +1742,7 @@ func TestMakeScalingDecision_CallsResizePools_OnWorkerDecrease(t *testing.T) {
 	// Set up async expectation handler in goroutine
 	go func() {
 		// Expect ResizePool to be called with 4 (decremented from 5)
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(4)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(4)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1786,7 +1786,7 @@ func TestMakeScalingDecision_CallsResizePools_OnWorkerIncrease(t *testing.T) {
 
 	// Create mock ResizablePool and inject it
 	mockPool := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool.Interface())
+	engine.SetSourceResizable(mockPool.Mock)
 
 	// Initialize desiredWorkers to 2 using test helper
 	engine.SetDesiredWorkers(2)
@@ -1794,7 +1794,7 @@ func TestMakeScalingDecision_CallsResizePools_OnWorkerIncrease(t *testing.T) {
 	// Set up async expectation handler in goroutine
 	go func() {
 		// Expect ResizePool to be called with 3 (incremented from 2)
-		resizeCall := mockPool.ResizePool.Eventually().ExpectCalledWithExactly(3)
+		resizeCall := mockPool.Method.ResizePool.Eventually.ExpectCalledWithExactly(3)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1846,13 +1846,13 @@ func TestMakeScalingDecision_WidenedThresholds(t *testing.T) {
 
 	// Test Case 1: Speed ratio 0.85 (< 0.90) - should scale DOWN (decrement desiredWorkers)
 	mockPool1 := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool1.Interface())
+	engine.SetSourceResizable(mockPool1.Mock)
 	engine.SetDesiredWorkers(5)
 
 	// Set up async expectation for Test Case 1
 	go func() {
 		// Expect ResizePool(4) - decremented from 5
-		resizeCall := mockPool1.ResizePool.Eventually().ExpectCalledWithExactly(4)
+		resizeCall := mockPool1.Method.ResizePool.Eventually.ExpectCalledWithExactly(4)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1876,13 +1876,13 @@ func TestMakeScalingDecision_WidenedThresholds(t *testing.T) {
 
 	// Test Case 2: Speed ratio 0.95 (between 0.90-1.10) - should scale UP (stable/improving)
 	mockPool2 := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool2.Interface())
+	engine.SetSourceResizable(mockPool2.Mock)
 	engine.SetDesiredWorkers(3)
 
 	// Set up async expectation for Test Case 2
 	go func() {
 		// Expect ResizePool(4) - incremented from 3
-		resizeCall := mockPool2.ResizePool.Eventually().ExpectCalledWithExactly(4)
+		resizeCall := mockPool2.Method.ResizePool.Eventually.ExpectCalledWithExactly(4)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1906,13 +1906,13 @@ func TestMakeScalingDecision_WidenedThresholds(t *testing.T) {
 
 	// Test Case 3: Speed ratio 1.15 (> 1.10) - should scale UP (significant improvement)
 	mockPool3 := MockResizablePool(t)
-	engine.SetSourceResizable(mockPool3.Interface())
+	engine.SetSourceResizable(mockPool3.Mock)
 	engine.SetDesiredWorkers(2)
 
 	// Set up async expectation for Test Case 3
 	go func() {
 		// Expect ResizePool(3) - incremented from 2
-		resizeCall := mockPool3.ResizePool.Eventually().ExpectCalledWithExactly(3)
+		resizeCall := mockPool3.Method.ResizePool.Eventually.ExpectCalledWithExactly(3)
 		resizeCall.InjectReturnValues()
 	}()
 
@@ -1943,14 +1943,14 @@ func TestMockResizablePool_AllMethodsAvailable(t *testing.T) {
 	mock := MockResizablePool(t)
 
 	// Verify mock object has all method mocks
-	g.Expect(mock.ResizePool).ShouldNot(BeNil(), "ResizePool mock should exist")
-	g.Expect(mock.PoolSize).ShouldNot(BeNil(), "PoolSize mock should exist")
-	g.Expect(mock.PoolTargetSize).ShouldNot(BeNil(), "PoolTargetSize mock should exist")
-	g.Expect(mock.PoolMinSize).ShouldNot(BeNil(), "PoolMinSize mock should exist")
-	g.Expect(mock.PoolMaxSize).ShouldNot(BeNil(), "PoolMaxSize mock should exist")
+	g.Expect(mock.Method.ResizePool).ShouldNot(BeNil(), "ResizePool mock should exist")
+	g.Expect(mock.Method.PoolSize).ShouldNot(BeNil(), "PoolSize mock should exist")
+	g.Expect(mock.Method.PoolTargetSize).ShouldNot(BeNil(), "PoolTargetSize mock should exist")
+	g.Expect(mock.Method.PoolMinSize).ShouldNot(BeNil(), "PoolMinSize mock should exist")
+	g.Expect(mock.Method.PoolMaxSize).ShouldNot(BeNil(), "PoolMaxSize mock should exist")
 
 	// Verify Interface() returns ResizablePool
-	pool := mock.Interface()
+	pool := mock.Mock
 	g.Expect(pool).ShouldNot(BeNil(), "Interface() should return ResizablePool")
 }
 
@@ -2605,14 +2605,14 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 
 	// Create mocked TimeProvider
 	timeMock := MockTimeProvider(t)
-	engine.TimeProvider = timeMock.Interface()
+	engine.TimeProvider = timeMock.Mock
 
 	// Run Analyze
 	go func() {
 		// Expect Analyze phase Now() calls
 		analyzeTime := time.Now()
 		for range 50 {
-			nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+			nowCall := timeMock.Method.Now.Eventually.ExpectCalledWithExactly()
 			nowCall.InjectReturnValues(analyzeTime)
 		}
 	}()
@@ -2634,7 +2634,7 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 
 	go func() {
 		// Expect NewTicker call
-		tickerCall := timeMock.NewTicker.Eventually().ExpectCalledWithExactly(1 * time.Second)
+		tickerCall := timeMock.Method.NewTicker.Eventually.ExpectCalledWithExactly(1 * time.Second)
 		mockTicker := &syncengine.MockTicker{TickChan: tickerChan}
 		tickerCall.InjectReturnValues(mockTicker)
 
@@ -2648,7 +2648,7 @@ func TestSyncAdaptive_EvaluatesEvery10Seconds(t *testing.T) {
 				currentTime = currentTime.Add(100 * time.Millisecond)
 
 				// Provide Now() for evaluation check
-				nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+				nowCall := timeMock.Method.Now.Eventually.ExpectCalledWithExactly()
 				nowCall.InjectReturnValues(currentTime)
 
 				// Send tick
@@ -2803,10 +2803,10 @@ func mustNewEngine(t *testing.T, source, dest string) *syncengine.Engine {
 }
 
 // runMockTimeProvider starts a goroutine to handle mock time expectations
-func runMockTimeProvider(timeMock *TimeProviderMock, tickerChan chan time.Time, done chan struct{}) {
+func runMockTimeProvider(timeMock *TimeProviderMockHandle, tickerChan chan time.Time, done chan struct{}) {
 	go func() {
 		// Expect NewTicker call
-		call := timeMock.NewTicker.Eventually().ExpectCalledWithExactly(1 * time.Second)
+		call := timeMock.Method.NewTicker.Eventually.ExpectCalledWithExactly(1 * time.Second)
 
 		// Create a mock ticker
 		mockTicker := &syncengine.MockTicker{
@@ -2824,7 +2824,7 @@ func runMockTimeProvider(timeMock *TimeProviderMock, tickerChan chan time.Time, 
 			select {
 			case <-ticker.C:
 				// Expect Now() call
-				nowCall := timeMock.Now.Eventually().ExpectCalledWithExactly()
+				nowCall := timeMock.Method.Now.Eventually.ExpectCalledWithExactly()
 				nowCall.InjectReturnValues(currentTime)
 				currentTime = currentTime.Add(1 * time.Second)
 
@@ -2841,7 +2841,7 @@ func runMockTimeProvider(timeMock *TimeProviderMock, tickerChan chan time.Time, 
 }
 
 // setupAdaptiveEngine creates and configures an engine with adaptive mode
-func setupAdaptiveEngine(sourceDir, destDir string, timeMock *TimeProviderMock) *syncengine.Engine {
+func setupAdaptiveEngine(sourceDir, destDir string, timeMock *TimeProviderMockHandle) *syncengine.Engine {
 	engine, err := syncengine.NewEngine(sourceDir, destDir)
 	if err != nil {
 		panic(fmt.Sprintf("NewEngine failed: %v", err))
@@ -2849,7 +2849,7 @@ func setupAdaptiveEngine(sourceDir, destDir string, timeMock *TimeProviderMock) 
 	engine.Workers = 0 // 0 means adaptive mode
 	engine.AdaptiveMode = true
 	engine.FileOps = fileops.NewRealFileOps()
-	engine.TimeProvider = timeMock.Interface()
+	engine.TimeProvider = timeMock.Mock
 
 	return engine
 }

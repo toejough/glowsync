@@ -8,17 +8,6 @@ import (
 	ssh "golang.org/x/crypto/ssh"
 )
 
-// SSHDialerMock is the mock for SSHDialer.
-type SSHDialerMock struct {
-	imp  *_imptest.Imp
-	Dial *SSHDialerMockDialMethod
-}
-
-// Interface returns the SSHDialer implementation that can be passed to code under test.
-func (m *SSHDialerMock) Interface() filesystem.SSHDialer {
-	return &mockSSHDialerImpl{mock: m}
-}
-
 // SSHDialerMockDialArgs holds typed arguments for Dial.
 type SSHDialerMockDialArgs struct {
 	Network string
@@ -49,13 +38,8 @@ func (c *SSHDialerMockDialCall) InjectReturnValues(result0 *ssh.Client, result1 
 // SSHDialerMockDialMethod wraps DependencyMethod with typed returns.
 type SSHDialerMockDialMethod struct {
 	*_imptest.DependencyMethod
-}
-
-// Eventually switches to unordered mode for concurrent code.
-// Waits indefinitely for a matching call; mismatches are queued.
-// Returns typed wrapper preserving type-safe GetArgs() access.
-func (m *SSHDialerMockDialMethod) Eventually() *SSHDialerMockDialMethod {
-	return &SSHDialerMockDialMethod{DependencyMethod: m.DependencyMethod.Eventually()}
+	// Eventually is the async version of this method for concurrent code.
+	Eventually *SSHDialerMockDialMethod
 }
 
 // ExpectCalledWithExactly waits for a call with exactly the specified arguments.
@@ -70,18 +54,35 @@ func (m *SSHDialerMockDialMethod) ExpectCalledWithMatches(matchers ...any) *SSHD
 	return &SSHDialerMockDialCall{DependencyCall: call}
 }
 
-// MockSSHDialer creates a new SSHDialerMock for testing.
-func MockSSHDialer(t _imptest.TestReporter) *SSHDialerMock {
-	imp := _imptest.NewImp(t)
-	return &SSHDialerMock{
-		imp:  imp,
-		Dial: &SSHDialerMockDialMethod{DependencyMethod: _imptest.NewDependencyMethod(imp, "Dial")},
+// SSHDialerMockHandle is the test handle for SSHDialer.
+type SSHDialerMockHandle struct {
+	Mock       filesystem.SSHDialer
+	Method     *SSHDialerMockMethods
+	Controller *_imptest.Imp
+}
+
+// SSHDialerMockMethods holds method wrappers for setting expectations.
+type SSHDialerMockMethods struct {
+	Dial *SSHDialerMockDialMethod
+}
+
+// MockSSHDialer creates a new SSHDialerMockHandle for testing.
+func MockSSHDialer(t _imptest.TestReporter) *SSHDialerMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &SSHDialerMockMethods{
+		Dial: newSSHDialerMockDialMethod(_imptest.NewDependencyMethod(ctrl, "Dial")),
 	}
+	h := &SSHDialerMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockSSHDialerImpl{handle: h}
+	return h
 }
 
 // mockSSHDialerImpl implements filesystem.SSHDialer.
 type mockSSHDialerImpl struct {
-	mock *SSHDialerMock
+	handle *SSHDialerMockHandle
 }
 
 // Dial implements filesystem.SSHDialer.Dial.
@@ -91,7 +92,7 @@ func (impl *mockSSHDialerImpl) Dial(network string, addr string, config *ssh.Cli
 		Args:         []any{network, addr, config},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -112,4 +113,11 @@ func (impl *mockSSHDialerImpl) Dial(network string, addr string, config *ssh.Cli
 	}
 
 	return result1, result2
+}
+
+// newSSHDialerMockDialMethod creates a typed method wrapper with Eventually initialized.
+func newSSHDialerMockDialMethod(dm *_imptest.DependencyMethod) *SSHDialerMockDialMethod {
+	m := &SSHDialerMockDialMethod{DependencyMethod: dm}
+	m.Eventually = &SSHDialerMockDialMethod{DependencyMethod: dm.Eventually}
+	return m
 }

@@ -7,19 +7,20 @@ import (
 	_imptest "github.com/toejough/imptest/imptest"
 )
 
-// ResizablePoolMock is the mock for ResizablePool.
-type ResizablePoolMock struct {
-	imp            *_imptest.Imp
+// ResizablePoolMockHandle is the test handle for ResizablePool.
+type ResizablePoolMockHandle struct {
+	Mock       filesystem.ResizablePool
+	Method     *ResizablePoolMockMethods
+	Controller *_imptest.Imp
+}
+
+// ResizablePoolMockMethods holds method wrappers for setting expectations.
+type ResizablePoolMockMethods struct {
 	ResizePool     *ResizablePoolMockResizePoolMethod
 	PoolSize       *_imptest.DependencyMethod
 	PoolTargetSize *_imptest.DependencyMethod
 	PoolMinSize    *_imptest.DependencyMethod
 	PoolMaxSize    *_imptest.DependencyMethod
-}
-
-// Interface returns the ResizablePool implementation that can be passed to code under test.
-func (m *ResizablePoolMock) Interface() filesystem.ResizablePool {
-	return &mockResizablePoolImpl{mock: m}
 }
 
 // ResizablePoolMockPoolMaxSizeCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
@@ -83,13 +84,8 @@ func (c *ResizablePoolMockResizePoolCall) GetArgs() ResizablePoolMockResizePoolA
 // ResizablePoolMockResizePoolMethod wraps DependencyMethod with typed returns.
 type ResizablePoolMockResizePoolMethod struct {
 	*_imptest.DependencyMethod
-}
-
-// Eventually switches to unordered mode for concurrent code.
-// Waits indefinitely for a matching call; mismatches are queued.
-// Returns typed wrapper preserving type-safe GetArgs() access.
-func (m *ResizablePoolMockResizePoolMethod) Eventually() *ResizablePoolMockResizePoolMethod {
-	return &ResizablePoolMockResizePoolMethod{DependencyMethod: m.DependencyMethod.Eventually()}
+	// Eventually is the async version of this method for concurrent code.
+	Eventually *ResizablePoolMockResizePoolMethod
 }
 
 // ExpectCalledWithExactly waits for a call with exactly the specified arguments.
@@ -104,22 +100,27 @@ func (m *ResizablePoolMockResizePoolMethod) ExpectCalledWithMatches(matchers ...
 	return &ResizablePoolMockResizePoolCall{DependencyCall: call}
 }
 
-// MockResizablePool creates a new ResizablePoolMock for testing.
-func MockResizablePool(t _imptest.TestReporter) *ResizablePoolMock {
-	imp := _imptest.NewImp(t)
-	return &ResizablePoolMock{
-		imp:            imp,
-		ResizePool:     &ResizablePoolMockResizePoolMethod{DependencyMethod: _imptest.NewDependencyMethod(imp, "ResizePool")},
-		PoolSize:       _imptest.NewDependencyMethod(imp, "PoolSize"),
-		PoolTargetSize: _imptest.NewDependencyMethod(imp, "PoolTargetSize"),
-		PoolMinSize:    _imptest.NewDependencyMethod(imp, "PoolMinSize"),
-		PoolMaxSize:    _imptest.NewDependencyMethod(imp, "PoolMaxSize"),
+// MockResizablePool creates a new ResizablePoolMockHandle for testing.
+func MockResizablePool(t _imptest.TestReporter) *ResizablePoolMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &ResizablePoolMockMethods{
+		ResizePool:     newResizablePoolMockResizePoolMethod(_imptest.NewDependencyMethod(ctrl, "ResizePool")),
+		PoolSize:       _imptest.NewDependencyMethod(ctrl, "PoolSize"),
+		PoolTargetSize: _imptest.NewDependencyMethod(ctrl, "PoolTargetSize"),
+		PoolMinSize:    _imptest.NewDependencyMethod(ctrl, "PoolMinSize"),
+		PoolMaxSize:    _imptest.NewDependencyMethod(ctrl, "PoolMaxSize"),
 	}
+	h := &ResizablePoolMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockResizablePoolImpl{handle: h}
+	return h
 }
 
 // mockResizablePoolImpl implements filesystem.ResizablePool.
 type mockResizablePoolImpl struct {
-	mock *ResizablePoolMock
+	handle *ResizablePoolMockHandle
 }
 
 // PoolMaxSize implements filesystem.ResizablePool.PoolMaxSize.
@@ -129,7 +130,7 @@ func (impl *mockResizablePoolImpl) PoolMaxSize() int {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -152,7 +153,7 @@ func (impl *mockResizablePoolImpl) PoolMinSize() int {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -175,7 +176,7 @@ func (impl *mockResizablePoolImpl) PoolSize() int {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -198,7 +199,7 @@ func (impl *mockResizablePoolImpl) PoolTargetSize() int {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -221,10 +222,17 @@ func (impl *mockResizablePoolImpl) ResizePool(targetSize int) {
 		Args:         []any{targetSize},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
 	}
 
+}
+
+// newResizablePoolMockResizePoolMethod creates a typed method wrapper with Eventually initialized.
+func newResizablePoolMockResizePoolMethod(dm *_imptest.DependencyMethod) *ResizablePoolMockResizePoolMethod {
+	m := &ResizablePoolMockResizePoolMethod{DependencyMethod: dm}
+	m.Eventually = &ResizablePoolMockResizePoolMethod{DependencyMethod: dm.Eventually}
+	return m
 }

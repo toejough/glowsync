@@ -6,17 +6,6 @@ import (
 	_imptest "github.com/toejough/imptest/imptest"
 )
 
-// SFTPClientCloserMock is the mock for SFTPClientCloser.
-type SFTPClientCloserMock struct {
-	imp   *_imptest.Imp
-	Close *_imptest.DependencyMethod
-}
-
-// Interface returns the SFTPClientCloser implementation that can be passed to code under test.
-func (m *SFTPClientCloserMock) Interface() SFTPClientCloser {
-	return &mockSFTPClientCloserImpl{mock: m}
-}
-
 // SFTPClientCloserMockCloseCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
 type SFTPClientCloserMockCloseCall struct {
 	*_imptest.DependencyCall
@@ -27,18 +16,35 @@ func (c *SFTPClientCloserMockCloseCall) InjectReturnValues(result0 error) {
 	c.DependencyCall.InjectReturnValues(result0)
 }
 
-// MockSFTPClientCloser creates a new SFTPClientCloserMock for testing.
-func MockSFTPClientCloser(t _imptest.TestReporter) *SFTPClientCloserMock {
-	imp := _imptest.NewImp(t)
-	return &SFTPClientCloserMock{
-		imp:   imp,
-		Close: _imptest.NewDependencyMethod(imp, "Close"),
+// SFTPClientCloserMockHandle is the test handle for SFTPClientCloser.
+type SFTPClientCloserMockHandle struct {
+	Mock       SFTPClientCloser
+	Method     *SFTPClientCloserMockMethods
+	Controller *_imptest.Imp
+}
+
+// SFTPClientCloserMockMethods holds method wrappers for setting expectations.
+type SFTPClientCloserMockMethods struct {
+	Close *_imptest.DependencyMethod
+}
+
+// MockSFTPClientCloser creates a new SFTPClientCloserMockHandle for testing.
+func MockSFTPClientCloser(t _imptest.TestReporter) *SFTPClientCloserMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &SFTPClientCloserMockMethods{
+		Close: _imptest.NewDependencyMethod(ctrl, "Close"),
 	}
+	h := &SFTPClientCloserMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockSFTPClientCloserImpl{handle: h}
+	return h
 }
 
 // mockSFTPClientCloserImpl implements SFTPClientCloser.
 type mockSFTPClientCloserImpl struct {
-	mock *SFTPClientCloserMock
+	handle *SFTPClientCloserMockHandle
 }
 
 // Close implements SFTPClientCloser.Close.
@@ -48,7 +54,7 @@ func (impl *mockSFTPClientCloserImpl) Close() error {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)

@@ -6,17 +6,6 @@ import (
 	_imptest "github.com/toejough/imptest/imptest"
 )
 
-// SSHClientCloserMock is the mock for SSHClientCloser.
-type SSHClientCloserMock struct {
-	imp   *_imptest.Imp
-	Close *_imptest.DependencyMethod
-}
-
-// Interface returns the SSHClientCloser implementation that can be passed to code under test.
-func (m *SSHClientCloserMock) Interface() SSHClientCloser {
-	return &mockSSHClientCloserImpl{mock: m}
-}
-
 // SSHClientCloserMockCloseCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
 type SSHClientCloserMockCloseCall struct {
 	*_imptest.DependencyCall
@@ -27,18 +16,35 @@ func (c *SSHClientCloserMockCloseCall) InjectReturnValues(result0 error) {
 	c.DependencyCall.InjectReturnValues(result0)
 }
 
-// MockSSHClientCloser creates a new SSHClientCloserMock for testing.
-func MockSSHClientCloser(t _imptest.TestReporter) *SSHClientCloserMock {
-	imp := _imptest.NewImp(t)
-	return &SSHClientCloserMock{
-		imp:   imp,
-		Close: _imptest.NewDependencyMethod(imp, "Close"),
+// SSHClientCloserMockHandle is the test handle for SSHClientCloser.
+type SSHClientCloserMockHandle struct {
+	Mock       SSHClientCloser
+	Method     *SSHClientCloserMockMethods
+	Controller *_imptest.Imp
+}
+
+// SSHClientCloserMockMethods holds method wrappers for setting expectations.
+type SSHClientCloserMockMethods struct {
+	Close *_imptest.DependencyMethod
+}
+
+// MockSSHClientCloser creates a new SSHClientCloserMockHandle for testing.
+func MockSSHClientCloser(t _imptest.TestReporter) *SSHClientCloserMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &SSHClientCloserMockMethods{
+		Close: _imptest.NewDependencyMethod(ctrl, "Close"),
 	}
+	h := &SSHClientCloserMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockSSHClientCloserImpl{handle: h}
+	return h
 }
 
 // mockSSHClientCloserImpl implements SSHClientCloser.
 type mockSSHClientCloserImpl struct {
-	mock *SSHClientCloserMock
+	handle *SSHClientCloserMockHandle
 }
 
 // Close implements SSHClientCloser.Close.
@@ -48,7 +54,7 @@ func (impl *mockSSHClientCloserImpl) Close() error {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)

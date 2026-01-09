@@ -12,7 +12,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.25.3
 	github.com/onsi/gomega v1.38.3
 	github.com/pkg/sftp v1.13.10
-	github.com/toejough/imptest v0.0.0-20260101042338-551eb715673a
+	github.com/toejough/imptest v0.0.0-20260109064308-93303fa65717
 	golang.org/x/crypto v0.46.0
 	golang.org/x/term v0.38.0
 )

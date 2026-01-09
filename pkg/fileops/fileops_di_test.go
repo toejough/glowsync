@@ -20,21 +20,21 @@ func TestCountFiles(t *testing.T) {
 
 	fsMock := MockFileSystem(t)
 	scannerMock := MockFileScanner(t)
-	ops := fileops.NewFileOps(fsMock.Interface())
+	ops := fileops.NewFileOps(fsMock.Mock)
 
 	// Set up expectations in a goroutine
 	go func() {
 		// Expect Scan call
-		fsMock.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Interface())
+		fsMock.Method.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Mock)
 
 		// Expect Next calls - return 3 files then done
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "file1.txt", IsDir: false}, true) //nolint:lll // Test expectation with inline struct
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "file2.txt", IsDir: false}, true) //nolint:lll // Test expectation with inline struct
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "dir1", IsDir: true}, true)       //nolint:lll // Test expectation with inline struct
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "file1.txt", IsDir: false}, true) //nolint:lll // Test expectation with inline struct
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "file2.txt", IsDir: false}, true) //nolint:lll // Test expectation with inline struct
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "dir1", IsDir: true}, true)       //nolint:lll // Test expectation with inline struct
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
 
 		// Expect Err call
-		scannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
+		scannerMock.Method.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	// Call CountFiles
@@ -51,7 +51,7 @@ func TestCountFilesWithProgress(t *testing.T) {
 
 	fsMock := MockFileSystem(t)
 	scannerMock := MockFileScanner(t)
-	ops := fileops.NewFileOps(fsMock.Interface())
+	ops := fileops.NewFileOps(fsMock.Mock)
 
 	progressCalls := 0
 	progressCallback := func(_ string, _ int) {
@@ -61,17 +61,17 @@ func TestCountFilesWithProgress(t *testing.T) {
 	// Set up expectations in a goroutine
 	go func() {
 		// Expect Scan call
-		fsMock.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Interface())
+		fsMock.Method.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Mock)
 
 		// Expect Next calls - return 10 files to trigger progress callback
 		for range 10 {
-			scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "file.txt", IsDir: false}, true) //nolint:lll // Test expectation with inline struct
+			scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{RelativePath: "file.txt", IsDir: false}, true) //nolint:lll // Test expectation with inline struct
 		}
 
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
 
 		// Expect Err call
-		scannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
+		scannerMock.Method.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	// Call CountFilesWithProgress
@@ -246,30 +246,30 @@ func TestFileOpsScanDirectory(t *testing.T) {
 
 	fsMock := MockFileSystem(t)
 	scannerMock := MockFileScanner(t)
-	ops := fileops.NewFileOps(fsMock.Interface())
+	ops := fileops.NewFileOps(fsMock.Mock)
 
 	// Set up expectations in a goroutine
 	go func() {
 		// Expect Scan call
-		fsMock.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Interface())
+		fsMock.Method.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Mock)
 
 		// Expect Next calls - return 2 files then done
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
 			RelativePath: "file1.txt",
 			Size:         100,
 			ModTime:      time.Now(),
 			IsDir:        false,
 		}, true)
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
 			RelativePath: "file2.txt",
 			Size:         200,
 			ModTime:      time.Now(),
 			IsDir:        false,
 		}, true)
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
 
 		// Expect Err call
-		scannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
+		scannerMock.Method.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	// Call ScanDirectory
@@ -290,7 +290,7 @@ func TestFileOpsScanDirectoryWithProgress(t *testing.T) {
 
 	fsMock := MockFileSystem(t)
 	scannerMock := MockFileScanner(t)
-	ops := fileops.NewFileOps(fsMock.Interface())
+	ops := fileops.NewFileOps(fsMock.Mock)
 
 	progressCalls := 0
 	progressCallback := func(_ string, _, _ int, _ int64) {
@@ -300,25 +300,25 @@ func TestFileOpsScanDirectoryWithProgress(t *testing.T) {
 	// Set up expectations in a goroutine
 	go func() {
 		// Expect Scan call
-		fsMock.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Interface())
+		fsMock.Method.Scan.ExpectCalledWithExactly("/test").InjectReturnValues(scannerMock.Mock)
 
 		// Expect Next calls - return 2 files then done
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
 			RelativePath: "file1.txt",
 			Size:         100,
 			ModTime:      time.Now(),
 			IsDir:        false,
 		}, true)
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{
 			RelativePath: "file2.txt",
 			Size:         200,
 			ModTime:      time.Now(),
 			IsDir:        false,
 		}, true)
-		scannerMock.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
+		scannerMock.Method.Next.ExpectCalledWithExactly().InjectReturnValues(filesystem.FileInfo{}, false)
 
 		// Expect Err call
-		scannerMock.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
+		scannerMock.Method.Err.ExpectCalledWithExactly().InjectReturnValues(nil)
 	}()
 
 	// Call ScanDirectoryWithProgress

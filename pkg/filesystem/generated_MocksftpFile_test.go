@@ -8,20 +8,6 @@ import (
 	os "os"
 )
 
-// SftpFileMock is the mock for SftpFile.
-type SftpFileMock struct {
-	imp   *_imptest.Imp
-	Read  *SftpFileMockReadMethod
-	Write *SftpFileMockWriteMethod
-	Close *_imptest.DependencyMethod
-	Stat  *_imptest.DependencyMethod
-}
-
-// Interface returns the SftpFile implementation that can be passed to code under test.
-func (m *SftpFileMock) Interface() filesystem.SftpFile {
-	return &mockSftpFileImpl{mock: m}
-}
-
 // SftpFileMockCloseCall wraps DependencyCall with typed GetArgs and InjectReturnValues.
 type SftpFileMockCloseCall struct {
 	*_imptest.DependencyCall
@@ -30,6 +16,21 @@ type SftpFileMockCloseCall struct {
 // InjectReturnValues specifies the typed values the mock should return.
 func (c *SftpFileMockCloseCall) InjectReturnValues(result0 error) {
 	c.DependencyCall.InjectReturnValues(result0)
+}
+
+// SftpFileMockHandle is the test handle for SftpFile.
+type SftpFileMockHandle struct {
+	Mock       filesystem.SftpFile
+	Method     *SftpFileMockMethods
+	Controller *_imptest.Imp
+}
+
+// SftpFileMockMethods holds method wrappers for setting expectations.
+type SftpFileMockMethods struct {
+	Read  *SftpFileMockReadMethod
+	Write *SftpFileMockWriteMethod
+	Close *_imptest.DependencyMethod
+	Stat  *_imptest.DependencyMethod
 }
 
 // SftpFileMockReadArgs holds typed arguments for Read.
@@ -58,13 +59,8 @@ func (c *SftpFileMockReadCall) InjectReturnValues(result0 int, result1 error) {
 // SftpFileMockReadMethod wraps DependencyMethod with typed returns.
 type SftpFileMockReadMethod struct {
 	*_imptest.DependencyMethod
-}
-
-// Eventually switches to unordered mode for concurrent code.
-// Waits indefinitely for a matching call; mismatches are queued.
-// Returns typed wrapper preserving type-safe GetArgs() access.
-func (m *SftpFileMockReadMethod) Eventually() *SftpFileMockReadMethod {
-	return &SftpFileMockReadMethod{DependencyMethod: m.DependencyMethod.Eventually()}
+	// Eventually is the async version of this method for concurrent code.
+	Eventually *SftpFileMockReadMethod
 }
 
 // ExpectCalledWithExactly waits for a call with exactly the specified arguments.
@@ -115,13 +111,8 @@ func (c *SftpFileMockWriteCall) InjectReturnValues(result0 int, result1 error) {
 // SftpFileMockWriteMethod wraps DependencyMethod with typed returns.
 type SftpFileMockWriteMethod struct {
 	*_imptest.DependencyMethod
-}
-
-// Eventually switches to unordered mode for concurrent code.
-// Waits indefinitely for a matching call; mismatches are queued.
-// Returns typed wrapper preserving type-safe GetArgs() access.
-func (m *SftpFileMockWriteMethod) Eventually() *SftpFileMockWriteMethod {
-	return &SftpFileMockWriteMethod{DependencyMethod: m.DependencyMethod.Eventually()}
+	// Eventually is the async version of this method for concurrent code.
+	Eventually *SftpFileMockWriteMethod
 }
 
 // ExpectCalledWithExactly waits for a call with exactly the specified arguments.
@@ -136,21 +127,26 @@ func (m *SftpFileMockWriteMethod) ExpectCalledWithMatches(matchers ...any) *Sftp
 	return &SftpFileMockWriteCall{DependencyCall: call}
 }
 
-// MockSftpFile creates a new SftpFileMock for testing.
-func MockSftpFile(t _imptest.TestReporter) *SftpFileMock {
-	imp := _imptest.NewImp(t)
-	return &SftpFileMock{
-		imp:   imp,
-		Read:  &SftpFileMockReadMethod{DependencyMethod: _imptest.NewDependencyMethod(imp, "Read")},
-		Write: &SftpFileMockWriteMethod{DependencyMethod: _imptest.NewDependencyMethod(imp, "Write")},
-		Close: _imptest.NewDependencyMethod(imp, "Close"),
-		Stat:  _imptest.NewDependencyMethod(imp, "Stat"),
+// MockSftpFile creates a new SftpFileMockHandle for testing.
+func MockSftpFile(t _imptest.TestReporter) *SftpFileMockHandle {
+	ctrl := _imptest.NewImp(t)
+	methods := &SftpFileMockMethods{
+		Read:  newSftpFileMockReadMethod(_imptest.NewDependencyMethod(ctrl, "Read")),
+		Write: newSftpFileMockWriteMethod(_imptest.NewDependencyMethod(ctrl, "Write")),
+		Close: _imptest.NewDependencyMethod(ctrl, "Close"),
+		Stat:  _imptest.NewDependencyMethod(ctrl, "Stat"),
 	}
+	h := &SftpFileMockHandle{
+		Method:     methods,
+		Controller: ctrl,
+	}
+	h.Mock = &mockSftpFileImpl{handle: h}
+	return h
 }
 
 // mockSftpFileImpl implements filesystem.SftpFile.
 type mockSftpFileImpl struct {
-	mock *SftpFileMock
+	handle *SftpFileMockHandle
 }
 
 // Close implements filesystem.SftpFile.Close.
@@ -160,7 +156,7 @@ func (impl *mockSftpFileImpl) Close() error {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -183,7 +179,7 @@ func (impl *mockSftpFileImpl) Read(p []byte) (int, error) {
 		Args:         []any{p},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -213,7 +209,7 @@ func (impl *mockSftpFileImpl) Stat() (os.FileInfo, error) {
 		Args:         []any{},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -243,7 +239,7 @@ func (impl *mockSftpFileImpl) Write(p []byte) (int, error) {
 		Args:         []any{p},
 		ResponseChan: make(chan _imptest.GenericResponse, 1),
 	}
-	impl.mock.imp.CallChan <- call
+	impl.handle.Controller.CallChan <- call
 	resp := <-call.ResponseChan
 	if resp.Type == "panic" {
 		panic(resp.PanicValue)
@@ -264,4 +260,18 @@ func (impl *mockSftpFileImpl) Write(p []byte) (int, error) {
 	}
 
 	return result1, result2
+}
+
+// newSftpFileMockReadMethod creates a typed method wrapper with Eventually initialized.
+func newSftpFileMockReadMethod(dm *_imptest.DependencyMethod) *SftpFileMockReadMethod {
+	m := &SftpFileMockReadMethod{DependencyMethod: dm}
+	m.Eventually = &SftpFileMockReadMethod{DependencyMethod: dm.Eventually}
+	return m
+}
+
+// newSftpFileMockWriteMethod creates a typed method wrapper with Eventually initialized.
+func newSftpFileMockWriteMethod(dm *_imptest.DependencyMethod) *SftpFileMockWriteMethod {
+	m := &SftpFileMockWriteMethod{DependencyMethod: dm}
+	m.Eventually = &SftpFileMockWriteMethod{DependencyMethod: dm.Eventually}
+	return m
 }
