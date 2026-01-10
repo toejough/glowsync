@@ -77,6 +77,7 @@ type Engine struct {
 	Verbose         bool              // Enable verbose progress logging
 	FileOps         *fileops.FileOps  // File operations (for dependency injection)
 	TimeProvider    TimeProvider      // Time provider (for dependency injection)
+	emitter         EventEmitter      // Event emitter for TUI communication (optional)
 	statusCallbacks []func(*Status)
 	mu              sync.RWMutex
 	cancelChan      chan struct{} // Channel to signal cancellation
@@ -124,6 +125,17 @@ func NewEngine(source, dest string) (*Engine, error) {
 	}
 
 	return engine, nil
+}
+
+// SetEventEmitter sets the event emitter for TUI communication.
+// The emitter is optional - if nil, no events will be emitted.
+func (e *Engine) SetEventEmitter(emitter EventEmitter) {
+	e.emitter = emitter
+}
+
+// GetEventEmitter returns the current event emitter.
+func (e *Engine) GetEventEmitter() EventEmitter {
+	return e.emitter
 }
 
 // Analyze scans source and destination to determine what needs to be synced
