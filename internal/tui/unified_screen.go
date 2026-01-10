@@ -161,7 +161,14 @@ func (u *UnifiedScreen) View() string {
 		sections = append(sections, u.renderSummarySection())
 	}
 
-	content := strings.Join(sections, "\n\n")
+	// Filter out empty sections before joining to avoid extra spacing
+	var nonEmpty []string
+	for _, s := range sections {
+		if s != "" {
+			nonEmpty = append(nonEmpty, s)
+		}
+	}
+	content := strings.Join(nonEmpty, "\n\n")
 	return shared.RenderBox(content, u.width, u.height)
 }
 

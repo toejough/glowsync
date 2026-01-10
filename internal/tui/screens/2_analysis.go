@@ -39,14 +39,13 @@ type AnalysisScreen struct {
 	destPhases   []completedPhase // Counting phases for dest
 	otherPhases  []string         // Scanning, comparing, etc.
 	seenPhases   map[string]int   // Track occurrences for context labels
-	lastPhase    string           // Last seen phase (for status display)
 
 	// Event-based state (replaces polling-based state)
-	eventBridge      *shared.EventBridge   // Bridge for engine events
+	eventBridge       *shared.EventBridge  // Bridge for engine events
 	currentScanTarget string               // Current scan target from events
-	sourceFileCount  int                   // Source file count from ScanComplete event
-	destFileCount    int                   // Dest file count from ScanComplete event
-	syncPlan         *syncengine.SyncPlan  // Plan from CompareComplete event
+	sourceFileCount   int                  // Source file count from ScanComplete event
+	destFileCount     int                  // Dest file count from ScanComplete event
+	syncPlan          *syncengine.SyncPlan // Plan from CompareComplete event
 }
 
 // CurrentScanTarget returns the current scan target from events.
@@ -416,18 +415,32 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	builder.WriteString(shared.RenderTitle("🔍 Scanning Files"))
 	builder.WriteString("\n\n")
 
-	// Always show source section with its phases (even while initializing)
-	s.renderPathSection(&builder, "Source", s.config.SourcePath, s.sourcePhases, s.isSourcePhaseActive())
-
-	// Always show dest section with its phases
-	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive())
-
 	if s.status == nil {
+		// Still initializing - show paths with initializing spinner
+		builder.WriteString(shared.RenderLabel("Source: "))
+		builder.WriteString(s.config.SourcePath)
+		builder.WriteString("\n")
+		builder.WriteString("  ")
 		builder.WriteString(s.spinner.View())
-		builder.WriteString(" Initializing...\n\n")
+		builder.WriteString(" Initializing...\n")
+
+		builder.WriteString(shared.RenderLabel("Dest: "))
+		builder.WriteString(s.config.DestPath)
+		builder.WriteString("\n")
+		builder.WriteString("  ")
+		builder.WriteString(shared.RenderDim("⋯ Waiting"))
+		builder.WriteString("\n\n")
+
+		builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
 
 		return builder.String()
 	}
+
+	// Show source section - never show "Waiting" once scanning has started
+	s.renderPathSection(&builder, "Source", s.config.SourcePath, s.sourcePhases, s.isSourcePhaseActive(), false)
+
+	// Show dest section - show "Waiting" while source is being processed
+	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), s.isSourcePhaseActive())
 
 	// Other completed phases (comparing, deleting, etc.)
 	for _, phase := range s.otherPhases {
@@ -474,7 +487,8 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 }
 
 // renderPathSection renders a path with its associated phases.
-func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path string, phases []completedPhase, isActive bool) {
+// Always outputs exactly header + status line for consistent layout (prevents flicker).
+func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path string, phases []completedPhase, isActive bool, showWaiting bool) {
 	// Path header
 	builder.WriteString(shared.RenderLabel(label + ": "))
 	builder.WriteString(path)
@@ -491,8 +505,9 @@ func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path 
 		builder.WriteString("\n")
 	}
 
-	// Current active phase for this path
+	// Always show a status line for consistent layout
 	if isActive {
+		// Current active phase
 		builder.WriteString("  ")
 		builder.WriteString(s.spinner.View())
 		builder.WriteString(" ")
@@ -501,25 +516,26 @@ func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path 
 			fmt.Fprintf(builder, "... %d files", s.status.ScannedFiles)
 		}
 		builder.WriteString("\n")
+	} else if len(phases) == 0 && showWaiting {
+		// Not active and no completed phases - show waiting placeholder
+		// Only show for dest while source is being processed
+		builder.WriteString("  ")
+		builder.WriteString(shared.RenderDim("⋯ Waiting"))
+		builder.WriteString("\n")
 	}
+	// If not active but has phases, the phases already provide structure
 }
 
-// isSourcePhaseActive returns true if the current phase is a source phase.
+// isSourcePhaseActive returns true if source is currently being scanned.
+// Uses event-based tracking (currentScanTarget) for accuracy with fast operations.
 func (s AnalysisScreen) isSourcePhaseActive() bool {
-	if s.status == nil {
-		return false
-	}
-	return s.status.AnalysisPhase == shared.PhaseCountingSource ||
-		s.status.AnalysisPhase == shared.PhaseScanningSource
+	return s.currentScanTarget == "source"
 }
 
-// isDestPhaseActive returns true if the current phase is a dest phase.
+// isDestPhaseActive returns true if dest is currently being scanned.
+// Uses event-based tracking (currentScanTarget) for accuracy with fast operations.
 func (s AnalysisScreen) isDestPhaseActive() bool {
-	if s.status == nil {
-		return false
-	}
-	return s.status.AnalysisPhase == shared.PhaseCountingDest ||
-		s.status.AnalysisPhase == shared.PhaseScanningDest
+	return s.currentScanTarget == "dest"
 }
 
 // isOtherPhaseActive returns true if the current phase is not source/dest specific.

@@ -78,6 +78,7 @@ func TestAnalysisPhaseTrackingViaEvents(t *testing.T) {
 	// Verify the view contains the expected output
 	screen.width = 80
 	screen.height = 24
+	screen.status = &syncengine.Status{} // Set status so we're past initialization
 	view := screen.View()
 	g.Expect(view).To(ContainSubstring("500 files"), "view should show file count")
 	g.Expect(view).To(ContainSubstring("300 files"), "view should show dest file count")
@@ -112,7 +113,7 @@ func TestAnalysisPhaseTrackingInView(t *testing.T) {
 		AnalysisPhase: shared.PhaseCountingDest,
 		ScannedFiles:  100,
 	}
-	screen.lastPhase = shared.PhaseCountingDest
+	screen.currentScanTarget = "dest" // Event-based tracking of active section
 	screen.seenPhases = map[string]int{"source": 2, "dest": 1}
 
 	view := screen.View()
