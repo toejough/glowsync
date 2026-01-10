@@ -97,8 +97,8 @@ func (s SyncScreen) calculateMaxFilesToShow() int {
 	// Box vertical padding (top + bottom)
 	fixedLines += 2
 
-	// Title section: "📦 Syncing Files\n\n"
-	fixedLines += 2
+	// Finalization message (when applicable) or nothing
+	// This is conditional but we reserve space for consistency
 
 	// Unified progress section: label + bar + files + bytes + time + blank
 	fixedLines += 6
@@ -582,16 +582,12 @@ func (s SyncScreen) renderSyncingView() string {
 func (s SyncScreen) renderSyncingContent() string {
 	var builder strings.Builder
 
-	// Show different title based on finalization phase
+	// Show finalization message when in that phase
 	if s.status != nil && s.status.FinalizationPhase == statusComplete {
-		builder.WriteString(shared.RenderTitle("📦 Finalizing..."))
-		builder.WriteString("\n\n")
-		builder.WriteString(shared.RenderLabel("Updating destination cache..."))
+		builder.WriteString(shared.RenderLabel("Finalizing: "))
+		builder.WriteString("Updating destination cache...")
 		builder.WriteString("\n")
 		builder.WriteString(shared.RenderDim("(This helps the next sync run faster)"))
-		builder.WriteString("\n\n")
-	} else {
-		builder.WriteString(shared.RenderTitle("📦 Syncing Files"))
 		builder.WriteString("\n\n")
 	}
 

@@ -31,7 +31,7 @@ func TestAnalysisPhaseTrackingViaEvents(t *testing.T) {
 		Event: syncengine.ScanStarted{Target: "source"},
 	})
 	screen = toAnalysisScreen(model)
-	g.Expect(screen.currentScanTarget).To(Equal("source"))
+	g.Expect(screen.activeScanTargets["source"]).To(BeTrue())
 
 	// Simulate receiving ScanComplete event for source with 500 files
 	model, _ = screen.Update(shared.EngineEventMsg{
@@ -50,7 +50,7 @@ func TestAnalysisPhaseTrackingViaEvents(t *testing.T) {
 		Event: syncengine.ScanStarted{Target: "dest"},
 	})
 	screen = toAnalysisScreen(model)
-	g.Expect(screen.currentScanTarget).To(Equal("dest"))
+	g.Expect(screen.activeScanTargets["dest"]).To(BeTrue())
 
 	// Simulate ScanComplete for dest with 300 files
 	model, _ = screen.Update(shared.EngineEventMsg{
@@ -113,7 +113,7 @@ func TestAnalysisPhaseTrackingInView(t *testing.T) {
 		AnalysisPhase: shared.PhaseCountingDest,
 		ScannedFiles:  100,
 	}
-	screen.currentScanTarget = "dest" // Event-based tracking of active section
+	screen.activeScanTargets = map[string]bool{"dest": true} // Event-based tracking of active section
 	screen.seenPhases = map[string]int{"source": 2, "dest": 1}
 
 	view := screen.View()

@@ -41,16 +41,23 @@ type AnalysisScreen struct {
 	seenPhases   map[string]int   // Track occurrences for context labels
 
 	// Event-based state (replaces polling-based state)
-	eventBridge       *shared.EventBridge  // Bridge for engine events
-	currentScanTarget string               // Current scan target from events
-	sourceFileCount   int                  // Source file count from ScanComplete event
-	destFileCount     int                  // Dest file count from ScanComplete event
-	syncPlan          *syncengine.SyncPlan // Plan from CompareComplete event
+	eventBridge        *shared.EventBridge  // Bridge for engine events
+	activeScanTargets  map[string]bool      // Active scan targets (for parallel scanning)
+	sourceFileCount    int                  // Source file count from ScanComplete event
+	destFileCount      int                  // Dest file count from ScanComplete event
+	syncPlan           *syncengine.SyncPlan // Plan from CompareComplete event
 }
 
-// CurrentScanTarget returns the current scan target from events.
+// CurrentScanTarget returns "source" or "dest" if that target is active, empty otherwise.
+// For backwards compatibility with tests, returns first active target found.
 func (s AnalysisScreen) CurrentScanTarget() string {
-	return s.currentScanTarget
+	if s.activeScanTargets["source"] {
+		return "source"
+	}
+	if s.activeScanTargets["dest"] {
+		return "dest"
+	}
+	return ""
 }
 
 // SourceFileCount returns the source file count from ScanComplete event.
@@ -78,11 +85,12 @@ func NewAnalysisScreen(cfg *config.Config) *AnalysisScreen {
 	overallProg := shared.NewProgressModel(0) // Width set later in resize
 
 	return &AnalysisScreen{
-		config:          cfg,
-		spinner:         spin,
-		overallProgress: overallProg,
-		lastUpdate:      time.Now(),
-		seenPhases:      make(map[string]int),
+		config:            cfg,
+		spinner:           spin,
+		overallProgress:   overallProg,
+		lastUpdate:        time.Now(),
+		seenPhases:        make(map[string]int),
+		activeScanTargets: make(map[string]bool),
 	}
 }
 
@@ -147,8 +155,6 @@ func (s AnalysisScreen) getPhaseDisplayText(phase string) string {
 		return "Scanning destination directory"
 	case shared.PhaseComparing:
 		return "Comparing files"
-	case shared.PhaseDeleting:
-		return "Checking for files to delete"
 	case shared.StateComplete:
 		return "Analysis complete"
 	default:
@@ -236,9 +242,14 @@ func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 func (s AnalysisScreen) handleEngineEvent(msg shared.EngineEventMsg) (tea.Model, tea.Cmd) {
 	switch evt := msg.Event.(type) {
 	case syncengine.ScanStarted:
-		s.currentScanTarget = evt.Target
+		// Add target to active set (supports parallel scanning)
+		if s.activeScanTargets == nil {
+			s.activeScanTargets = make(map[string]bool)
+		}
+		s.activeScanTargets[evt.Target] = true
 	case syncengine.ScanComplete:
-		s.currentScanTarget = "" // Clear current target
+		// Remove target from active set
+		delete(s.activeScanTargets, evt.Target)
 		switch evt.Target {
 		case "source":
 			s.sourceFileCount = evt.Count
@@ -259,6 +270,12 @@ func (s AnalysisScreen) handleEngineEvent(msg shared.EngineEventMsg) (tea.Model,
 		s.otherPhases = append(s.otherPhases, "Comparing files")
 	case syncengine.CompareComplete:
 		s.syncPlan = evt.Plan
+		// Add comparison results to completed phases
+		s.otherPhases = append(s.otherPhases,
+			fmt.Sprintf("In both: %d", evt.Plan.FilesInBoth),
+			fmt.Sprintf("Only in source: %d", evt.Plan.FilesOnlyInSource),
+			fmt.Sprintf("Only in dest: %d", evt.Plan.FilesOnlyInDest),
+		)
 	}
 
 	// Continue listening for more events
@@ -412,9 +429,6 @@ func (s AnalysisScreen) renderAnalyzingView() string {
 func (s AnalysisScreen) renderAnalyzingContent() string {
 	var builder strings.Builder
 
-	builder.WriteString(shared.RenderTitle("🔍 Scanning Files"))
-	builder.WriteString("\n\n")
-
 	if s.status == nil {
 		// Still initializing - show paths with initializing spinner
 		builder.WriteString(shared.RenderLabel("Source: "))
@@ -436,11 +450,11 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 		return builder.String()
 	}
 
-	// Show source section - never show "Waiting" once scanning has started
+	// Show source section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Source", s.config.SourcePath, s.sourcePhases, s.isSourcePhaseActive(), false)
 
-	// Show dest section - show "Waiting" while source is being processed
-	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), s.isSourcePhaseActive())
+	// Show dest section - both scan in parallel so no waiting needed
+	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), false)
 
 	// Other completed phases (comparing, deleting, etc.)
 	for _, phase := range s.otherPhases {
@@ -527,15 +541,15 @@ func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path 
 }
 
 // isSourcePhaseActive returns true if source is currently being scanned.
-// Uses event-based tracking (currentScanTarget) for accuracy with fast operations.
+// Uses event-based tracking (activeScanTargets) for accuracy with fast operations.
 func (s AnalysisScreen) isSourcePhaseActive() bool {
-	return s.currentScanTarget == "source"
+	return s.activeScanTargets["source"]
 }
 
 // isDestPhaseActive returns true if dest is currently being scanned.
-// Uses event-based tracking (currentScanTarget) for accuracy with fast operations.
+// Uses event-based tracking (activeScanTargets) for accuracy with fast operations.
 func (s AnalysisScreen) isDestPhaseActive() bool {
-	return s.currentScanTarget == "dest"
+	return s.activeScanTargets["dest"]
 }
 
 // isOtherPhaseActive returns true if the current phase is not source/dest specific.

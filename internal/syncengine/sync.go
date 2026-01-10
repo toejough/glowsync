@@ -165,26 +165,41 @@ func (e *Engine) Analyze() error {
 		return nil
 	}
 
-	// Scan source directory
+	// Scan source and destination directories in parallel
+	var sourceFiles, destFiles map[string]*fileops.FileInfo
+	var sourceErr, destErr error
+	var wg sync.WaitGroup
+	wg.Add(2) //nolint:mnd // Two parallel scans
+
+	// Emit ScanStarted for both immediately
 	e.emit(ScanStarted{Target: "source"})
-	sourceFiles, err := e.scanSourceDirectory()
-	if err != nil {
-		return err
-	}
-	e.emit(ScanComplete{Target: "source", Count: len(sourceFiles)})
-
-	err = e.checkCancellation()
-	if err != nil {
-		return err
-	}
-
-	// Scan destination directory
 	e.emit(ScanStarted{Target: "dest"})
-	destFiles, err := e.scanDestinationDirectory()
-	if err != nil {
-		return err
+
+	go func() {
+		defer wg.Done()
+		sourceFiles, sourceErr = e.scanSourceDirectory()
+		if sourceErr == nil {
+			e.emit(ScanComplete{Target: "source", Count: len(sourceFiles)})
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		destFiles, destErr = e.scanDestinationDirectory()
+		if destErr == nil {
+			e.emit(ScanComplete{Target: "dest", Count: len(destFiles)})
+		}
+	}()
+
+	wg.Wait()
+
+	// Check for errors after both complete
+	if sourceErr != nil {
+		return sourceErr
 	}
-	e.emit(ScanComplete{Target: "dest", Count: len(destFiles)})
+	if destErr != nil {
+		return destErr
+	}
 
 	err = e.checkCancellation()
 	if err != nil {
@@ -211,9 +226,12 @@ func (e *Engine) Analyze() error {
 	// Emit compare complete with sync plan
 	e.Status.mu.RLock()
 	plan := &SyncPlan{
-		FilesToCopy:   len(e.Status.FilesToSync),
-		FilesToDelete: 0, // TODO: track deletion count
-		BytesToCopy:   e.Status.TotalBytes,
+		FilesToCopy:       len(e.Status.FilesToSync),
+		FilesToDelete:     e.Status.FilesOnlyInDest,
+		BytesToCopy:       e.Status.TotalBytes,
+		FilesInBoth:       e.Status.FilesInBoth,
+		FilesOnlyInSource: e.Status.FilesOnlyInSource,
+		FilesOnlyInDest:   e.Status.FilesOnlyInDest,
 	}
 	e.Status.mu.RUnlock()
 	e.emit(CompareComplete{Plan: plan})
@@ -707,6 +725,8 @@ func (e *Engine) compareAndPlanSync(sourceFiles, destFiles map[string]*fileops.F
 	comparedCount := 0
 	needSyncCount := 0
 	alreadySyncedCount := 0
+	filesInBoth := 0
+	filesOnlyInSource := 0
 
 	for relPath, srcFile := range sourceFiles {
 		// Check for cancellation periodically (every 100 files)
@@ -723,6 +743,13 @@ func (e *Engine) compareAndPlanSync(sourceFiles, destFiles map[string]*fileops.F
 		}
 
 		dstFile := destFiles[relPath]
+
+		// Track comparison counts
+		if dstFile != nil {
+			filesInBoth++
+		} else {
+			filesOnlyInSource++
+		}
 
 		// Determine if file needs sync based on ChangeType
 		needsSync := e.determineIfFileNeedsSync(relPath, srcFile, dstFile, comparedCount)
@@ -754,6 +781,12 @@ func (e *Engine) compareAndPlanSync(sourceFiles, destFiles map[string]*fileops.F
 	}
 
 	e.logComparisonSummary(sourceFiles, destFiles)
+
+	// Store comparison counts in Status for event emission
+	e.Status.mu.Lock()
+	e.Status.FilesInBoth = filesInBoth
+	e.Status.FilesOnlyInSource = filesOnlyInSource
+	e.Status.mu.Unlock()
 
 	return nil
 }
@@ -818,6 +851,11 @@ func (e *Engine) compareFilesWithHash(relPath string, comparedCount int) bool {
 
 func (e *Engine) countAndLogOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) (int, int) {
 	filesToDelete, dirsToDelete := countOrphanedItems(sourceFiles, destFiles)
+
+	// Store orphan count in Status for CompareComplete event
+	e.Status.mu.Lock()
+	e.Status.FilesOnlyInDest = filesToDelete
+	e.Status.mu.Unlock()
 
 	if filesToDelete == 0 && dirsToDelete == 0 {
 		return 0, 0
@@ -2348,6 +2386,11 @@ type Status struct {
 	TotalBytesInSource int64 // Total bytes in source
 	AlreadySyncedFiles int   // Files that were already up-to-date
 	AlreadySyncedBytes int64 // Bytes that were already up-to-date
+
+	// Comparison counts (for TUI display)
+	FilesInBoth       int // Files that exist in both source and dest
+	FilesOnlyInSource int // Files that exist only in source (new files)
+	FilesOnlyInDest   int // Files that exist only in dest (orphans)
 
 	// Analysis progress
 	//nolint:lll // Inline comment listing all possible phase values

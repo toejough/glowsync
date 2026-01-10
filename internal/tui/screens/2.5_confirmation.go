@@ -64,10 +64,6 @@ func (s ConfirmationScreen) RenderContent() string {
 	// Get status from engine
 	status := s.engine.GetStatus()
 
-	// Title
-	builder.WriteString(shared.RenderTitle("Analysis Complete"))
-	builder.WriteString("\n\n")
-
 	// Statistics
 	builder.WriteString(shared.RenderLabel("Files to sync: "))
 	builder.WriteString(strconv.Itoa(status.TotalFiles))

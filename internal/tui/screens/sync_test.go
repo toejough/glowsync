@@ -361,7 +361,7 @@ func TestSyncScreenView(t *testing.T) {
 
 	// Test View rendering
 	view := screen.View()
-	g.Expect(view).Should(ContainSubstring("Syncing Files"))
+	g.Expect(view).Should(ContainSubstring("Starting sync"))
 }
 
 func TestSyncScreenViewSwitchesFromNormalToCancellationView(t *testing.T) {
@@ -379,9 +379,8 @@ func TestSyncScreenViewSwitchesFromNormalToCancellationView(t *testing.T) {
 	syncScreen, ok := updatedModel.(screens.SyncScreen)
 	g.Expect(ok).Should(BeTrue())
 
-	// Normal view should show "Syncing Files"
+	// Normal view should show sync screen content (not cancelling)
 	normalView := syncScreen.View()
-	g.Expect(normalView).Should(ContainSubstring("Syncing Files"))
 	g.Expect(normalView).ShouldNot(ContainSubstring("Cancelling Sync"))
 
 	// Cancel the sync
@@ -394,7 +393,6 @@ func TestSyncScreenViewSwitchesFromNormalToCancellationView(t *testing.T) {
 	// After cancellation, view should switch to cancellation view
 	cancelledView := syncScreen2.View()
 	g.Expect(cancelledView).Should(ContainSubstring("Cancelling Sync"))
-	g.Expect(cancelledView).ShouldNot(ContainSubstring("Syncing Files"))
 	g.Expect(cancelledView).Should(ContainSubstring("Files being finalized"))
 }
 

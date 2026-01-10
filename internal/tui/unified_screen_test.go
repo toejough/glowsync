@@ -133,9 +133,8 @@ var _ = Describe("UnifiedScreen", func() {
 
 			view := screen.View()
 
-			// Analysis section should show paths and scanning status
-			Expect(view).To(ContainSubstring("Source:"))        // From analysis
-			Expect(view).To(ContainSubstring("Scanning Files")) // From analysis
+			// Analysis section should show paths
+			Expect(view).To(ContainSubstring("Source:"))
 		})
 
 		It("analysis section shows paths after advancing phases", func() {

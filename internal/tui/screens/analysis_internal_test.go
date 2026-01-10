@@ -36,8 +36,9 @@ func TestGetAnalysisPhaseText(t *testing.T) {
 	screen.status.AnalysisPhase = "comparing"
 	g.Expect(screen.getAnalysisPhaseText()).Should(ContainSubstring("Comparing"))
 
+	// "deleting" phase no longer has special text - comparison results are shown instead
 	screen.status.AnalysisPhase = "deleting"
-	g.Expect(screen.getAnalysisPhaseText()).Should(ContainSubstring("Checking"))
+	g.Expect(screen.getAnalysisPhaseText()).Should(ContainSubstring("Initializing"))
 
 	screen.status.AnalysisPhase = "complete"
 	g.Expect(screen.getAnalysisPhaseText()).Should(ContainSubstring("complete"))

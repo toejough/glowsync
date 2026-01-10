@@ -94,7 +94,7 @@ func TestConfirmationScreen_View(t *testing.T) {
 	output := screen.View()
 
 	// Verify output contains expected elements
-	g.Expect(output).Should(ContainSubstring("Analysis Complete"), "Expected title to be present")
+	g.Expect(output).Should(ContainSubstring("Files to sync"), "Expected files to sync label")
 	g.Expect(output).Should(ContainSubstring("Press Enter to begin sync"), "Expected help text for Enter")
 	g.Expect(output).Should(ContainSubstring("Esc to cancel"), "Expected help text for Esc")
 }
