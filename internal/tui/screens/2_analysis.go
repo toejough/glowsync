@@ -41,6 +41,33 @@ type AnalysisScreen struct {
 	seenPhases   map[string]int   // Track occurrences for context labels
 	lastPhase    string           // Last seen phase, to detect transitions
 	lastCount    int              // File count when phase started (to capture result)
+
+	// Event-based state (replaces polling-based state)
+	eventBridge      *shared.EventBridge   // Bridge for engine events
+	currentScanTarget string               // Current scan target from events
+	sourceFileCount  int                   // Source file count from ScanComplete event
+	destFileCount    int                   // Dest file count from ScanComplete event
+	syncPlan         *syncengine.SyncPlan  // Plan from CompareComplete event
+}
+
+// CurrentScanTarget returns the current scan target from events.
+func (s AnalysisScreen) CurrentScanTarget() string {
+	return s.currentScanTarget
+}
+
+// SourceFileCount returns the source file count from ScanComplete event.
+func (s AnalysisScreen) SourceFileCount() int {
+	return s.sourceFileCount
+}
+
+// DestFileCount returns the dest file count from ScanComplete event.
+func (s AnalysisScreen) DestFileCount() int {
+	return s.destFileCount
+}
+
+// SyncPlan returns the sync plan from CompareComplete event.
+func (s AnalysisScreen) SyncPlan() *syncengine.SyncPlan {
+	return s.syncPlan
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -87,6 +114,8 @@ func (s AnalysisScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s.handleSpinnerTick(msg)
 	case shared.TickMsg:
 		return s.handleTick()
+	case shared.EngineEventMsg:
+		return s.handleEngineEvent(msg)
 	}
 
 	return s, nil
@@ -197,6 +226,33 @@ func (s AnalysisScreen) handleError(msg shared.ErrorMsg) (tea.Model, tea.Cmd) {
 			Err:        msg.Err,
 		}
 	}
+}
+
+// handleEngineEvent processes events from the engine via EventBridge.
+func (s AnalysisScreen) handleEngineEvent(msg shared.EngineEventMsg) (tea.Model, tea.Cmd) {
+	switch evt := msg.Event.(type) {
+	case syncengine.ScanStarted:
+		s.currentScanTarget = evt.Target
+	case syncengine.ScanComplete:
+		s.currentScanTarget = "" // Clear current target
+		switch evt.Target {
+		case "source":
+			s.sourceFileCount = evt.Count
+		case "dest":
+			s.destFileCount = evt.Count
+		}
+	case syncengine.CompareStarted:
+		// Could update UI state if needed
+	case syncengine.CompareComplete:
+		s.syncPlan = evt.Plan
+	}
+
+	// Continue listening for more events
+	var cmd tea.Cmd
+	if s.eventBridge != nil {
+		cmd = s.eventBridge.ListenCmd()
+	}
+	return s, cmd
 }
 
 //nolint:exhaustive // Only handling specific key types
@@ -496,7 +552,7 @@ func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path 
 		builder.WriteString(" ")
 		builder.WriteString(s.getCurrentPhaseLabel())
 		if s.status != nil {
-			builder.WriteString(fmt.Sprintf("... %d files", s.status.ScannedFiles))
+			fmt.Fprintf(builder, "... %d files", s.status.ScannedFiles)
 		}
 		builder.WriteString("\n")
 	}

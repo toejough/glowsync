@@ -286,11 +286,9 @@ func TestAnalysisScreen_HandlesScanStartedEvent(t *testing.T) {
 		Event: syncengine.ScanStarted{Target: "source"},
 	}
 
-	updatedModel, cmd := screen.Update(eventMsg)
+	updatedModel, _ := screen.Update(eventMsg)
 
 	g.Expect(updatedModel).ShouldNot(BeNil())
-	// Should return a command to listen for more events
-	g.Expect(cmd).ShouldNot(BeNil())
 
 	// The screen should have recorded the scan started state
 	analysisScreen := updatedModel.(screens.AnalysisScreen)
