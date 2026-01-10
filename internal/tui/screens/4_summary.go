@@ -225,11 +225,13 @@ func (s SummaryScreen) renderCancelledSummary(builder *strings.Builder, elapsed 
 // ============================================================================
 
 func (s SummaryScreen) renderCancelledView() string {
-	// Timeline header + content + box wrapper
+	// Timeline header + content + help text + box wrapper (standalone mode)
 	var builder strings.Builder
 	builder.WriteString(shared.RenderTimeline("sync_error"))
 	builder.WriteString("\n\n")
 	builder.WriteString(s.renderCancelledContent())
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Enter or q to exit • Esc for new session"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
@@ -254,14 +256,12 @@ func (s SummaryScreen) renderCancelledContent() string {
 		s.renderCancelledErrors(&builder)
 	}
 
-	builder.WriteString("\n")
-	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
-	builder.WriteString("\n")
-
 	if s.logPath != "" {
+		builder.WriteString("\n")
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
+	// Note: Help text removed - shown by unified screen based on active phase
 	return builder.String()
 }
 
@@ -385,11 +385,13 @@ func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
 // ============================================================================
 
 func (s SummaryScreen) renderCompleteView() string {
-	// Timeline header + content + box wrapper
+	// Timeline header + content + help text + box wrapper (standalone mode)
 	var builder strings.Builder
 	builder.WriteString(shared.RenderTimeline("done"))
 	builder.WriteString("\n\n")
 	builder.WriteString(s.renderCompleteContent())
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Enter or q to exit • Esc for new session"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
@@ -418,14 +420,12 @@ func (s SummaryScreen) renderCompleteContent() string {
 		s.renderCompleteErrors(&builder)
 	}
 
-	builder.WriteString("\n")
-	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
-	builder.WriteString("\n")
-
 	if s.logPath != "" {
+		builder.WriteString("\n")
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
+	// Note: Help text removed - shown by unified screen based on active phase
 	return builder.String()
 }
 
@@ -434,11 +434,13 @@ func (s SummaryScreen) renderCompleteContent() string {
 // ============================================================================
 
 func (s SummaryScreen) renderErrorView() string {
-	// Timeline header + content + box wrapper
+	// Timeline header + content + help text + box wrapper (standalone mode)
 	var builder strings.Builder
 	builder.WriteString(shared.RenderTimeline("done_error"))
 	builder.WriteString("\n\n")
 	builder.WriteString(s.renderErrorContent())
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderSubtitle("Enter or q to exit • Esc for new session"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
@@ -497,13 +499,11 @@ func (s SummaryScreen) renderErrorContent() string {
 		}
 	}
 
-	builder.WriteString(shared.RenderSubtitle("Press Enter or q to exit • Esc to start new session • Ctrl+C to exit"))
-	builder.WriteString("\n")
-
 	if s.logPath != "" {
 		builder.WriteString(shared.RenderDim("Debug log saved to: " + shared.MakePathClickable(s.logPath)))
 	}
 
+	// Note: Help text removed - shown by unified screen based on active phase
 	return builder.String()
 }
 

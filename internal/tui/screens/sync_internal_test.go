@@ -495,8 +495,8 @@ func TestRenderSyncingView_CompleteIntegration(t *testing.T) {
 	g.Expect(result).ShouldNot(ContainSubstring("Overall Progress (All Files)"))
 	g.Expect(result).ShouldNot(ContainSubstring("This Session:"))
 
-	// Verify help text
-	g.Expect(result).Should(ContainSubstring("Press Esc or q to cancel"))
+	// Verify help text (standalone mode)
+	g.Expect(result).Should(ContainSubstring("Esc or q to cancel"))
 }
 
 func TestRenderSyncingView_UsesUnifiedProgress(t *testing.T) {

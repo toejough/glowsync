@@ -570,11 +570,13 @@ func (s SyncScreen) renderSyncingView() string {
 		return s.renderCancellationProgress()
 	}
 
-	// Timeline header + content + box wrapper
+	// Timeline header + content + help text + box wrapper (standalone mode)
 	var builder strings.Builder
 	builder.WriteString(shared.RenderTimeline("sync"))
 	builder.WriteString("\n\n")
 	builder.WriteString(s.renderSyncingContent())
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Esc or q to cancel • Ctrl+C to exit immediately"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
@@ -610,10 +612,7 @@ func (s SyncScreen) renderSyncingContent() string {
 	// Errors
 	s.renderSyncingErrors(&builder)
 
-	// Help text
-	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Press Esc or q to cancel sync • Ctrl+C to exit immediately"))
-
+	// Note: Help text removed - shown by unified screen based on active phase
 	return builder.String()
 }
 
