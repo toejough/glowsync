@@ -44,7 +44,7 @@ func TestRenderTimeline_BasicPhases(t *testing.T) {
 	testCases := []struct {
 		name               string
 		currentPhase       string
-		expectedSymbols    []string // Symbols in order: Input, Scan, Compare, Sync, Done
+		expectedSymbols    []string // Symbols in order: Input, Scan, Compare, Confirm, Sync, Summary
 		expectedPhaseNames []string
 	}{
 		{
@@ -52,45 +52,54 @@ func TestRenderTimeline_BasicPhases(t *testing.T) {
 			currentPhase: "input",
 			expectedSymbols: []string{
 				shared.ActiveSymbol(), shared.PendingSymbol(), shared.PendingSymbol(),
-				shared.PendingSymbol(), shared.PendingSymbol(),
+				shared.PendingSymbol(), shared.PendingSymbol(), shared.PendingSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 		{
 			name:         "scan phase - second active",
 			currentPhase: "scan",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.ActiveSymbol(), shared.PendingSymbol(),
-				shared.PendingSymbol(), shared.PendingSymbol(),
+				shared.PendingSymbol(), shared.PendingSymbol(), shared.PendingSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 		{
 			name:         "compare phase - third active",
 			currentPhase: "compare",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.ActiveSymbol(),
-				shared.PendingSymbol(), shared.PendingSymbol(),
+				shared.PendingSymbol(), shared.PendingSymbol(), shared.PendingSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 		{
-			name:         "sync phase - fourth active",
+			name:         "confirm phase - fourth active",
+			currentPhase: "confirm",
+			expectedSymbols: []string{
+				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.SuccessSymbol(),
+				shared.ActiveSymbol(), shared.PendingSymbol(), shared.PendingSymbol(),
+			},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
+		},
+		{
+			name:         "sync phase - fifth active",
 			currentPhase: "sync",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.SuccessSymbol(),
-				shared.ActiveSymbol(), shared.PendingSymbol(),
+				shared.SuccessSymbol(), shared.ActiveSymbol(), shared.PendingSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 		{
-			name:         "done phase - all complete",
-			currentPhase: "done",
+			name:         "summary phase - all complete",
+			currentPhase: "summary",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.SuccessSymbol(),
-				shared.SuccessSymbol(), shared.SuccessSymbol(),
+				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.SuccessSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 	}
 
@@ -114,10 +123,10 @@ func TestRenderTimeline_BasicPhases(t *testing.T) {
 					"timeline should contain symbol %s", symbol)
 			}
 
-			// Verify separators are present (should have 4 separators between 5 phases)
+			// Verify separators are present (should have 5 separators between 6 phases)
 			separatorCount := strings.Count(stripped, "──")
-			g.Expect(separatorCount).To(Equal(4),
-				"timeline should have 4 separators between 5 phases")
+			g.Expect(separatorCount).To(Equal(5),
+				"timeline should have 5 separators between 6 phases")
 		})
 	}
 }
@@ -130,19 +139,19 @@ func TestRenderTimeline_ContentVerification(t *testing.T) {
 	result := shared.RenderTimeline("compare")
 	stripped := stripANSI(result)
 
-	// Verify all 5 phase names are present
-	expectedPhases := []string{"Input", "Scan", "Compare", "Sync", "Done"}
+	// Verify all 6 phase names are present
+	expectedPhases := []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"}
 	for _, phase := range expectedPhases {
 		g.Expect(stripped).To(ContainSubstring(phase),
 			"timeline should contain phase %s", phase)
 	}
 
-	// Verify correct number of separators (4 between 5 phases)
+	// Verify correct number of separators (5 between 6 phases)
 	separatorCount := strings.Count(stripped, "──")
-	g.Expect(separatorCount).To(Equal(4),
-		"should have exactly 4 separators between 5 phases")
+	g.Expect(separatorCount).To(Equal(5),
+		"should have exactly 5 separators between 6 phases")
 
-	// Verify total symbol count (should have 5 symbols total)
+	// Verify total symbol count (should have 6 symbols total)
 	// Count all possible symbols
 	symbolCount := 0
 	symbolCount += strings.Count(stripped, shared.SuccessSymbol())
@@ -151,8 +160,8 @@ func TestRenderTimeline_ContentVerification(t *testing.T) {
 	symbolCount += strings.Count(stripped, shared.ErrorSymbol())
 	symbolCount += strings.Count(stripped, shared.CancelledSymbol())
 
-	g.Expect(symbolCount).To(Equal(5),
-		"should have exactly 5 symbols total (one per phase)")
+	g.Expect(symbolCount).To(Equal(6),
+		"should have exactly 6 symbols total (one per phase)")
 }
 
 func TestRenderTimeline_EdgeCases(t *testing.T) {
@@ -197,7 +206,7 @@ func TestRenderTimeline_EdgeCases(t *testing.T) {
 
 			// For invalid phases, should still render all phase names
 			stripped := stripANSI(result)
-			expectedPhaseNames := []string{"Input", "Scan", "Compare", "Sync", "Done"}
+			expectedPhaseNames := []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"}
 			for _, phaseName := range expectedPhaseNames {
 				g.Expect(stripped).To(ContainSubstring(phaseName),
 					"timeline should always contain phase name %s", phaseName)
@@ -205,8 +214,8 @@ func TestRenderTimeline_EdgeCases(t *testing.T) {
 
 			// Should have separators
 			separatorCount := strings.Count(stripped, "──")
-			g.Expect(separatorCount).To(Equal(4),
-				"timeline should always have 4 separators")
+			g.Expect(separatorCount).To(Equal(5),
+				"timeline should always have 5 separators")
 		})
 	}
 }
@@ -223,7 +232,7 @@ func TestRenderTimeline_ErrorStateDoesNotShowInput(t *testing.T) {
 	stripped := stripANSI(result)
 
 	// Should still render all phases (treating it as invalid input)
-	expectedPhases := []string{"Input", "Scan", "Compare", "Sync", "Done"}
+	expectedPhases := []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"}
 	for _, phase := range expectedPhases {
 		g.Expect(stripped).To(ContainSubstring(phase),
 			"timeline should contain phase %s even for invalid error phase", phase)
@@ -236,7 +245,7 @@ func TestRenderTimeline_ErrorStates(t *testing.T) {
 	testCases := []struct {
 		name               string
 		currentPhase       string
-		expectedSymbols    []string // Symbols in order: Input, Scan, Compare, Sync, Done
+		expectedSymbols    []string // Symbols in order: Input, Scan, Compare, Confirm, Sync, Summary
 		expectedPhaseNames []string
 	}{
 		{
@@ -244,27 +253,36 @@ func TestRenderTimeline_ErrorStates(t *testing.T) {
 			currentPhase: "scan_error",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.ErrorSymbol(), shared.CancelledSymbol(),
-				shared.CancelledSymbol(), shared.CancelledSymbol(),
+				shared.CancelledSymbol(), shared.CancelledSymbol(), shared.CancelledSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 		{
 			name:         "compare_error - error at third phase",
 			currentPhase: "compare_error",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.ErrorSymbol(),
-				shared.CancelledSymbol(), shared.CancelledSymbol(),
+				shared.CancelledSymbol(), shared.CancelledSymbol(), shared.CancelledSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 		{
-			name:         "sync_error - error at fourth phase",
+			name:         "confirm_error - error at fourth phase",
+			currentPhase: "confirm_error",
+			expectedSymbols: []string{
+				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.SuccessSymbol(),
+				shared.ErrorSymbol(), shared.CancelledSymbol(), shared.CancelledSymbol(),
+			},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
+		},
+		{
+			name:         "sync_error - error at fifth phase",
 			currentPhase: "sync_error",
 			expectedSymbols: []string{
 				shared.SuccessSymbol(), shared.SuccessSymbol(), shared.SuccessSymbol(),
-				shared.ErrorSymbol(), shared.CancelledSymbol(),
+				shared.SuccessSymbol(), shared.ErrorSymbol(), shared.CancelledSymbol(),
 			},
-			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Sync", "Done"},
+			expectedPhaseNames: []string{"Input", "Scan", "Compare", "Confirm", "Sync", "Summary"},
 		},
 	}
 
@@ -299,8 +317,8 @@ func TestRenderTimeline_ErrorStates(t *testing.T) {
 
 			// Verify separators are present
 			separatorCount := strings.Count(stripped, "──")
-			g.Expect(separatorCount).To(Equal(4),
-				"timeline should have 4 separators between 5 phases")
+			g.Expect(separatorCount).To(Equal(5),
+				"timeline should have 5 separators between 6 phases")
 		})
 	}
 }
@@ -326,8 +344,9 @@ func TestRenderTimeline_SymbolFallback(t *testing.T) {
 	g.Expect(stripped).To(ContainSubstring("Input"))
 	g.Expect(stripped).To(ContainSubstring("Scan"))
 	g.Expect(stripped).To(ContainSubstring("Compare"))
+	g.Expect(stripped).To(ContainSubstring("Confirm"))
 	g.Expect(stripped).To(ContainSubstring("Sync"))
-	g.Expect(stripped).To(ContainSubstring("Done"))
+	g.Expect(stripped).To(ContainSubstring("Summary"))
 }
 
 func TestRenderTimeline_SymbolProgression(t *testing.T) {
@@ -341,8 +360,8 @@ func TestRenderTimeline_SymbolProgression(t *testing.T) {
 	inputResult := stripANSI(shared.RenderTimeline("input"))
 	g.Expect(inputResult).To(ContainSubstring(shared.ActiveSymbol()),
 		"input phase should have active symbol")
-	g.Expect(strings.Count(inputResult, shared.PendingSymbol())).To(Equal(4),
-		"input phase should have 4 pending symbols")
+	g.Expect(strings.Count(inputResult, shared.PendingSymbol())).To(Equal(5),
+		"input phase should have 5 pending symbols")
 	g.Expect(inputResult).ToNot(ContainSubstring(shared.SuccessSymbol()),
 		"input phase should not have success symbols yet")
 
@@ -352,17 +371,17 @@ func TestRenderTimeline_SymbolProgression(t *testing.T) {
 		"scan phase should have active symbol")
 	g.Expect(strings.Count(scanResult, shared.SuccessSymbol())).To(Equal(1),
 		"scan phase should have 1 success symbol")
-	g.Expect(strings.Count(scanResult, shared.PendingSymbol())).To(Equal(3),
-		"scan phase should have 3 pending symbols")
+	g.Expect(strings.Count(scanResult, shared.PendingSymbol())).To(Equal(4),
+		"scan phase should have 4 pending symbols")
 
-	// Done phase: All success symbols, no pending or active
-	doneResult := stripANSI(shared.RenderTimeline("done"))
-	g.Expect(strings.Count(doneResult, shared.SuccessSymbol())).To(Equal(5),
-		"done phase should have 5 success symbols")
-	g.Expect(doneResult).ToNot(ContainSubstring(shared.PendingSymbol()),
-		"done phase should not have pending symbols")
-	g.Expect(doneResult).ToNot(ContainSubstring(shared.ActiveSymbol()),
-		"done phase should not have active symbol")
+	// Summary phase: All success symbols, no pending or active
+	summaryResult := stripANSI(shared.RenderTimeline("summary"))
+	g.Expect(strings.Count(summaryResult, shared.SuccessSymbol())).To(Equal(6),
+		"summary phase should have 6 success symbols")
+	g.Expect(summaryResult).ToNot(ContainSubstring(shared.PendingSymbol()),
+		"summary phase should not have pending symbols")
+	g.Expect(summaryResult).ToNot(ContainSubstring(shared.ActiveSymbol()),
+		"summary phase should not have active symbol")
 }
 
 // stripANSI removes ANSI escape codes from a string for easier testing

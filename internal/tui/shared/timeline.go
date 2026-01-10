@@ -25,7 +25,7 @@ func CancelledSymbol() string {
 }
 
 // RenderTimeline renders the phase progression timeline for the header.
-// Shows 5 phases: Input, Scan, Compare, Sync, Done
+// Shows 6 phases: Input, Scan, Compare, Confirm, Sync, Summary
 // Phases before current show ✓ (completed)
 // Current phase shows ◉ (active)
 // Phases after current show ○ (pending)
@@ -50,8 +50,9 @@ func RenderTimeline(currentPhase string) string {
 		{"Input", "input"},
 		{"Scan", "scan"},
 		{"Compare", "compare"},
+		{"Confirm", "confirm"},
 		{"Sync", "sync"},
-		{"Done", "done"},
+		{"Summary", "summary"},
 	}
 
 	// Find the index of the current phase
@@ -68,7 +69,7 @@ func RenderTimeline(currentPhase string) string {
 		currentIdx = 0
 	}
 
-	// Build timeline parts (preallocate with capacity for all 5 phases)
+	// Build timeline parts (preallocate with capacity for all 6 phases)
 	parts := make([]string, 0, len(phases))
 
 	for phaseIdx, phaseInfo := range phases {

@@ -58,7 +58,7 @@ var _ = Describe("UnifiedScreen", func() {
 			Expect(updated.hasInput).To(BeTrue()) // Input preserved
 		})
 
-		It("advances to compare phase on TransitionToConfirmationMsg", func() {
+		It("advances to confirm phase on TransitionToConfirmationMsg", func() {
 			// First advance to scan
 			screen.phase = PhaseScan
 			screen.analysis = *screens.NewAnalysisScreen(cfg)
@@ -72,13 +72,13 @@ var _ = Describe("UnifiedScreen", func() {
 			newModel, _ := screen.Update(msg)
 			updated := newModel.(*UnifiedScreen)
 
-			Expect(updated.phase).To(Equal(PhaseCompare))
+			Expect(updated.phase).To(Equal(PhaseConfirm))
 			Expect(updated.hasConfirmation).To(BeTrue())
 			Expect(updated.hasAnalysis).To(BeTrue()) // Analysis preserved
 		})
 
 		It("advances to sync phase on TransitionToSyncMsg", func() {
-			screen.phase = PhaseCompare
+			screen.phase = PhaseConfirm
 
 			msg := shared.TransitionToSyncMsg{
 				Engine:  nil,
@@ -92,7 +92,7 @@ var _ = Describe("UnifiedScreen", func() {
 			Expect(updated.hasSync).To(BeTrue())
 		})
 
-		It("advances to done phase on TransitionToSummaryMsg", func() {
+		It("advances to summary phase on TransitionToSummaryMsg", func() {
 			screen.phase = PhaseSync
 
 			msg := shared.TransitionToSummaryMsg{
@@ -102,7 +102,7 @@ var _ = Describe("UnifiedScreen", func() {
 			newModel, _ := screen.Update(msg)
 			updated := newModel.(*UnifiedScreen)
 
-			Expect(updated.phase).To(Equal(PhaseDone))
+			Expect(updated.phase).To(Equal(PhaseSummary))
 			Expect(updated.hasSummary).To(BeTrue())
 		})
 	})

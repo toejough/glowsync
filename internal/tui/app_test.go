@@ -98,10 +98,10 @@ func TestAppModelTransitionToConfirmation(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we transitioned to compare phase
+	// Verify we transitioned to confirm phase
 	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
 	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
-	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseCompare), "Expected compare phase after TransitionToConfirmationMsg")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseConfirm), "Expected confirm phase after TransitionToConfirmationMsg")
 }
 
 func TestAppModelTransitionToInput(t *testing.T) {
@@ -181,10 +181,10 @@ func TestAppModelTransitionToSummary(t *testing.T) {
 
 	model = &appModel
 
-	// Verify we transitioned to done phase
+	// Verify we transitioned to summary phase
 	unifiedScreen, isUnifiedScreen := model.CurrentScreen().(*tui.UnifiedScreen)
 	g.Expect(isUnifiedScreen).Should(BeTrue(), "Expected UnifiedScreen")
-	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseDone), "Expected done phase after TransitionToSummaryMsg")
+	g.Expect(unifiedScreen.Phase()).Should(Equal(tui.PhaseSummary), "Expected summary phase after TransitionToSummaryMsg")
 }
 
 func TestAppModelTransitionToSync(t *testing.T) {

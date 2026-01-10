@@ -17,8 +17,9 @@ const (
 	PhaseInput Phase = iota
 	PhaseScan
 	PhaseCompare
+	PhaseConfirm
 	PhaseSync
-	PhaseDone
+	PhaseSummary
 )
 
 // String returns the phase name for timeline rendering
@@ -30,10 +31,12 @@ func (p Phase) String() string {
 		return "scan"
 	case PhaseCompare:
 		return "compare"
+	case PhaseConfirm:
+		return "confirm"
 	case PhaseSync:
 		return "sync"
-	case PhaseDone:
-		return "done"
+	case PhaseSummary:
+		return "summary"
 	default:
 		return "input"
 	}
@@ -182,7 +185,7 @@ func (u *UnifiedScreen) transitionToAnalysis(msg shared.TransitionToAnalysisMsg)
 func (u *UnifiedScreen) transitionToConfirmation(msg shared.TransitionToConfirmationMsg) (tea.Model, tea.Cmd) {
 	u.engine = msg.Engine
 	u.logPath = msg.LogPath
-	u.phase = PhaseCompare
+	u.phase = PhaseConfirm
 	u.confirmation = *screens.NewConfirmationScreen(msg.Engine, msg.LogPath)
 	u.hasConfirmation = true
 
@@ -206,7 +209,7 @@ func (u *UnifiedScreen) transitionToSync(msg shared.TransitionToSyncMsg) (tea.Mo
 }
 
 func (u *UnifiedScreen) transitionToSummary(msg shared.TransitionToSummaryMsg) (tea.Model, tea.Cmd) {
-	u.phase = PhaseDone
+	u.phase = PhaseSummary
 	u.summary = *screens.NewSummaryScreen(u.engine, msg.FinalState, msg.Err, u.logPath)
 	u.hasSummary = true
 
@@ -231,13 +234,14 @@ func (u *UnifiedScreen) delegateToActiveScreen(msg tea.Msg) (tea.Model, tea.Cmd)
 			model, cmd = u.input.Update(msg)
 			u.input = model.(screens.InputScreen)
 		}
-	case PhaseScan:
+	case PhaseScan, PhaseCompare:
+		// Both scan and compare phases use the analysis screen
 		if u.hasAnalysis {
 			var model tea.Model
 			model, cmd = u.analysis.Update(msg)
 			u.analysis = model.(screens.AnalysisScreen)
 		}
-	case PhaseCompare:
+	case PhaseConfirm:
 		if u.hasConfirmation {
 			var model tea.Model
 			model, cmd = u.confirmation.Update(msg)
@@ -249,7 +253,7 @@ func (u *UnifiedScreen) delegateToActiveScreen(msg tea.Msg) (tea.Model, tea.Cmd)
 			model, cmd = u.sync.Update(msg)
 			u.sync = model.(screens.SyncScreen)
 		}
-	case PhaseDone:
+	case PhaseSummary:
 		if u.hasSummary {
 			var model tea.Model
 			model, cmd = u.summary.Update(msg)
