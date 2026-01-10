@@ -756,3 +756,45 @@ A simple md issue tracker.
      - 2026-01-03 16:07 EST - GREEN: Wiring up real widgets to replace placeholders
      - 2026-01-03 16:27 EST - REFACTOR: Auditing widget integration
      - 2026-01-03 16:29 EST - COMMIT: Step 4 complete - real widgets integrated with unified screen
+33. "Comparing files" line still shows after removing headers
+   - status: done
+   - priority: high
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: The "comparing files" line still appears during analysis, should be removed for consistency with other header removals
+   - resolution: Removed "Comparing files" from otherPhases when CompareStarted event received
+34. "Initializing" spinner freezes and never completes
+   - status: done
+   - priority: high
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: The "Initializing" status shows with a spinner that freezes and never terminates
+   - resolution: Changed isOtherPhaseActive() to only show spinner for "comparing" phase. Other phases (source/dest scans, deleting) shown separately.
+35. Comparison counts need header and indentation
+   - status: done
+   - priority: medium
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: The file status counts (in both, only in source, only in dest) need a header like "Comparison:" and indentation to match source/dest styling
+   - resolution: Added "Comparison:" header with indented items showing counts with checkmarks
+36. Mystery progress bar with unexplained file count
+   - status: done
+   - priority: high
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: Progress bar after "initializing" shows unknown file counts (e.g., 8293) not seen elsewhere
+   - resolution: Removed processing progress bar entirely. Source/dest counts and comparison results section provide the meaningful information.
+37. Bytes count exceeds maximum (81.6GB/46.5GB)
+   - status: done
+   - priority: medium
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: The bytes transferred count goes over the max value
+   - resolution: Fixed by removing processing progress display (issue #36). The confusing metrics no longer shown.
+38. Time value inaccurate (5s/5s 114.5%)
+   - status: done
+   - priority: medium
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: The time display shows meaningless/inaccurate values
+   - resolution: Fixed by removing processing progress display (issue #36). The confusing time estimates no longer shown.

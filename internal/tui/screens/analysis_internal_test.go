@@ -97,7 +97,8 @@ func TestRenderAnalysisProgress(t *testing.T) {
 	result := builder.String()
 	g.Expect(result).Should(ContainSubstring("Found"))
 
-	// Test scanning phase with total
+	// Test processing phase with total - no longer renders progress
+	// (processing progress removed - comparison results section now shows the meaningful info)
 	screen.status.AnalysisPhase = "scanning_source"
 	screen.status.TotalFilesToScan = 1000
 	screen.status.TotalBytesToScan = 10_000_000
@@ -107,8 +108,7 @@ func TestRenderAnalysisProgress(t *testing.T) {
 	builder.Reset()
 	screen.renderAnalysisProgress(&builder)
 	result = builder.String()
-	g.Expect(result).ShouldNot(BeEmpty())
-	g.Expect(result).Should(ContainSubstring("Files:"))
+	g.Expect(result).Should(BeEmpty()) // Processing progress no longer shown
 
 	// Test scanning phase without total (still in counting mode)
 	screen.status.AnalysisPhase = "counting_dest"
@@ -178,7 +178,8 @@ func TestRenderAnalysisProgress_PhaseTransition(t *testing.T) {
 
 	g.Expect(resultCounting).Should(ContainSubstring("Found"))
 
-	// Transition to processing phase
+	// Transition to processing phase - no longer renders progress
+	// (processing progress removed - comparison results section provides the meaningful info)
 	screen.status.AnalysisPhase = "scanning_source"
 	screen.status.TotalFilesToScan = 1000
 	screen.status.TotalBytesToScan = 10_000_000
@@ -188,11 +189,12 @@ func TestRenderAnalysisProgress_PhaseTransition(t *testing.T) {
 	screen.renderAnalysisProgress(&builder)
 	resultProcessing := builder.String()
 
-	g.Expect(resultProcessing).Should(ContainSubstring("Files:"))
+	g.Expect(resultProcessing).Should(BeEmpty()) // Processing progress no longer shown
 	g.Expect(resultProcessing).ShouldNot(ContainSubstring("Found"))
 }
 
-// TestRenderAnalysisProgress_ProcessingPhase verifies processing phase routing
+// TestRenderAnalysisProgress_ProcessingPhase verifies processing phase no longer renders
+// Processing progress was removed - comparison results section now provides the meaningful info
 func TestRenderAnalysisProgress_ProcessingPhase(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -218,11 +220,8 @@ func TestRenderAnalysisProgress_ProcessingPhase(t *testing.T) {
 	screen.renderAnalysisProgress(&builder)
 	result := builder.String()
 
-	// Should use processing progress renderer
-	g.Expect(result).Should(ContainSubstring("Files:"))
-	g.Expect(result).Should(ContainSubstring("Bytes:"))
-	g.Expect(result).Should(ContainSubstring("Time:"))
-	g.Expect(result).ShouldNot(ContainSubstring("Found")) // Counting format
+	// Processing progress no longer renders - empty output expected
+	g.Expect(result).Should(BeEmpty())
 }
 
 // TestRenderCountingProgress_ElapsedTime verifies time calculation

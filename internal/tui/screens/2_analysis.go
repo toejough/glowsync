@@ -267,15 +267,10 @@ func (s AnalysisScreen) handleEngineEvent(msg shared.EngineEventMsg) (tea.Model,
 			s.destPhases = append(s.destPhases, completedPhase{text: label, result: result})
 		}
 	case syncengine.CompareStarted:
-		s.otherPhases = append(s.otherPhases, "Comparing files")
+		// No longer adding "Comparing files" - timeline shows state
 	case syncengine.CompareComplete:
 		s.syncPlan = evt.Plan
-		// Add comparison results to completed phases
-		s.otherPhases = append(s.otherPhases,
-			fmt.Sprintf("In both: %d", evt.Plan.FilesInBoth),
-			fmt.Sprintf("Only in source: %d", evt.Plan.FilesOnlyInSource),
-			fmt.Sprintf("Only in dest: %d", evt.Plan.FilesOnlyInDest),
-		)
+		// Comparison results are rendered directly from syncPlan, not added to otherPhases
 	}
 
 	// Continue listening for more events
@@ -408,12 +403,14 @@ func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 	// Calculate progress metrics
 	progress := s.status.CalculateAnalysisProgress()
 
-	// Route to appropriate renderer based on phase
+	// Only show counting progress during counting phase
+	// Processing progress (comparing/deleting) is covered by comparison results section
 	if progress.IsCounting {
 		builder.WriteString(s.renderCountingProgress(s.status))
-	} else {
-		builder.WriteString(s.renderProcessingProgress(s.status, progress))
 	}
+	// Note: renderProcessingProgress removed - confusing because it shows different
+	// file counts than source/dest counts. Comparison results section provides the
+	// meaningful information about what's happening.
 }
 
 func (s AnalysisScreen) renderAnalyzingView() string {
@@ -456,7 +453,28 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	// Show dest section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), false)
 
-	// Other completed phases (comparing, deleting, etc.)
+	// Comparison results section (when complete)
+	if s.syncPlan != nil {
+		builder.WriteString(shared.RenderLabel("Comparison:"))
+		builder.WriteString("\n")
+		builder.WriteString("  ")
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("In both: %d", s.syncPlan.FilesInBoth)))
+		builder.WriteString("\n")
+		builder.WriteString("  ")
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("Only in source: %d", s.syncPlan.FilesOnlyInSource)))
+		builder.WriteString("\n")
+		builder.WriteString("  ")
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("Only in dest: %d", s.syncPlan.FilesOnlyInDest)))
+		builder.WriteString("\n")
+	}
+
+	// Other completed phases (if any remaining)
 	for _, phase := range s.otherPhases {
 		builder.WriteString(shared.SuccessSymbol())
 		builder.WriteString(" ")
@@ -552,13 +570,15 @@ func (s AnalysisScreen) isDestPhaseActive() bool {
 	return s.activeScanTargets["dest"]
 }
 
-// isOtherPhaseActive returns true if the current phase is not source/dest specific.
+// isOtherPhaseActive returns true if the current phase is not source/dest specific
+// and is a phase we want to show a spinner for.
 func (s AnalysisScreen) isOtherPhaseActive() bool {
 	if s.status == nil {
 		return false
 	}
-	return !s.isSourcePhaseActive() && !s.isDestPhaseActive() &&
-		s.status.AnalysisPhase != shared.StateComplete
+	// Only show spinner for "comparing" phase
+	// Other phases: source/dest scans shown separately, "deleting" covered by comparison results
+	return s.status.AnalysisPhase == shared.PhaseComparing
 }
 
 // getCurrentPhaseLabel returns the label for the current active phase.
