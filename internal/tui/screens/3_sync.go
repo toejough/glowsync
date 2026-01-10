@@ -368,11 +368,20 @@ func (s SyncScreen) renderCancellationContent() string {
 
 //nolint:cyclop,gocognit,funlen // Complex rendering logic for file status display with multiple formatting cases
 func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToShow int) {
-	// Count how many files are actually copying and display them
-	totalCopying := 0
-	filesDisplayed := 0
+	// First, count how many files are actually in active states
+	var activeFiles []*syncengine.FileToSync
+	for _, file := range s.status.FilesToSync {
+		if file.Status == statusCopying || file.Status == statusFinalizing || file.Status == statusOpening {
+			activeFiles = append(activeFiles, file)
+		}
+	}
 
-	builder.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Copying (%d):", len(s.status.CurrentFiles))))
+	// Don't show anything if no files are active
+	if len(activeFiles) == 0 {
+		return
+	}
+
+	builder.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Copying (%d):", len(activeFiles))))
 	builder.WriteString("\n")
 
 	// Calculate available width for path display
@@ -420,47 +429,46 @@ func (s SyncScreen) renderCurrentlyCopying(builder *strings.Builder, maxFilesToS
 
 	// Display up to maxFilesToShow files
 	// Consistent format: [progress bar] [percentage] [path] [status]
-	for _, file := range s.status.FilesToSync {
-		if file.Status == statusCopying || file.Status == statusFinalizing || file.Status == statusOpening {
-			totalCopying++
-
-			if filesDisplayed < maxFilesToShow {
-				// Calculate file progress percentage based on status
-				var filePercent float64
-				var statusMsg string
-
-				switch file.Status {
-				case statusOpening:
-					filePercent = 0
-					statusMsg = "waiting for dest"
-				case statusCopying:
-					if file.Size > 0 {
-						filePercent = float64(file.Transferred) / float64(file.Size)
-					}
-					statusMsg = "copying"
-				case statusFinalizing:
-					filePercent = 1.0
-					statusMsg = "finalizing"
-				}
-
-				// Truncate path to fit available width
-				truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
-
-				// Consistent format: [progress bar] [percentage] [path] [status]
-				fmt.Fprintf(builder, "%s %5.1f%% %s %s\n",
-					shared.RenderProgress(s.fileProgress, filePercent),
-					filePercent*shared.ProgressPercentageScale,
-					shared.FileItemCopyingStyle().Render(truncPath),
-					shared.RenderDim(statusMsg))
-
-				filesDisplayed++
-			}
+	filesDisplayed := 0
+	for _, file := range activeFiles {
+		if filesDisplayed >= maxFilesToShow {
+			break
 		}
+
+		// Calculate file progress percentage based on status
+		var filePercent float64
+		var statusMsg string
+
+		switch file.Status {
+		case statusOpening:
+			filePercent = 0
+			statusMsg = "waiting for dest"
+		case statusCopying:
+			if file.Size > 0 {
+				filePercent = float64(file.Transferred) / float64(file.Size)
+			}
+			statusMsg = "copying"
+		case statusFinalizing:
+			filePercent = 1.0
+			statusMsg = "finalizing"
+		}
+
+		// Truncate path to fit available width
+		truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
+
+		// Consistent format: [progress bar] [percentage] [path] [status]
+		fmt.Fprintf(builder, "%s %5.1f%% %s %s\n",
+			shared.RenderProgress(s.fileProgress, filePercent),
+			filePercent*shared.ProgressPercentageScale,
+			shared.FileItemCopyingStyle().Render(truncPath),
+			shared.RenderDim(statusMsg))
+
+		filesDisplayed++
 	}
 
 	// Show how many more files are being copied but not displayed
-	if totalCopying > filesDisplayed {
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", totalCopying-filesDisplayed)))
+	if len(activeFiles) > filesDisplayed {
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", len(activeFiles)-filesDisplayed)))
 	}
 }
 

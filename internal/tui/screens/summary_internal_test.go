@@ -12,18 +12,6 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-func TestGetMaxPathWidthSummary(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &SummaryScreen{
-		width: 100,
-	}
-
-	width := screen.getMaxPathWidth()
-	g.Expect(width).Should(BeNumerically(">", 0))
-}
-
 func TestRenderErrorView_WithEnrichedAdditionalErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
