@@ -600,6 +600,19 @@ func (s SyncScreen) renderSyncingContent() string {
 		return builder.String()
 	}
 
+	// Show "Starting sync..." until actual sync activity begins
+	// This prevents a confusing jump to high progress (e.g., 79%) from already-synced files
+	syncActivityStarted := s.status.ProcessedFiles > 0 ||
+		s.status.TransferredBytes > 0 ||
+		len(s.status.CurrentFiles) > 0
+
+	if !syncActivityStarted {
+		builder.WriteString(s.spinner.View())
+		builder.WriteString(" Starting sync...\n\n")
+
+		return builder.String()
+	}
+
 	// Unified progress (replaces separate overall and session progress)
 	s.renderUnifiedProgress(&builder)
 
