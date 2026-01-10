@@ -1,4 +1,3 @@
-//nolint:paralleltest // Event type tests are simple struct verification
 package syncengine_test
 
 import (
@@ -11,6 +10,7 @@ import (
 
 // TestEventTypes_ScanEvents verifies scan phase event types exist with expected fields.
 func TestEventTypes_ScanEvents(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// ScanStarted should have Target field
@@ -30,6 +30,7 @@ func TestEventTypes_ScanEvents(t *testing.T) {
 
 // TestEventTypes_CompareEvents verifies compare phase event types exist with expected fields.
 func TestEventTypes_CompareEvents(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// CompareStarted exists (no fields)
@@ -56,6 +57,7 @@ func TestEventTypes_CompareEvents(t *testing.T) {
 
 // TestEventTypes_SyncEvents verifies sync phase event types exist with expected fields.
 func TestEventTypes_SyncEvents(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// SyncStarted exists (no fields)
@@ -97,6 +99,7 @@ func TestEventTypes_SyncEvents(t *testing.T) {
 
 // TestEventTypes_ErrorEvent verifies error event type exists with expected fields.
 func TestEventTypes_ErrorEvent(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// ErrorOccurred should have Phase and Err fields
@@ -107,6 +110,7 @@ func TestEventTypes_ErrorEvent(t *testing.T) {
 
 // TestEventTypes_ImplementEventInterface verifies all events implement the Event interface.
 func TestEventTypes_ImplementEventInterface(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// All event types should be assignable to Event interface
@@ -151,6 +155,7 @@ func TestEventTypes_ImplementEventInterface(t *testing.T) {
 
 // TestEventEmitter_Interface verifies EventEmitter interface exists.
 func TestEventEmitter_Interface(t *testing.T) {
+	t.Parallel()
 	g := NewWithT(t)
 
 	// EventEmitter interface should exist and have Emit method
