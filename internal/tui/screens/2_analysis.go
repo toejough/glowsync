@@ -186,7 +186,11 @@ func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg)
 	s.engine.AdaptiveMode = s.config.AdaptiveMode
 	s.engine.ChangeType = s.config.TypeOfChange
 
-	// Register status callback
+	// Create event bridge and wire it to the engine
+	s.eventBridge = shared.NewEventBridge()
+	s.engine.SetEventEmitter(s.eventBridge)
+
+	// Register status callback (still needed for progress display during polling transition)
 	s.engine.RegisterStatusCallback(func(status *syncengine.Status) {
 		s.status = status
 	})
@@ -215,6 +219,8 @@ func (s AnalysisScreen) handleEngineInitialized(msg shared.EngineInitializedMsg)
 
 			return shared.AnalysisCompleteMsg{}
 		},
+		// Start listening for engine events
+		s.eventBridge.ListenCmd(),
 	)
 }
 
