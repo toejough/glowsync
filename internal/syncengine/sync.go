@@ -232,6 +232,9 @@ func (e *Engine) Analyze() error {
 		FilesInBoth:       e.Status.FilesInBoth,
 		FilesOnlyInSource: e.Status.FilesOnlyInSource,
 		FilesOnlyInDest:   e.Status.FilesOnlyInDest,
+		BytesInBoth:       e.Status.BytesInBoth,
+		BytesOnlyInSource: e.Status.BytesOnlyInSource,
+		BytesOnlyInDest:   e.Status.BytesOnlyInDest,
 	}
 	e.Status.mu.RUnlock()
 	e.emit(CompareComplete{Plan: plan})
@@ -727,6 +730,8 @@ func (e *Engine) compareAndPlanSync(sourceFiles, destFiles map[string]*fileops.F
 	alreadySyncedCount := 0
 	filesInBoth := 0
 	filesOnlyInSource := 0
+	var bytesInBoth int64
+	var bytesOnlyInSource int64
 
 	for relPath, srcFile := range sourceFiles {
 		// Check for cancellation periodically (every 100 files)
@@ -744,11 +749,13 @@ func (e *Engine) compareAndPlanSync(sourceFiles, destFiles map[string]*fileops.F
 
 		dstFile := destFiles[relPath]
 
-		// Track comparison counts
+		// Track comparison counts and bytes
 		if dstFile != nil {
 			filesInBoth++
+			bytesInBoth += srcFile.Size
 		} else {
 			filesOnlyInSource++
+			bytesOnlyInSource += srcFile.Size
 		}
 
 		// Determine if file needs sync based on ChangeType
@@ -786,6 +793,8 @@ func (e *Engine) compareAndPlanSync(sourceFiles, destFiles map[string]*fileops.F
 	e.Status.mu.Lock()
 	e.Status.FilesInBoth = filesInBoth
 	e.Status.FilesOnlyInSource = filesOnlyInSource
+	e.Status.BytesInBoth = bytesInBoth
+	e.Status.BytesOnlyInSource = bytesOnlyInSource
 	e.Status.mu.Unlock()
 
 	return nil
@@ -850,11 +859,12 @@ func (e *Engine) compareFilesWithHash(relPath string, comparedCount int) bool {
 }
 
 func (e *Engine) countAndLogOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) (int, int) {
-	filesToDelete, dirsToDelete := countOrphanedItems(sourceFiles, destFiles)
+	filesToDelete, dirsToDelete, bytesToDelete := countOrphanedItems(sourceFiles, destFiles)
 
-	// Store orphan count in Status for CompareComplete event
+	// Store orphan count and bytes in Status for CompareComplete event
 	e.Status.mu.Lock()
 	e.Status.FilesOnlyInDest = filesToDelete
+	e.Status.BytesOnlyInDest = bytesToDelete
 	e.Status.mu.Unlock()
 
 	if filesToDelete == 0 && dirsToDelete == 0 {
@@ -2388,9 +2398,12 @@ type Status struct {
 	AlreadySyncedBytes int64 // Bytes that were already up-to-date
 
 	// Comparison counts (for TUI display)
-	FilesInBoth       int // Files that exist in both source and dest
-	FilesOnlyInSource int // Files that exist only in source (new files)
-	FilesOnlyInDest   int // Files that exist only in dest (orphans)
+	FilesInBoth       int   // Files that exist in both source and dest
+	FilesOnlyInSource int   // Files that exist only in source (new files)
+	FilesOnlyInDest   int   // Files that exist only in dest (orphans)
+	BytesInBoth       int64 // Bytes of files in both (no action needed)
+	BytesOnlyInSource int64 // Bytes to copy
+	BytesOnlyInDest   int64 // Bytes to delete
 
 	// Analysis progress
 	//nolint:lll // Inline comment listing all possible phase values
@@ -2702,9 +2715,10 @@ type dirToDelete struct {
 
 // countAndLogOrphanedItems counts and logs sample of orphaned items
 // countOrphanedItems counts files and directories in destination that don't exist in source.
-func countOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) (int, int) {
+func countOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) (int, int, int64) {
 	filesToDelete := 0
 	dirsToDelete := 0
+	var bytesToDelete int64
 
 	for relPath, dstFile := range destFiles {
 		if _, exists := sourceFiles[relPath]; !exists {
@@ -2712,11 +2726,12 @@ func countOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) (in
 				dirsToDelete++
 			} else {
 				filesToDelete++
+				bytesToDelete += dstFile.Size
 			}
 		}
 	}
 
-	return filesToDelete, dirsToDelete
+	return filesToDelete, dirsToDelete, bytesToDelete
 }
 
 // formatSyncReason formats the reason why a file needs to be synced.

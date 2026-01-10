@@ -426,27 +426,38 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	// Show source section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Source", s.config.SourcePath, s.sourcePhases, s.isSourcePhaseActive(), false)
 
+	// Show "only in source" (to copy) info after source section
+	if s.syncPlan != nil && s.syncPlan.FilesOnlyInSource > 0 {
+		builder.WriteString("  ")
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("To copy: %d files (%s)",
+			s.syncPlan.FilesOnlyInSource, shared.FormatBytes(s.syncPlan.BytesOnlyInSource))))
+		builder.WriteString("\n")
+	}
+
 	// Show dest section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), false)
 
-	// Comparison results section (when complete)
-	if s.syncPlan != nil {
+	// Show "only in dest" (to delete) info after dest section
+	if s.syncPlan != nil && s.syncPlan.FilesOnlyInDest > 0 {
+		builder.WriteString("  ")
+		builder.WriteString(shared.SuccessSymbol())
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("To delete: %d files (%s)",
+			s.syncPlan.FilesOnlyInDest, shared.FormatBytes(s.syncPlan.BytesOnlyInDest))))
+		builder.WriteString("\n")
+	}
+
+	// Comparison results section - files in both locations (no action needed)
+	if s.syncPlan != nil && s.syncPlan.FilesInBoth > 0 {
 		builder.WriteString(shared.RenderLabel("Comparison:"))
 		builder.WriteString("\n")
 		builder.WriteString("  ")
 		builder.WriteString(shared.SuccessSymbol())
 		builder.WriteString(" ")
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("In both: %d", s.syncPlan.FilesInBoth)))
-		builder.WriteString("\n")
-		builder.WriteString("  ")
-		builder.WriteString(shared.SuccessSymbol())
-		builder.WriteString(" ")
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("Only in source: %d", s.syncPlan.FilesOnlyInSource)))
-		builder.WriteString("\n")
-		builder.WriteString("  ")
-		builder.WriteString(shared.SuccessSymbol())
-		builder.WriteString(" ")
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("Only in dest: %d", s.syncPlan.FilesOnlyInDest)))
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("In both: %d files (%s) - no action needed",
+			s.syncPlan.FilesInBoth, shared.FormatBytes(s.syncPlan.BytesInBoth))))
 		builder.WriteString("\n")
 	}
 

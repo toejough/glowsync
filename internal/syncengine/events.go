@@ -64,9 +64,12 @@ type SyncPlan struct {
 	BytesToCopy   int64
 
 	// Comparison counts for TUI display
-	FilesInBoth        int // Files that exist in both source and dest
-	FilesOnlyInSource  int // Files that exist only in source (new files)
-	FilesOnlyInDest    int // Files that exist only in dest (orphans)
+	FilesInBoth        int   // Files that exist in both source and dest
+	FilesOnlyInSource  int   // Files that exist only in source (new files)
+	FilesOnlyInDest    int   // Files that exist only in dest (orphans)
+	BytesInBoth        int64 // Bytes of files in both (no action needed)
+	BytesOnlyInSource  int64 // Bytes to copy (same as BytesToCopy)
+	BytesOnlyInDest    int64 // Bytes to delete
 }
 
 // Sync phase events
