@@ -47,30 +47,9 @@ func TestGetAnalysisPhaseText(t *testing.T) {
 	g.Expect(screen.getAnalysisPhaseText()).Should(ContainSubstring("Initializing"))
 }
 
-func TestRenderAnalysisLog(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &AnalysisScreen{
-		status: &syncengine.Status{
-			AnalysisLog: []string{"log entry 1", "log entry 2"},
-		},
-	}
-
-	var builder strings.Builder
-	screen.renderAnalysisLog(&builder)
-	result := builder.String()
-	g.Expect(result).Should(ContainSubstring("Activity Log"))
-	g.Expect(result).Should(ContainSubstring("log entry 1"))
-
-	// Test with empty log
-	screen.status.AnalysisLog = []string{}
-
-	builder.Reset()
-	screen.renderAnalysisLog(&builder)
-	result = builder.String()
-	g.Expect(result).Should(BeEmpty())
-}
+// TestRenderAnalysisLog removed - function was removed (Issue #40).
+// With parallel scanning, log entries interleave and become confusing.
+// Source/dest sections and comparison results now provide the meaningful info.
 
 func TestRenderAnalysisProgress(t *testing.T) {
 	t.Parallel()
@@ -88,17 +67,17 @@ func TestRenderAnalysisProgress(t *testing.T) {
 		overallProgress: newTestProgressBar(),
 	}
 
-	// Test counting phase
+	// Test counting phase - no longer renders progress (Issue #39)
+	// With parallel scanning, ScannedFiles is unreliable. Source/dest sections show accurate counts.
 	screen.status.AnalysisPhase = "counting_source"
 	screen.status.ScannedFiles = 100
 
 	var builder strings.Builder
 	screen.renderAnalysisProgress(&builder)
 	result := builder.String()
-	g.Expect(result).Should(ContainSubstring("Found"))
+	g.Expect(result).Should(BeEmpty()) // Counting progress removed
 
-	// Test processing phase with total - no longer renders progress
-	// (processing progress removed - comparison results section now shows the meaningful info)
+	// Test processing phase with total - also no longer renders progress
 	screen.status.AnalysisPhase = "scanning_source"
 	screen.status.TotalFilesToScan = 1000
 	screen.status.TotalBytesToScan = 10_000_000
@@ -110,7 +89,7 @@ func TestRenderAnalysisProgress(t *testing.T) {
 	result = builder.String()
 	g.Expect(result).Should(BeEmpty()) // Processing progress no longer shown
 
-	// Test scanning phase without total (still in counting mode)
+	// Test scanning phase without total - also no longer renders progress
 	screen.status.AnalysisPhase = "counting_dest"
 	screen.status.TotalFilesToScan = 0
 	screen.status.TotalBytesToScan = 0
@@ -120,10 +99,10 @@ func TestRenderAnalysisProgress(t *testing.T) {
 	builder.Reset()
 	screen.renderAnalysisProgress(&builder)
 	result = builder.String()
-	g.Expect(result).Should(ContainSubstring("Found"))
+	g.Expect(result).Should(BeEmpty()) // Counting progress removed
 }
 
-// TestRenderAnalysisProgress_CountingPhase verifies counting phase routing
+// TestRenderAnalysisProgress_CountingPhase verifies counting phase no longer renders (Issue #39)
 func TestRenderAnalysisProgress_CountingPhase(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -146,12 +125,11 @@ func TestRenderAnalysisProgress_CountingPhase(t *testing.T) {
 	screen.renderAnalysisProgress(&builder)
 	result := builder.String()
 
-	// Should use counting progress renderer
-	g.Expect(result).Should(ContainSubstring("Found"))
-	g.Expect(result).ShouldNot(ContainSubstring("Files:")) // Processing format
+	// Counting progress removed (Issue #39) - source/dest sections show accurate counts
+	g.Expect(result).Should(BeEmpty())
 }
 
-// TestRenderAnalysisProgress_PhaseTransition verifies correct routing during phase changes
+// TestRenderAnalysisProgress_PhaseTransition verifies progress is empty for all phases (Issue #39)
 func TestRenderAnalysisProgress_PhaseTransition(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -169,17 +147,16 @@ func TestRenderAnalysisProgress_PhaseTransition(t *testing.T) {
 		overallProgress: newTestProgressBar(),
 	}
 
-	// Start in counting phase
+	// Counting phase - no longer renders progress (Issue #39)
 	screen.status.AnalysisPhase = "counting_source"
 
 	var builder strings.Builder
 	screen.renderAnalysisProgress(&builder)
 	resultCounting := builder.String()
 
-	g.Expect(resultCounting).Should(ContainSubstring("Found"))
+	g.Expect(resultCounting).Should(BeEmpty()) // Counting progress removed
 
-	// Transition to processing phase - no longer renders progress
-	// (processing progress removed - comparison results section provides the meaningful info)
+	// Processing phase - also no longer renders progress
 	screen.status.AnalysisPhase = "scanning_source"
 	screen.status.TotalFilesToScan = 1000
 	screen.status.TotalBytesToScan = 10_000_000
@@ -190,7 +167,6 @@ func TestRenderAnalysisProgress_PhaseTransition(t *testing.T) {
 	resultProcessing := builder.String()
 
 	g.Expect(resultProcessing).Should(BeEmpty()) // Processing progress no longer shown
-	g.Expect(resultProcessing).ShouldNot(ContainSubstring("Found"))
 }
 
 // TestRenderAnalysisProgress_ProcessingPhase verifies processing phase no longer renders
@@ -224,80 +200,8 @@ func TestRenderAnalysisProgress_ProcessingPhase(t *testing.T) {
 	g.Expect(result).Should(BeEmpty())
 }
 
-// TestRenderCountingProgress_ElapsedTime verifies time calculation
-func TestRenderCountingProgress_ElapsedTime(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &AnalysisScreen{
-		status: &syncengine.Status{
-			ScannedFiles:      100,
-			AnalysisStartTime: time.Now().Add(-30 * time.Second),
-		},
-	}
-
-	result := screen.renderCountingProgress(screen.status)
-
-	// Should show elapsed time
-	g.Expect(result).Should(ContainSubstring("s")) // Time format includes seconds
-}
-
-// TestRenderCountingProgress_Format verifies output format for counting phase
-func TestRenderCountingProgress_Format(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &AnalysisScreen{
-		status: &syncengine.Status{
-			ScannedFiles:      50,
-			AnalysisStartTime: time.Now().Add(-5 * time.Second),
-		},
-	}
-
-	result := screen.renderCountingProgress(screen.status)
-
-	// Should contain basic format elements
-	g.Expect(result).Should(ContainSubstring("Found"))
-	g.Expect(result).Should(ContainSubstring("items"))
-	g.Expect(result).ShouldNot(ContainSubstring("%")) // No percentages during counting
-}
-
-// TestRenderCountingProgress_ScanRate verifies rate display
-func TestRenderCountingProgress_ScanRate(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &AnalysisScreen{
-		status: &syncengine.Status{
-			ScannedFiles:      100,
-			AnalysisStartTime: time.Now().Add(-10 * time.Second),
-			AnalysisRate:      10.0, // 10 items/second
-		},
-	}
-
-	result := screen.renderCountingProgress(screen.status)
-
-	// Should display scan rate
-	g.Expect(result).Should(ContainSubstring("/s")) // Rate per second
-}
-
-// TestRenderCountingProgress_ZeroFiles handles no files found
-func TestRenderCountingProgress_ZeroFiles(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	screen := &AnalysisScreen{
-		status: &syncengine.Status{
-			ScannedFiles:      0,
-			AnalysisStartTime: time.Now(),
-		},
-	}
-
-	result := screen.renderCountingProgress(screen.status)
-
-	// Should handle zero files gracefully
-	g.Expect(result).ShouldNot(BeEmpty())
-}
+// TestRenderCountingProgress tests removed - renderCountingProgress was removed (Issue #39).
+// With parallel scanning, ScannedFiles is unreliable. Source/dest sections show accurate counts.
 
 // TestRenderCurrentPathWithTruncation removed - renderCurrentPathSection was removed
 // because the "Current:" display was confusing. Source/dest sections provide context.

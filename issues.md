@@ -798,3 +798,21 @@ A simple md issue tracker.
    - completed: 2026-01-10
    - description: The time display shows meaningless/inaccurate values
    - resolution: Fixed by removing processing progress display (issue #36). The confusing time estimates no longer shown.
+39. "Found 0 items" status is confusing during parallel scanning
+   - status: done
+   - priority: high
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: With parallel scanning, the "Found X items" counter shows 0 or incorrect values because ScannedFiles is reset when each scan phase starts
+   - root cause: Both source and dest goroutines write to shared `ScannedFiles` field, causing race and reset
+   - observed behavior: Shows "Found 0 items" when scanning should be showing counts
+   - resolution: Removed renderCountingProgress and renderAnalysisProgress (empty body). Source/dest sections show accurate counts from events.
+40. Activity log stale during parallel scanning
+   - status: done
+   - priority: high
+   - created: 2026-01-10
+   - completed: 2026-01-10
+   - description: Activity log shows only source scanning entries, not dest scanning or comparison entries despite debug logs showing these activities
+   - root cause: Parallel goroutines both write to AnalysisLog - entries interleave and become confusing
+   - observed behavior: Log shows source scanning, but dest scanning and comparison entries don't appear
+   - resolution: Removed activity log display entirely. Source/dest sections and comparison results section provide the meaningful status information.

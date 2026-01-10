@@ -376,41 +376,17 @@ func (s AnalysisScreen) initializeEngine() tea.Cmd {
 	}
 }
 
-func (s AnalysisScreen) renderAnalysisLog(builder *strings.Builder) {
-	if len(s.status.AnalysisLog) == 0 {
-		return
-	}
-
-	builder.WriteString(shared.RenderLabel("Activity Log:"))
-	builder.WriteString("\n")
-
-	// Show last 10 log entries
-	startIdx := 0
-	if len(s.status.AnalysisLog) > shared.ProgressUpdateInterval {
-		startIdx = len(s.status.AnalysisLog) - shared.ProgressUpdateInterval
-	}
-
-	for i := startIdx; i < len(s.status.AnalysisLog); i++ {
-		fmt.Fprintf(builder, "  %s\n", s.status.AnalysisLog[i])
-	}
-}
+// renderAnalysisLog removed (Issue #40). With parallel scanning, log entries from
+// source/dest goroutines interleave and become confusing. The source/dest sections
+// and comparison results section now provide the meaningful status information.
 
 func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
-	if s.engine == nil || s.status == nil {
-		return
-	}
-
-	// Calculate progress metrics
-	progress := s.status.CalculateAnalysisProgress()
-
-	// Only show counting progress during counting phase
-	// Processing progress (comparing/deleting) is covered by comparison results section
-	if progress.IsCounting {
-		builder.WriteString(s.renderCountingProgress(s.status))
-	}
-	// Note: renderProcessingProgress removed - confusing because it shows different
-	// file counts than source/dest counts. Comparison results section provides the
-	// meaningful information about what's happening.
+	// Note: Counting progress display removed (Issue #39).
+	// With parallel scanning, ScannedFiles is unreliable (race conditions between goroutines).
+	// The source/dest sections already show accurate counts from events.
+	// Processing progress also removed (Issue #36) - comparison results section provides
+	// the meaningful information about what's happening.
+	_ = builder // silence unused parameter warning
 }
 
 func (s AnalysisScreen) renderAnalyzingView() string {
@@ -504,8 +480,9 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 		builder.WriteString("\n\n")
 	}
 
-	// Show analysis log
-	s.renderAnalysisLog(&builder)
+	// Note: Activity log removed (Issue #40). With parallel scanning, log entries interleave
+	// and become confusing. Source/dest sections and comparison results provide the
+	// meaningful status information.
 
 	// Show help text
 	builder.WriteString("\n")
@@ -595,36 +572,6 @@ func (s AnalysisScreen) getCurrentPhaseLabel() string {
 	}
 }
 
-func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string {
-	var builder strings.Builder
-
-	// Show elapsed time
-	var elapsed time.Duration
-	if !status.AnalysisStartTime.IsZero() {
-		elapsed = time.Since(status.AnalysisStartTime)
-	}
-
-	// Show items found
-	builder.WriteString(fmt.Sprintf("Found: %d items", status.ScannedFiles))
-
-	// Show scan rate if available
-	if status.AnalysisRate > 0 {
-		builder.WriteString(fmt.Sprintf(" (%.1f items/s)", status.AnalysisRate))
-	}
-
-	builder.WriteString("\n")
-
-	// Show elapsed time
-	if elapsed > 0 {
-		builder.WriteString(fmt.Sprintf("Elapsed: %s\n", shared.FormatDuration(elapsed)))
-	}
-
-	builder.WriteString("\n")
-	builder.WriteString(s.spinner.View())
-	builder.WriteString(" Counting...")
-
-	return builder.String()
-}
 // ============================================================================
 // Rendering
 // ============================================================================
