@@ -496,11 +496,7 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	// Show scan progress with progress bar or count
 	s.renderAnalysisProgress(&builder)
 
-	// Show current path being scanned
-	if s.status.CurrentPath != "" {
-		s.renderCurrentPathSection(&builder)
-		builder.WriteString("\n")
-	}
+	// Note: "Current:" path display removed - was confusing, source/dest sections provide context
 
 	// Show errors if any
 	if len(s.status.Errors) > 0 {
@@ -629,13 +625,6 @@ func (s AnalysisScreen) renderCountingProgress(status *syncengine.Status) string
 
 	return builder.String()
 }
-
-func (s AnalysisScreen) renderCurrentPathSection(builder *strings.Builder) {
-	maxWidth := shared.CalculateMaxPathWidth(s.width)
-	truncatedPath := shared.RenderPathPlain(s.status.CurrentPath, maxWidth)
-	fmt.Fprintf(builder, "Current: %s\n", truncatedPath)
-}
-
 // ============================================================================
 // Rendering
 // ============================================================================
