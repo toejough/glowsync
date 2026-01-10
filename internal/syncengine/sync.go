@@ -138,6 +138,14 @@ func (e *Engine) GetEventEmitter() EventEmitter {
 	return e.emitter
 }
 
+// emit sends an event if an emitter is configured.
+// Safe to call even when emitter is nil.
+func (e *Engine) emit(event Event) {
+	if e.emitter != nil {
+		e.emitter.Emit(event)
+	}
+}
+
 // Analyze scans source and destination to determine what needs to be synced
 func (e *Engine) Analyze() error {
 	e.logAnalysis("Starting analysis...")
@@ -158,10 +166,12 @@ func (e *Engine) Analyze() error {
 	}
 
 	// Scan source directory
+	e.emit(ScanStarted{Target: "source"})
 	sourceFiles, err := e.scanSourceDirectory()
 	if err != nil {
 		return err
 	}
+	e.emit(ScanComplete{Target: "source", Count: len(sourceFiles)})
 
 	err = e.checkCancellation()
 	if err != nil {
@@ -169,10 +179,12 @@ func (e *Engine) Analyze() error {
 	}
 
 	// Scan destination directory
+	e.emit(ScanStarted{Target: "dest"})
 	destFiles, err := e.scanDestinationDirectory()
 	if err != nil {
 		return err
 	}
+	e.emit(ScanComplete{Target: "dest", Count: len(destFiles)})
 
 	err = e.checkCancellation()
 	if err != nil {
@@ -182,6 +194,7 @@ func (e *Engine) Analyze() error {
 	e.logSamplePaths(sourceFiles, destFiles)
 
 	// Compare files and determine which need sync
+	e.emit(CompareStarted{})
 	err = e.compareAndPlanSync(sourceFiles, destFiles)
 	if err != nil {
 		return err
@@ -194,6 +207,16 @@ func (e *Engine) Analyze() error {
 	}
 
 	e.finalizeAnalysis()
+
+	// Emit compare complete with sync plan
+	e.Status.mu.RLock()
+	plan := &SyncPlan{
+		FilesToCopy:   len(e.Status.FilesToSync),
+		FilesToDelete: 0, // TODO: track deletion count
+		BytesToCopy:   e.Status.TotalBytes,
+	}
+	e.Status.mu.RUnlock()
+	e.emit(CompareComplete{Plan: plan})
 
 	return nil
 }
