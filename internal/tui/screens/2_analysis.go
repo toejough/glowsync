@@ -390,11 +390,13 @@ func (s AnalysisScreen) renderAnalysisProgress(builder *strings.Builder) {
 }
 
 func (s AnalysisScreen) renderAnalyzingView() string {
-	// Timeline header + content + box wrapper
+	// Timeline header + content + help text + box wrapper (standalone mode)
 	var builder strings.Builder
 	builder.WriteString(shared.RenderTimeline("scan"))
 	builder.WriteString("\n\n")
 	builder.WriteString(s.renderAnalyzingContent())
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Esc to go back • Ctrl+C to exit"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
@@ -416,10 +418,9 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 		builder.WriteString("\n")
 		builder.WriteString("  ")
 		builder.WriteString(shared.RenderDim("⋯ Waiting"))
-		builder.WriteString("\n\n")
+		builder.WriteString("\n")
 
-		builder.WriteString(shared.RenderDim("Esc to go back • Ctrl+C to exit"))
-
+		// Note: Help text removed - shown by active screen in unified view
 		return builder.String()
 	}
 
@@ -495,10 +496,7 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	// and become confusing. Source/dest sections and comparison results provide the
 	// meaningful status information.
 
-	// Show help text
-	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Esc to go back • Ctrl+C to exit"))
-
+	// Note: Help text removed - shown by active screen in unified view
 	return builder.String()
 }
 

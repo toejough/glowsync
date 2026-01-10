@@ -45,13 +45,15 @@ func (s ConfirmationScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, nil
 }
 
-// View renders the confirmation screen
+// View renders the confirmation screen (standalone mode with help text)
 func (s ConfirmationScreen) View() string {
-	// Timeline header + content + box wrapper
+	// Timeline header + content + help text + box wrapper
 	var builder strings.Builder
 	builder.WriteString(shared.RenderTimeline("compare"))
 	builder.WriteString("\n\n")
 	builder.WriteString(s.RenderContent())
+	builder.WriteString("\n")
+	builder.WriteString(shared.RenderDim("Enter to sync • Esc to cancel • Ctrl+C to exit"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 
@@ -98,10 +100,7 @@ func (s ConfirmationScreen) RenderContent() string {
 		builder.WriteString(errorList)
 	}
 
-	// Help text
-	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Enter to sync • Esc to cancel • Ctrl+C to exit"))
-
+	// Note: Help text removed - shown by unified screen based on active phase
 	return builder.String()
 }
 

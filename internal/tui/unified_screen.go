@@ -161,6 +161,9 @@ func (u *UnifiedScreen) View() string {
 		sections = append(sections, u.renderSummarySection())
 	}
 
+	// Add help text based on current phase
+	sections = append(sections, u.renderHelpText())
+
 	// Filter out empty sections before joining to avoid extra spacing
 	var nonEmpty []string
 	for _, s := range sections {
@@ -170,6 +173,24 @@ func (u *UnifiedScreen) View() string {
 	}
 	content := strings.Join(nonEmpty, "\n\n")
 	return shared.RenderBox(content, u.width, u.height)
+}
+
+// renderHelpText returns the appropriate help text for the current phase
+func (u *UnifiedScreen) renderHelpText() string {
+	switch u.phase {
+	case PhaseInput:
+		return "" // Input screen has its own help text
+	case PhaseScan, PhaseCompare:
+		return shared.RenderDim("Esc to go back • Ctrl+C to exit")
+	case PhaseConfirm:
+		return shared.RenderDim("Enter to sync • Esc to cancel • Ctrl+C to exit")
+	case PhaseSync:
+		return shared.RenderDim("Esc or q to cancel • Ctrl+C to exit immediately")
+	case PhaseSummary:
+		return shared.RenderDim("Enter or q to exit • Esc for new session")
+	default:
+		return ""
+	}
 }
 
 // ============================================================================
