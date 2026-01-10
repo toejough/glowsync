@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
 
 	"github.com/joe/copy-files/internal/config"
+	"github.com/joe/copy-files/internal/syncengine"
 	"github.com/joe/copy-files/internal/tui/screens"
 	"github.com/joe/copy-files/internal/tui/shared"
 )
@@ -264,4 +265,92 @@ func TestAnalysisScreenWindowSize(t *testing.T) {
 	updatedModel, _ := screen.Update(msg)
 	g := NewWithT(t)
 	g.Expect(updatedModel).ShouldNot(BeNil())
+}
+
+// ============================================================================
+// Engine Event Tests (Phase C)
+// ============================================================================
+
+func TestAnalysisScreen_HandlesScanStartedEvent(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/source",
+		DestPath:   "/dest",
+	}
+	screen := screens.NewAnalysisScreen(cfg)
+
+	// Send ScanStarted event wrapped in EngineEventMsg
+	eventMsg := shared.EngineEventMsg{
+		Event: syncengine.ScanStarted{Target: "source"},
+	}
+
+	updatedModel, cmd := screen.Update(eventMsg)
+
+	g.Expect(updatedModel).ShouldNot(BeNil())
+	// Should return a command to listen for more events
+	g.Expect(cmd).ShouldNot(BeNil())
+
+	// The screen should have recorded the scan started state
+	analysisScreen := updatedModel.(screens.AnalysisScreen)
+	g.Expect(analysisScreen.CurrentScanTarget()).To(Equal("source"))
+}
+
+func TestAnalysisScreen_HandlesScanCompleteEvent(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/source",
+		DestPath:   "/dest",
+	}
+	screen := screens.NewAnalysisScreen(cfg)
+
+	// First send scan started
+	screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanStarted{Target: "source"},
+	})
+
+	// Now send scan complete
+	eventMsg := shared.EngineEventMsg{
+		Event: syncengine.ScanComplete{Target: "source", Count: 1234},
+	}
+
+	updatedModel, _ := screen.Update(eventMsg)
+	analysisScreen := updatedModel.(screens.AnalysisScreen)
+
+	// The screen should have recorded the final count
+	g.Expect(analysisScreen.SourceFileCount()).To(Equal(1234))
+}
+
+func TestAnalysisScreen_HandlesCompareCompleteEvent(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/source",
+		DestPath:   "/dest",
+	}
+	screen := screens.NewAnalysisScreen(cfg)
+
+	// Send compare complete event
+	eventMsg := shared.EngineEventMsg{
+		Event: syncengine.CompareComplete{
+			Plan: &syncengine.SyncPlan{
+				FilesToCopy:   100,
+				FilesToDelete: 5,
+				BytesToCopy:   1024 * 1024,
+			},
+		},
+	}
+
+	updatedModel, _ := screen.Update(eventMsg)
+	analysisScreen := updatedModel.(screens.AnalysisScreen)
+
+	// The screen should have the sync plan
+	plan := analysisScreen.SyncPlan()
+	g.Expect(plan).ToNot(BeNil())
+	g.Expect(plan.FilesToCopy).To(Equal(100))
+	g.Expect(plan.BytesToCopy).To(Equal(int64(1024 * 1024)))
 }
