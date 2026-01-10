@@ -2097,6 +2097,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	e.Status.AnalysisPhase = phaseCountingSource
 	e.Status.mu.Unlock()
 
+	e.emit(ScanStarted{Target: "source"})
 	e.logAnalysis("Accessing source...")
 	e.notifyStatusUpdate()
 
@@ -2117,6 +2118,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	}
 
 	e.logAnalysis(fmt.Sprintf("Source file count: %d", sourceCount))
+	e.emit(ScanComplete{Target: "source", Count: sourceCount})
 
 	// Store source count immediately so TUI can display it
 	e.Status.mu.Lock()
@@ -2129,6 +2131,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	e.Status.ScannedFiles = 0
 	e.Status.mu.Unlock()
 
+	e.emit(ScanStarted{Target: "dest"})
 	e.logAnalysis("Accessing destination...")
 	e.notifyStatusUpdate()
 
@@ -2153,6 +2156,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	}
 
 	e.logAnalysis(fmt.Sprintf("Destination file count: %d", destCount))
+	e.emit(ScanComplete{Target: "dest", Count: destCount})
 
 	// Store dest count immediately so TUI can display it
 	e.Status.mu.Lock()
