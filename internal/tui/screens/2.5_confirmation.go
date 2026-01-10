@@ -1,7 +1,6 @@
 package screens
 
 import (
-	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -64,18 +63,11 @@ func (s ConfirmationScreen) RenderContent() string {
 	// Get status from engine
 	status := s.engine.GetStatus()
 
-	// Statistics
-	builder.WriteString(shared.RenderLabel("Files to sync: "))
-	builder.WriteString(strconv.Itoa(status.TotalFiles))
-	builder.WriteString("\n")
-
-	builder.WriteString(shared.RenderLabel("Total size: "))
-	builder.WriteString(shared.FormatBytes(status.TotalBytes))
-	builder.WriteString("\n")
+	// Note: "Files to sync" and "Total size" removed - now shown in analysis screen
+	// as "To copy: N files (X bytes)" under the Source section
 
 	// Filter indicator (if pattern is set)
 	if s.engine.FilePattern != "" {
-		builder.WriteString("\n")
 		builder.WriteString(shared.RenderLabel("Filtering by: "))
 		builder.WriteString(s.engine.FilePattern)
 		builder.WriteString("\n")
@@ -83,7 +75,6 @@ func (s ConfirmationScreen) RenderContent() string {
 
 	// Empty state handling - context-aware messages
 	if status.TotalFiles == 0 {
-		builder.WriteString("\n")
 		if s.engine.FilePattern != "" {
 			// Filter applied but no matches
 			builder.WriteString(shared.RenderEmptyListPlaceholder("No files match your filter"))
@@ -96,7 +87,6 @@ func (s ConfirmationScreen) RenderContent() string {
 
 	// Show errors if any occurred during analysis
 	if len(status.Errors) > 0 {
-		builder.WriteString("\n")
 		builder.WriteString(shared.RenderError("Errors during analysis:"))
 		builder.WriteString("\n")
 
@@ -110,7 +100,7 @@ func (s ConfirmationScreen) RenderContent() string {
 
 	// Help text
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Press Enter to begin sync • Esc to cancel • Ctrl+C to exit"))
+	builder.WriteString(shared.RenderDim("Enter to sync • Esc to cancel • Ctrl+C to exit"))
 
 	return builder.String()
 }

@@ -418,7 +418,7 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 		builder.WriteString(shared.RenderDim("⋯ Waiting"))
 		builder.WriteString("\n\n")
 
-		builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
+		builder.WriteString(shared.RenderDim("Esc to go back • Ctrl+C to exit"))
 
 		return builder.String()
 	}
@@ -497,7 +497,7 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 
 	// Show help text
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Press Esc to change paths • Ctrl+C to exit"))
+	builder.WriteString(shared.RenderDim("Esc to go back • Ctrl+C to exit"))
 
 	return builder.String()
 }

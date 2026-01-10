@@ -94,8 +94,8 @@ func TestConfirmationScreen_View(t *testing.T) {
 	output := screen.View()
 
 	// Verify output contains expected elements
-	g.Expect(output).Should(ContainSubstring("Files to sync"), "Expected files to sync label")
-	g.Expect(output).Should(ContainSubstring("Press Enter to begin sync"), "Expected help text for Enter")
+	// Note: "Files to sync" removed - now shown in analysis screen as "To copy: N files"
+	g.Expect(output).Should(ContainSubstring("Enter to sync"), "Expected help text for Enter")
 	g.Expect(output).Should(ContainSubstring("Esc to cancel"), "Expected help text for Esc")
 }
 
@@ -137,7 +137,7 @@ func TestConfirmationScreen_View_EmptyState_PreservesControls(t *testing.T) {
 	output := screen.View()
 
 	// Should still show help text even when empty
-	g.Expect(output).Should(ContainSubstring("Press Enter to begin sync"),
+	g.Expect(output).Should(ContainSubstring("Enter to sync"),
 		"Should show Enter key help")
 	g.Expect(output).Should(ContainSubstring("Esc to cancel"),
 		"Should show Esc key help")
