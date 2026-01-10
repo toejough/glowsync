@@ -39,8 +39,7 @@ type AnalysisScreen struct {
 	destPhases   []completedPhase // Counting phases for dest
 	otherPhases  []string         // Scanning, comparing, etc.
 	seenPhases   map[string]int   // Track occurrences for context labels
-	lastPhase    string           // Last seen phase, to detect transitions
-	lastCount    int              // File count when phase started (to capture result)
+	lastPhase    string           // Last seen phase (for status display)
 
 	// Event-based state (replaces polling-based state)
 	eventBridge      *shared.EventBridge   // Bridge for engine events
@@ -244,11 +243,21 @@ func (s AnalysisScreen) handleEngineEvent(msg shared.EngineEventMsg) (tea.Model,
 		switch evt.Target {
 		case "source":
 			s.sourceFileCount = evt.Count
+			// Record completed phase with guaranteed-correct count from event
+			s.seenPhases["source"]++
+			label := s.getCountingLabel(s.seenPhases["source"])
+			result := fmt.Sprintf("%d files", evt.Count)
+			s.sourcePhases = append(s.sourcePhases, completedPhase{text: label, result: result})
 		case "dest":
 			s.destFileCount = evt.Count
+			// Record completed phase with guaranteed-correct count from event
+			s.seenPhases["dest"]++
+			label := s.getCountingLabel(s.seenPhases["dest"])
+			result := fmt.Sprintf("%d files", evt.Count)
+			s.destPhases = append(s.destPhases, completedPhase{text: label, result: result})
 		}
 	case syncengine.CompareStarted:
-		// Could update UI state if needed
+		s.otherPhases = append(s.otherPhases, "Comparing files")
 	case syncengine.CompareComplete:
 		s.syncPlan = evt.Plan
 	}
@@ -294,86 +303,17 @@ func (s AnalysisScreen) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.C
 }
 
 func (s AnalysisScreen) handleTick() (tea.Model, tea.Cmd) {
-	// Update status from engine, but only every 200ms to reduce lock contention
+	// Update status from engine for live progress display
+	// Note: Phase tracking now done via events, not polling
 	if s.engine != nil {
 		now := time.Now()
 		if now.Sub(s.lastUpdate) >= shared.StatusUpdateThrottleMs*time.Millisecond {
 			s.status = s.engine.GetStatus()
 			s.lastUpdate = now
-			s.updatePhaseTracking()
 		}
 	}
 
 	return s, shared.TickCmd()
-}
-
-// updatePhaseTracking tracks phase transitions and captures file counts.
-// Extracted for testability.
-func (s *AnalysisScreen) updatePhaseTracking() {
-	if s.status == nil {
-		return
-	}
-
-	currentPhase := s.status.AnalysisPhase
-	if currentPhase != s.lastPhase {
-		if s.lastPhase != "" {
-			// Record completed phase with the count we tracked
-			s.recordCompletedPhase(s.lastPhase, s.lastCount)
-		}
-		// Start tracking count for new phase - capture current count
-		// (don't reset to 0, as the status might already have a count)
-		s.lastCount = s.status.ScannedFiles
-		s.lastPhase = currentPhase
-	} else {
-		// Same phase - track the highest count seen
-		if s.status.ScannedFiles > s.lastCount {
-			s.lastCount = s.status.ScannedFiles
-		}
-	}
-}
-
-// recordCompletedPhase adds a completed phase to the appropriate list with its result.
-func (s *AnalysisScreen) recordCompletedPhase(phase string, count int) {
-	// For counting phases, if we didn't capture a count (polling missed it),
-	// try to get the count from the status totals set by the engine
-	actualCount := count
-	if count == 0 && s.status != nil {
-		switch phase {
-		case shared.PhaseCountingSource:
-			if s.status.TotalFilesInSource > 0 {
-				actualCount = s.status.TotalFilesInSource
-			}
-		case shared.PhaseCountingDest:
-			if s.status.TotalFilesInDest > 0 {
-				actualCount = s.status.TotalFilesInDest
-			}
-		}
-	}
-
-	result := fmt.Sprintf("%d files", actualCount)
-
-	// Determine phase category and label
-	switch phase {
-	case shared.PhaseCountingSource:
-		s.seenPhases["source"]++
-		label := s.getCountingLabel(s.seenPhases["source"])
-		s.sourcePhases = append(s.sourcePhases, completedPhase{text: label, result: result})
-
-	case shared.PhaseCountingDest:
-		s.seenPhases["dest"]++
-		label := s.getCountingLabel(s.seenPhases["dest"])
-		s.destPhases = append(s.destPhases, completedPhase{text: label, result: result})
-
-	case shared.PhaseScanningSource:
-		s.sourcePhases = append(s.sourcePhases, completedPhase{text: "Scanning", result: result})
-
-	case shared.PhaseScanningDest:
-		s.destPhases = append(s.destPhases, completedPhase{text: "Scanning", result: result})
-
-	default:
-		// Other phases (comparing, deleting, etc.)
-		s.otherPhases = append(s.otherPhases, s.getPhaseDisplayText(phase))
-	}
 }
 
 // getCountingLabel returns the label for a counting phase based on occurrence.

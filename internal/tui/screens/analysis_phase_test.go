@@ -4,7 +4,6 @@ package screens
 import (
 	"strings"
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/gomega" //nolint:revive // Dot import is idiomatic for Gomega matchers
@@ -14,9 +13,9 @@ import (
 	"github.com/joe/copy-files/internal/tui/shared"
 )
 
-// TestAnalysisPhaseTracking tests that file counts are properly captured
-// and displayed when phases transition.
-func TestAnalysisPhaseTracking(t *testing.T) {
+// TestAnalysisPhaseTrackingViaEvents tests that file counts are properly captured
+// via engine events (not polling).
+func TestAnalysisPhaseTrackingViaEvents(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
@@ -27,48 +26,49 @@ func TestAnalysisPhaseTracking(t *testing.T) {
 
 	screen := NewAnalysisScreen(cfg)
 
-	// Simulate engine initialization - create a minimal engine-like setup
-	// We'll manually set the status to simulate what the engine would report
-	screen.status = &syncengine.Status{
-		AnalysisPhase: shared.PhaseCountingSource,
-		ScannedFiles:  0,
-	}
-	screen.lastUpdate = time.Now().Add(-time.Second) // Ensure throttle doesn't block
+	// Simulate receiving ScanStarted event for source
+	model, _ := screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanStarted{Target: "source"},
+	})
+	screen = toAnalysisScreen(model)
+	g.Expect(screen.currentScanTarget).To(Equal("source"))
 
-	// Simulate first tick - counting_source with 100 files
-	screen.status.ScannedFiles = 100
-	screen = simulateTick(screen, shared.PhaseCountingSource, 100)
+	// Simulate receiving ScanComplete event for source with 500 files
+	model, _ = screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanComplete{Target: "source", Count: 500},
+	})
+	screen = toAnalysisScreen(model)
 
-	// Simulate more ticks in same phase - count increases
-	screen = simulateTick(screen, shared.PhaseCountingSource, 250)
-	screen = simulateTick(screen, shared.PhaseCountingSource, 500)
-
-	// Verify lastCount is tracking the max
-	g.Expect(screen.lastCount).To(Equal(500), "lastCount should track highest count seen")
-
-	// Now transition to counting_dest - this should record the source phase
-	screen = simulateTick(screen, shared.PhaseCountingDest, 0)
-
-	// Verify source phase was recorded with correct count
+	// Verify source phase was recorded with correct count from event
 	g.Expect(screen.sourcePhases).To(HaveLen(1), "should have one source phase recorded")
 	g.Expect(screen.sourcePhases[0].text).To(Equal("Counting (quick check)"))
 	g.Expect(screen.sourcePhases[0].result).To(Equal("500 files"))
+	g.Expect(screen.sourceFileCount).To(Equal(500))
 
-	// Continue counting dest
-	screen = simulateTick(screen, shared.PhaseCountingDest, 100)
-	screen = simulateTick(screen, shared.PhaseCountingDest, 300)
+	// Simulate ScanStarted for dest
+	model, _ = screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanStarted{Target: "dest"},
+	})
+	screen = toAnalysisScreen(model)
+	g.Expect(screen.currentScanTarget).To(Equal("dest"))
 
-	// Transition to counting_source again (full scan after monotonic check failed)
-	screen = simulateTick(screen, shared.PhaseCountingSource, 0)
+	// Simulate ScanComplete for dest with 300 files
+	model, _ = screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanComplete{Target: "dest", Count: 300},
+	})
+	screen = toAnalysisScreen(model)
 
 	// Verify dest phase was recorded
 	g.Expect(screen.destPhases).To(HaveLen(1), "should have one dest phase recorded")
 	g.Expect(screen.destPhases[0].text).To(Equal("Counting (quick check)"))
 	g.Expect(screen.destPhases[0].result).To(Equal("300 files"))
+	g.Expect(screen.destFileCount).To(Equal(300))
 
-	// Full scan of source
-	screen = simulateTick(screen, shared.PhaseCountingSource, 500)
-	screen = simulateTick(screen, shared.PhaseScanningSource, 0)
+	// Simulate another source scan (full scan after monotonic check failed)
+	model, _ = screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanComplete{Target: "source", Count: 500},
+	})
+	screen = toAnalysisScreen(model)
 
 	// Verify second source counting phase was recorded as "full scan"
 	g.Expect(screen.sourcePhases).To(HaveLen(2), "should have two source phases recorded")
@@ -76,6 +76,8 @@ func TestAnalysisPhaseTracking(t *testing.T) {
 	g.Expect(screen.sourcePhases[1].result).To(Equal("500 files"))
 
 	// Verify the view contains the expected output
+	screen.width = 80
+	screen.height = 24
 	view := screen.View()
 	g.Expect(view).To(ContainSubstring("500 files"), "view should show file count")
 	g.Expect(view).To(ContainSubstring("300 files"), "view should show dest file count")
@@ -131,87 +133,14 @@ func TestAnalysisPhaseTrackingInView(t *testing.T) {
 	g.Expect(sourceIdx).To(BeNumerically("<", destIdx), "Source should appear before Dest")
 }
 
-// simulateTick simulates what happens when the engine reports a new status.
-// Calls updatePhaseTracking directly since that's the logic we're testing.
-func simulateTick(screen *AnalysisScreen, phase string, count int) *AnalysisScreen {
-	// Update status to simulate what the engine would report
-	screen.status = &syncengine.Status{
-		AnalysisPhase: phase,
-		ScannedFiles:  count,
-	}
-
-	// Call the phase tracking logic directly
-	screen.updatePhaseTracking()
-
-	return screen
-}
-
-// TestAnalysisPhaseTrackingViaUpdate tests the full Update path
-// to ensure state is preserved through the value receiver chain.
-func TestAnalysisPhaseTrackingViaUpdate(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-
-	cfg := &config.Config{
-		SourcePath: "/test/source",
-		DestPath:   "/test/dest",
-	}
-
-	// Create a mock engine that returns controlled status values
-	engine, err := syncengine.NewEngine("/tmp", "/tmp")
-	g.Expect(err).ShouldNot(HaveOccurred())
-
-	screen := NewAnalysisScreen(cfg)
-	screen.engine = engine
-	screen.lastUpdate = time.Now().Add(-time.Second) // Bypass throttle
-
-	// Manually set the engine's status to simulate counting_source with 500 files
-	engine.Status.AnalysisPhase = shared.PhaseCountingSource
-	engine.Status.ScannedFiles = 500
-
-	// Send tick through Update
-	model, _ := screen.Update(shared.TickMsg{})
-	screen = toAnalysisScreen(model)
-
-	// Verify state was captured
-	g.Expect(screen.lastPhase).To(Equal(shared.PhaseCountingSource))
-	g.Expect(screen.lastCount).To(Equal(500))
-
-	// Update count in same phase
-	screen.lastUpdate = time.Now().Add(-time.Second) // Bypass throttle
-	engine.Status.ScannedFiles = 1000
-	model, _ = screen.Update(shared.TickMsg{})
-	screen = toAnalysisScreen(model)
-
-	g.Expect(screen.lastCount).To(Equal(1000), "should track highest count")
-
-	// Transition to counting_dest
-	screen.lastUpdate = time.Now().Add(-time.Second)
-	engine.Status.AnalysisPhase = shared.PhaseCountingDest
-	engine.Status.ScannedFiles = 0
-	model, _ = screen.Update(shared.TickMsg{})
-	screen = toAnalysisScreen(model)
-
-	// Verify source phase was recorded with correct count
-	g.Expect(screen.sourcePhases).To(HaveLen(1))
-	g.Expect(screen.sourcePhases[0].result).To(Equal("1000 files"))
-
-	// Check view contains the count
-	screen.width = 80
-	screen.height = 24
-	view := screen.View()
-	g.Expect(view).To(ContainSubstring("1000 files"))
-}
-
 func toAnalysisScreen(model tea.Model) *AnalysisScreen {
 	s := model.(AnalysisScreen)
 	return &s
 }
 
-// TestQuickCheckZeroFiles tests the scenario where we poll a phase
-// when it has 0 files and it transitions before we see any files.
-// The fix uses TotalFilesInSource/Dest from the engine status.
-func TestQuickCheckZeroFiles(t *testing.T) {
+// TestEventBasedCountsAreGuaranteedCorrect tests that event-based counts
+// are always correct, even when polling would miss them.
+func TestEventBasedCountsAreGuaranteedCorrect(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
@@ -220,35 +149,52 @@ func TestQuickCheckZeroFiles(t *testing.T) {
 		DestPath:   "/test/dest",
 	}
 
-	engine, err := syncengine.NewEngine("/tmp", "/tmp")
-	g.Expect(err).ShouldNot(HaveOccurred())
+	screen := NewAnalysisScreen(cfg)
+
+	// This test simulates the scenario that caused the original bug:
+	// - Engine scans 12108 files
+	// - Polling-based TUI might miss the final count (showing 8500)
+	// - Event-based TUI gets the exact count from ScanComplete event
+
+	// Simulate receiving ScanComplete with the exact count
+	model, _ := screen.Update(shared.EngineEventMsg{
+		Event: syncengine.ScanComplete{Target: "source", Count: 12108},
+	})
+	screen = toAnalysisScreen(model)
+
+	// The count should be exactly what the engine reported
+	g.Expect(screen.sourceFileCount).To(Equal(12108),
+		"Event-based count should match exactly what engine reported")
+	g.Expect(screen.sourcePhases[0].result).To(Equal("12108 files"),
+		"Displayed count should match exactly what engine reported")
+}
+
+// TestCompareCompleteEventStoresSyncPlan tests that CompareComplete stores the plan.
+func TestCompareCompleteEventStoresSyncPlan(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	cfg := &config.Config{
+		SourcePath: "/test/source",
+		DestPath:   "/test/dest",
+	}
 
 	screen := NewAnalysisScreen(cfg)
-	screen.engine = engine
-	screen.lastUpdate = time.Now().Add(-time.Second)
 
-	// Scenario: First poll sees counting_source with 0 files (just started)
-	engine.Status.AnalysisPhase = shared.PhaseCountingSource
-	engine.Status.ScannedFiles = 0
-
-	model, _ := screen.Update(shared.TickMsg{})
+	// Simulate receiving CompareComplete with a sync plan
+	plan := &syncengine.SyncPlan{
+		FilesToCopy:   100,
+		FilesToDelete: 5,
+		BytesToCopy:   1024 * 1024 * 10, // 10 MB
+	}
+	model, _ := screen.Update(shared.EngineEventMsg{
+		Event: syncengine.CompareComplete{Plan: plan},
+	})
 	screen = toAnalysisScreen(model)
 
-	g.Expect(screen.lastPhase).To(Equal(shared.PhaseCountingSource))
-	g.Expect(screen.lastCount).To(Equal(0)) // We saw 0 files
-
-	// Now the engine quickly transitions to counting_dest (quick check moved fast)
-	// The engine counted 500 files but we never saw that count via polling
-	// However, the engine stored the result in TotalFilesInSource
-	screen.lastUpdate = time.Now().Add(-time.Second)
-	engine.Status.AnalysisPhase = shared.PhaseCountingDest
-	engine.Status.ScannedFiles = 0         // Engine reset count for new phase
-	engine.Status.TotalFilesInSource = 500 // Engine stored the final count
-
-	model, _ = screen.Update(shared.TickMsg{})
-	screen = toAnalysisScreen(model)
-
-	// counting_source should be recorded with 500 files (from TotalFilesInSource)
-	g.Expect(screen.sourcePhases).To(HaveLen(1))
-	g.Expect(screen.sourcePhases[0].result).To(Equal("500 files"))
+	// Verify the plan was stored
+	g.Expect(screen.syncPlan).ToNot(BeNil())
+	g.Expect(screen.syncPlan.FilesToCopy).To(Equal(100))
+	g.Expect(screen.syncPlan.FilesToDelete).To(Equal(5))
+	g.Expect(screen.syncPlan.BytesToCopy).To(Equal(int64(1024 * 1024 * 10)))
 }
