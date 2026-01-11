@@ -1717,8 +1717,8 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 	// Update analysis phase
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = phaseCountingDest
-	e.Status.ScannedFiles = 0
-	e.Status.TotalFilesToScan = 0
+	e.Status.DestScannedFiles = 0
+	e.Status.DestTotalFiles = 0
 	e.Status.mu.Unlock()
 
 	// Notify before accessing (may block on slow/remote filesystems)
@@ -1729,19 +1729,10 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 	//nolint:dupl,lll // Duplicate scanning callbacks, long function signature
 	destFiles, err := e.FileOps.ScanDestDirectoryWithProgress(e.DestPath, func(path string, scannedCount int, totalCount int, fileSize int64) {
 		e.Status.mu.Lock()
-		e.Status.CurrentPath = path
-		e.Status.ScannedFiles = scannedCount
-		e.Status.TotalFilesToScan = totalCount
+		e.Status.DestScannedFiles = scannedCount
+		e.Status.DestTotalFiles = totalCount
 		// Accumulate scanned bytes
 		e.Status.ScannedBytes += fileSize
-
-		// Calculate analysis rate if we have elapsed time
-		if !e.Status.AnalysisStartTime.IsZero() {
-			elapsed := e.TimeProvider.Now().Sub(e.Status.AnalysisStartTime).Seconds()
-			if elapsed > 0 {
-				e.Status.AnalysisRate = float64(scannedCount) / elapsed
-			}
-		}
 
 		// Update phase when we transition from counting to scanning
 		if totalCount > 0 && e.Status.AnalysisPhase == phaseCountingDest {
@@ -1749,15 +1740,6 @@ func (e *Engine) scanDestinationDirectory() (map[string]*fileops.FileInfo, error
 		}
 
 		e.Status.mu.Unlock()
-
-		// Log every 10 files to avoid spam
-		if scannedCount%10 == 0 {
-			if totalCount > 0 {
-				e.logAnalysis(fmt.Sprintf("Scanning %d / %d files from destination...", scannedCount, totalCount))
-			} else {
-				e.logAnalysis(fmt.Sprintf("Counting files in destination: %d so far...", scannedCount))
-			}
-		}
 
 		e.notifyStatusUpdate()
 	})
@@ -1792,8 +1774,8 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 	// Update analysis phase and start time
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = phaseCountingSource
-	e.Status.ScannedFiles = 0
-	e.Status.TotalFilesToScan = 0
+	e.Status.SourceScannedFiles = 0
+	e.Status.SourceTotalFiles = 0
 	if e.Status.AnalysisStartTime.IsZero() {
 		e.Status.AnalysisStartTime = e.TimeProvider.Now()
 	}
@@ -1807,9 +1789,8 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 	//nolint:lll // Anonymous function with parameters as part of method call
 	sourceFiles, err := e.FileOps.ScanDirectoryWithProgress(e.SourcePath, func(path string, scannedCount int, totalCount int, fileSize int64) {
 		e.Status.mu.Lock()
-		e.Status.CurrentPath = path
-		e.Status.ScannedFiles = scannedCount
-		e.Status.TotalFilesToScan = totalCount
+		e.Status.SourceScannedFiles = scannedCount
+		e.Status.SourceTotalFiles = totalCount
 		// Accumulate scanned bytes
 		e.Status.ScannedBytes += fileSize
 
@@ -1827,15 +1808,6 @@ func (e *Engine) scanSourceDirectory() (map[string]*fileops.FileInfo, error) {
 		}
 
 		e.Status.mu.Unlock()
-
-		// Log every 10 files to avoid spam
-		if scannedCount%10 == 0 {
-			if totalCount > 0 {
-				e.logAnalysis(fmt.Sprintf("Scanning %d / %d files from source...", scannedCount, totalCount))
-			} else {
-				e.logAnalysis(fmt.Sprintf("Counting files in source: %d so far...", scannedCount))
-			}
-		}
 
 		e.notifyStatusUpdate()
 	})
@@ -2540,10 +2512,16 @@ type Status struct {
 	// Analysis progress
 	//nolint:lll // Inline comment listing all possible phase values
 	AnalysisPhase    string   // "counting_source", "scanning_source", "counting_dest", "scanning_dest", "comparing", "planning", "complete"
-	ScannedFiles     int      // Number of files scanned/compared so far
+	ScannedFiles     int      // Number of files scanned/compared so far (legacy, use Source/Dest specific)
 	TotalFilesToScan int      // Total files to scan/compare (0 if unknown/counting)
 	CurrentPath      string   // Current path being analyzed
 	AnalysisLog      []string // Recent analysis activities
+
+	// Separate source/dest scan progress (for parallel scanning)
+	SourceScannedFiles int // Files scanned in source so far
+	SourceTotalFiles   int // Total files in source (0 if still counting)
+	DestScannedFiles   int // Files scanned in dest so far
+	DestTotalFiles     int // Total files in dest (0 if still counting)
 
 	// Analysis progress tracking for time estimation
 	ScannedBytes      int64     // Bytes scanned so far

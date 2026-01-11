@@ -620,7 +620,20 @@ func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path 
 		builder.WriteString(" ")
 		builder.WriteString(s.getCurrentPhaseLabel())
 		if s.status != nil {
-			fmt.Fprintf(builder, "... %d files", s.status.ScannedFiles)
+			// Use source/dest specific counters for accurate parallel display
+			var scanned, total int
+			if label == "Source" {
+				scanned = s.status.SourceScannedFiles
+				total = s.status.SourceTotalFiles
+			} else {
+				scanned = s.status.DestScannedFiles
+				total = s.status.DestTotalFiles
+			}
+			if total > 0 {
+				fmt.Fprintf(builder, "... %d / %d files", scanned, total)
+			} else {
+				fmt.Fprintf(builder, "... %d files", scanned)
+			}
 		}
 		builder.WriteString("\n")
 	} else if len(phases) == 0 && showWaiting {
