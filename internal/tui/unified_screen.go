@@ -136,6 +136,11 @@ func (u *UnifiedScreen) View() string {
 	// Timeline always at top
 	sections = append(sections, shared.RenderTimeline(u.phase.String()))
 
+	// During sync phase, show "Syncing: Source → Dest" header
+	if u.phase == PhaseSync {
+		sections = append(sections, shared.RenderLabel("Syncing: ")+"Source "+shared.RightArrow()+" Dest")
+	}
+
 	// Input section (always present)
 	if u.hasInput {
 		sections = append(sections, u.renderInputSection())

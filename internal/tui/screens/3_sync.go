@@ -592,16 +592,7 @@ func (s SyncScreen) renderSyncingView() string {
 func (s SyncScreen) renderSyncingContent() string {
 	var builder strings.Builder
 
-	// Header showing source → dest relationship
-	if s.engine != nil {
-		builder.WriteString(shared.RenderLabel("Syncing: "))
-		builder.WriteString(shared.TruncatePath(s.engine.SourcePath, s.getMaxPathWidth()/2)) //nolint:mnd // Half width for each path
-		builder.WriteString(" ")
-		builder.WriteString(shared.RightArrow())
-		builder.WriteString(" ")
-		builder.WriteString(shared.TruncatePath(s.engine.DestPath, s.getMaxPathWidth()/2)) //nolint:mnd // Half width for each path
-		builder.WriteString("\n\n")
-	}
+	// Note: "Syncing: Source → Dest" header now shown by UnifiedScreen
 
 	// Show finalization message when in that phase
 	if s.status != nil && s.status.FinalizationPhase == statusComplete {

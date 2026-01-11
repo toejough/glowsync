@@ -655,12 +655,17 @@ func (s AnalysisScreen) renderMissingFromDestLine(builder *strings.Builder) {
 				"Missing from dest: %d files — to copy",
 				s.originalFilesToCopy)))
 		}
+		builder.WriteString("\n")
+
+		// Show file-level progress for currently copying files
+		s.renderActiveFilesProgress(builder)
 
 		// Show completed count if any files copied
 		if s.liveStatus.ProcessedFiles > 0 {
-			builder.WriteString("\n    ")
+			builder.WriteString("    ")
 			builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
 				"%d copied %s", s.liveStatus.ProcessedFiles, shared.SuccessSymbol())))
+			builder.WriteString("\n")
 		}
 	} else {
 		// Analysis mode: static count
@@ -668,8 +673,8 @@ func (s AnalysisScreen) renderMissingFromDestLine(builder *strings.Builder) {
 			"Missing from dest: %d files (%s) — to copy",
 			s.syncPlan.FilesOnlyInSource,
 			shared.FormatBytes(s.syncPlan.BytesOnlyInSource))))
+		builder.WriteString("\n")
 	}
-	builder.WriteString("\n")
 }
 
 // renderMissingFromSourceLine renders the "Missing from source" count with live updates.
@@ -736,4 +741,80 @@ func (s AnalysisScreen) renderInBothLine(builder *strings.Builder) {
 			shared.FormatBytes(s.syncPlan.BytesInBoth))))
 	}
 	builder.WriteString("\n")
+}
+
+// renderActiveFilesProgress renders the currently copying files with progress bars.
+func (s AnalysisScreen) renderActiveFilesProgress(builder *strings.Builder) {
+	if s.liveStatus == nil || len(s.liveStatus.FilesToSync) == 0 {
+		return
+	}
+
+	// Find active files (copying, opening, finalizing)
+	var activeFiles []*syncengine.FileToSync
+	for _, file := range s.liveStatus.FilesToSync {
+		if file.Status == "copying" || file.Status == "opening" || file.Status == "finalizing" {
+			activeFiles = append(activeFiles, file)
+		}
+	}
+
+	if len(activeFiles) == 0 {
+		return
+	}
+
+	// Show up to 3 active files with progress
+	maxFiles := 3
+	for i, file := range activeFiles {
+		if i >= maxFiles {
+			break
+		}
+
+		// Calculate progress percentage
+		var percent float64
+		if file.Size > 0 {
+			percent = float64(file.Transferred) / float64(file.Size)
+		}
+
+		// Determine status label
+		var statusLabel string
+		switch file.Status {
+		case "opening":
+			statusLabel = "waiting"
+		case "copying":
+			statusLabel = ""
+		case "finalizing":
+			statusLabel = "finalizing"
+			percent = 1.0
+		}
+
+		// Render: "    [████░░░░░░] 40% filename.mov"
+		builder.WriteString("    ")
+		builder.WriteString(s.renderMiniProgressBar(percent))
+		builder.WriteString(" ")
+		builder.WriteString(shared.TruncatePath(file.RelativePath, 30)) //nolint:mnd // Reasonable path width
+		if statusLabel != "" {
+			builder.WriteString(" ")
+			builder.WriteString(shared.RenderDim(statusLabel))
+		}
+		builder.WriteString("\n")
+	}
+
+	// Show overflow
+	if len(activeFiles) > maxFiles {
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("    ... and %d more\n", len(activeFiles)-maxFiles)))
+	}
+}
+
+// renderMiniProgressBar renders a compact progress bar.
+func (s AnalysisScreen) renderMiniProgressBar(percent float64) string {
+	const barWidth = 10
+	filled := int(percent * float64(barWidth))
+	if filled > barWidth {
+		filled = barWidth
+	}
+	empty := barWidth - filled
+
+	return fmt.Sprintf("[%s%s] %3.0f%%",
+		strings.Repeat("█", filled),
+		strings.Repeat("░", empty),
+		percent*100) //nolint:mnd // Percentage conversion
 }
