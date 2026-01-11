@@ -76,7 +76,8 @@ func (s ConfirmationScreen) RenderContent() string {
 	}
 
 	// Empty state handling - context-aware messages
-	if status.TotalFiles == 0 {
+	// Only show "already synced" if there are no files to copy AND no files to delete
+	if status.TotalFiles == 0 && status.FilesToDelete == 0 {
 		if s.engine.FilePattern != "" {
 			// Filter applied but no matches
 			builder.WriteString(shared.RenderEmptyListPlaceholder("No files match your filter"))

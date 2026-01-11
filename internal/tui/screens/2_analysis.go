@@ -631,7 +631,9 @@ func (s AnalysisScreen) renderPathSection(builder *strings.Builder, label, path 
 			}
 			if total > 0 {
 				fmt.Fprintf(builder, "... %d / %d files", scanned, total)
-			} else {
+			} else if scanned > 0 {
+				// Only show count when we've actually counted something
+				// (avoids showing "0 files" during SFTP directory fetch)
 				fmt.Fprintf(builder, "... %d files", scanned)
 			}
 		}

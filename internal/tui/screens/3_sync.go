@@ -375,9 +375,12 @@ func (s SyncScreen) renderSyncingContent() string {
 
 	// Show "Starting sync..." until actual sync activity begins
 	// This prevents a confusing jump to high progress (e.g., 79%) from already-synced files
+	// Include deletion activity - deletion IS sync activity
 	syncActivityStarted := s.status.ProcessedFiles > 0 ||
 		s.status.TransferredBytes > 0 ||
-		len(s.status.CurrentFiles) > 0
+		len(s.status.CurrentFiles) > 0 ||
+		s.status.FilesDeleted > 0 ||
+		s.status.FilesToDelete > 0
 
 	if !syncActivityStarted {
 		builder.WriteString(s.spinner.View())

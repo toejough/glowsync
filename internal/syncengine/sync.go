@@ -405,6 +405,12 @@ func (e *Engine) GetStatus() *Status {
 	status.AnalysisStartTime = e.Status.AnalysisStartTime
 	status.AnalysisRate = e.Status.AnalysisRate
 
+	// Copy separate source/dest scan progress fields
+	status.SourceScannedFiles = e.Status.SourceScannedFiles
+	status.SourceTotalFiles = e.Status.SourceTotalFiles
+	status.DestScannedFiles = e.Status.DestScannedFiles
+	status.DestTotalFiles = e.Status.DestTotalFiles
+
 	// Copy comparison result fields
 	status.FilesInBoth = e.Status.FilesInBoth
 	status.FilesOnlyInSource = e.Status.FilesOnlyInSource
@@ -2238,6 +2244,8 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	// Count source files
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = phaseCountingSource
+	e.Status.SourceScannedFiles = 0
+	e.Status.SourceTotalFiles = 0
 	e.Status.mu.Unlock()
 
 	e.emit(ScanStarted{Target: "source"})
@@ -2247,6 +2255,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	sourceCount, err := e.FileOps.CountFilesWithProgress(e.SourcePath, func(path string, count int) {
 		e.Status.mu.Lock()
 		e.Status.ScannedFiles = count
+		e.Status.SourceScannedFiles = count // Update source-specific counter for TUI
 		e.Status.CurrentPath = path
 		e.Status.mu.Unlock()
 
@@ -2272,6 +2281,8 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	e.Status.mu.Lock()
 	e.Status.AnalysisPhase = phaseCountingDest
 	e.Status.ScannedFiles = 0
+	e.Status.DestScannedFiles = 0
+	e.Status.DestTotalFiles = 0
 	e.Status.mu.Unlock()
 
 	e.emit(ScanStarted{Target: "dest"})
@@ -2281,6 +2292,7 @@ func (e *Engine) tryMonotonicCountOptimization() (bool, error) {
 	destCount, err := e.FileOps.CountDestFilesWithProgress(e.DestPath, func(path string, count int) {
 		e.Status.mu.Lock()
 		e.Status.ScannedFiles = count
+		e.Status.DestScannedFiles = count // Update dest-specific counter for TUI
 		e.Status.CurrentPath = path
 		e.Status.mu.Unlock()
 

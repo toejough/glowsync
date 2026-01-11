@@ -225,6 +225,22 @@ func (s SummaryScreen) renderCompleteTitle(builder *strings.Builder) {
 		return
 	}
 
+	// Show message if files were deleted (even if none were copied)
+	if s.status != nil && s.status.FilesDeleted > 0 {
+		filesWord := "file"
+		if s.status.FilesDeleted != 1 {
+			filesWord = "files"
+		}
+
+		message := fmt.Sprintf("%s Cleaned up %d orphaned %s from destination",
+			shared.SuccessSymbol(),
+			s.status.FilesDeleted,
+			filesWord)
+		builder.WriteString(shared.RenderSuccess(message))
+
+		return
+	}
+
 	// Default: all files already up-to-date
 	builder.WriteString(shared.RenderSuccess(shared.SuccessSymbol() + " All files already up-to-date"))
 }

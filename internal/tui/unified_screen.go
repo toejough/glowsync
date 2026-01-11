@@ -156,8 +156,8 @@ func (u *UnifiedScreen) View() string {
 		sections = append(sections, u.renderConfirmationSection())
 	}
 
-	// Sync section (once sync phase reached)
-	if u.hasSync {
+	// Sync section (only during sync phase, not after transition to summary)
+	if u.hasSync && u.phase == PhaseSync {
 		sections = append(sections, u.renderSyncSection())
 	}
 
