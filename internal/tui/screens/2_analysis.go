@@ -728,6 +728,9 @@ func (s AnalysisScreen) renderInBothLine(builder *strings.Builder) {
 // Live Sync Copying Section (moved from SyncScreen)
 // ============================================================================
 
+// Indent for items under Source/Dest sections.
+const sectionIndent = "  "
+
 // renderCopyingSection renders the full copying progress section during live sync.
 func (s AnalysisScreen) renderCopyingSection(builder *strings.Builder) {
 	// Show remaining count with transition arrow
@@ -758,6 +761,7 @@ func (s AnalysisScreen) renderCopyingSection(builder *strings.Builder) {
 
 	// Show completed count
 	if s.liveStatus.ProcessedFiles > 0 {
+		builder.WriteString(sectionIndent)
 		builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
 			"%d copied %s", s.liveStatus.ProcessedFiles, shared.SuccessSymbol())))
 		builder.WriteString("\n")
@@ -767,11 +771,13 @@ func (s AnalysisScreen) renderCopyingSection(builder *strings.Builder) {
 // renderSyncProgress renders progress bar with files, bytes, and time.
 func (s AnalysisScreen) renderSyncProgress(builder *strings.Builder) {
 	// Progress bar using overall percentage
+	builder.WriteString(sectionIndent)
 	builder.WriteString(shared.RenderProgress(s.overallProgress, s.liveStatus.Progress.OverallPercent))
 	builder.WriteString("\n")
 
 	// Files line with percentage
 	totalProcessedFiles := s.liveStatus.AlreadySyncedFiles + s.liveStatus.ProcessedFiles
+	builder.WriteString(sectionIndent)
 	fmt.Fprintf(builder, "Files: %d / %d (%.1f%%)",
 		totalProcessedFiles,
 		s.liveStatus.TotalFilesInSource,
@@ -784,6 +790,7 @@ func (s AnalysisScreen) renderSyncProgress(builder *strings.Builder) {
 
 	// Bytes line with percentage
 	totalProcessedBytes := s.liveStatus.AlreadySyncedBytes + s.liveStatus.TransferredBytes
+	builder.WriteString(sectionIndent)
 	fmt.Fprintf(builder, "Bytes: %s / %s (%.1f%%)",
 		shared.FormatBytes(totalProcessedBytes),
 		shared.FormatBytes(s.liveStatus.TotalBytesInSource),
@@ -794,6 +801,7 @@ func (s AnalysisScreen) renderSyncProgress(builder *strings.Builder) {
 	elapsed := time.Since(s.liveStatus.StartTime)
 	totalEstimated := elapsed + s.liveStatus.EstimatedTimeLeft
 
+	builder.WriteString(sectionIndent)
 	fmt.Fprintf(builder, "Time: %s / %s (%.1f%%)",
 		shared.FormatDuration(elapsed),
 		shared.FormatDuration(totalEstimated),
@@ -804,6 +812,7 @@ func (s AnalysisScreen) renderSyncProgress(builder *strings.Builder) {
 // renderSyncStatistics renders worker count and speed.
 func (s AnalysisScreen) renderSyncStatistics(builder *strings.Builder) {
 	// Worker count
+	builder.WriteString(sectionIndent)
 	fmt.Fprintf(builder, "Workers: %d", s.liveStatus.ActiveWorkers)
 
 	// Read/write percentage (from rolling window)
@@ -816,6 +825,7 @@ func (s AnalysisScreen) renderSyncStatistics(builder *strings.Builder) {
 
 	// Per-worker and total rates
 	if s.liveStatus.Workers.TotalRate > 0 {
+		builder.WriteString(sectionIndent)
 		fmt.Fprintf(builder, "Speed: %s/worker • %s total",
 			shared.FormatRate(s.liveStatus.Workers.PerWorkerRate),
 			shared.FormatRate(s.liveStatus.Workers.TotalRate))
@@ -840,6 +850,7 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 		return
 	}
 
+	builder.WriteString(sectionIndent)
 	builder.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Copying (%d):", len(activeFiles))))
 	builder.WriteString("\n")
 
@@ -882,7 +893,8 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 		// Truncate path to fit available width
 		truncPath := shared.TruncatePath(file.RelativePath, maxPathWidth)
 
-		// Format: [progress bar] [percentage] [path] [status]
+		// Format: [indent] [progress bar] [percentage] [path] [status]
+		builder.WriteString(sectionIndent)
 		fmt.Fprintf(builder, "%s %5.1f%% %s %s\n",
 			shared.RenderProgress(s.fileProgress, filePercent),
 			filePercent*shared.ProgressPercentageScale,
@@ -894,6 +906,7 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 
 	// Show overflow message
 	if len(activeFiles) > filesDisplayed {
+		builder.WriteString(sectionIndent)
 		builder.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", len(activeFiles)-filesDisplayed)))
 	}
 }
