@@ -183,7 +183,7 @@ func (u *UnifiedScreen) renderHelpText() string {
 	case PhaseScan, PhaseCompare:
 		return shared.RenderDim("Esc to go back • Ctrl+C to exit")
 	case PhaseConfirm:
-		return shared.RenderDim("Enter to sync • Esc to cancel • Ctrl+C to exit")
+		return shared.RenderDim("Ready to sync? Press Enter to start • Esc to cancel")
 	case PhaseSync:
 		return shared.RenderDim("Esc or q to cancel • Ctrl+C to exit immediately")
 	case PhaseSummary:

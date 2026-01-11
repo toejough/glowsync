@@ -41,11 +41,11 @@ type AnalysisScreen struct {
 	seenPhases   map[string]int   // Track occurrences for context labels
 
 	// Event-based state (replaces polling-based state)
-	eventBridge        *shared.EventBridge  // Bridge for engine events
-	activeScanTargets  map[string]bool      // Active scan targets (for parallel scanning)
-	sourceFileCount    int                  // Source file count from ScanComplete event
-	destFileCount      int                  // Dest file count from ScanComplete event
-	syncPlan           *syncengine.SyncPlan // Plan from CompareComplete event
+	eventBridge       *shared.EventBridge  // Bridge for engine events
+	activeScanTargets map[string]bool      // Active scan targets (for parallel scanning)
+	sourceFileCount   int                  // Source file count from ScanComplete event
+	destFileCount     int                  // Dest file count from ScanComplete event
+	syncPlan          *syncengine.SyncPlan // Plan from CompareComplete event
 }
 
 // CurrentScanTarget returns "source" or "dest" if that target is active, empty otherwise.
@@ -427,12 +427,10 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	// Show source section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Source", s.config.SourcePath, s.sourcePhases, s.isSourcePhaseActive(), false)
 
-	// Show "only in source" (to copy) info after source section
+	// Show "missing from dest" (to copy) - highlighted since it's an action item
 	if s.syncPlan != nil && s.syncPlan.FilesOnlyInSource > 0 {
 		builder.WriteString("  ")
-		builder.WriteString(shared.SuccessSymbol())
-		builder.WriteString(" ")
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("To copy: %d files (%s)",
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf("Missing from dest: %d files (%s) — to copy",
 			s.syncPlan.FilesOnlyInSource, shared.FormatBytes(s.syncPlan.BytesOnlyInSource))))
 		builder.WriteString("\n")
 	}
@@ -440,24 +438,17 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 	// Show dest section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), false)
 
-	// Show "only in dest" (to delete) info after dest section
+	// Show "missing from source" (to delete) - highlighted since it's an action item
 	if s.syncPlan != nil && s.syncPlan.FilesOnlyInDest > 0 {
 		builder.WriteString("  ")
-		builder.WriteString(shared.SuccessSymbol())
-		builder.WriteString(" ")
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("To delete: %d files (%s)",
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf("Missing from source: %d files (%s) — to delete",
 			s.syncPlan.FilesOnlyInDest, shared.FormatBytes(s.syncPlan.BytesOnlyInDest))))
 		builder.WriteString("\n")
 	}
 
-	// Comparison results section - files in both locations (no action needed)
+	// Comparison results section - files in both locations (no action needed, so dim)
 	if s.syncPlan != nil && s.syncPlan.FilesInBoth > 0 {
-		builder.WriteString(shared.RenderLabel("Comparison:"))
-		builder.WriteString("\n")
-		builder.WriteString("  ")
-		builder.WriteString(shared.SuccessSymbol())
-		builder.WriteString(" ")
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("In both: %d files (%s) - no action needed",
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("In both: %d files (%s) — no action needed",
 			s.syncPlan.FilesInBoth, shared.FormatBytes(s.syncPlan.BytesInBoth))))
 		builder.WriteString("\n")
 	}

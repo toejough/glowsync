@@ -53,7 +53,7 @@ func (s ConfirmationScreen) View() string {
 	builder.WriteString("\n\n")
 	builder.WriteString(s.RenderContent())
 	builder.WriteString("\n")
-	builder.WriteString(shared.RenderDim("Enter to sync • Esc to cancel • Ctrl+C to exit"))
+	builder.WriteString(shared.RenderDim("Ready to sync? Press Enter to start • Esc to cancel"))
 	return shared.RenderBox(builder.String(), s.width, s.height)
 }
 

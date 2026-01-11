@@ -100,6 +100,18 @@ func DimStyle() lipgloss.Style {
 		Foreground(DimColor())
 }
 
+// ActionItemStyle returns the style for action items that need attention (to copy, to delete)
+func ActionItemStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(PrimaryColor()).
+		Bold(true)
+}
+
+// RenderActionItem renders an action item with prominent styling
+func RenderActionItem(text string) string {
+	return ActionItemStyle().Render(text)
+}
+
 func ErrorColor() lipgloss.Color {
 	if colorsDisabled {
 		return lipgloss.Color("")
