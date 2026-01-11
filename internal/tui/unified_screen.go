@@ -230,6 +230,11 @@ func (u *UnifiedScreen) transitionToSync(msg shared.TransitionToSyncMsg) (tea.Mo
 	u.sync = *screens.NewSyncScreen(msg.Engine)
 	u.hasSync = true
 
+	// Enable live mode on analysis screen for dynamic count updates
+	if u.hasAnalysis {
+		u.analysis.EnableLiveMode()
+	}
+
 	return u, tea.Batch(
 		u.sync.Init(),
 		u.windowSizeCmd(),
@@ -253,6 +258,14 @@ func (u *UnifiedScreen) transitionToSummary(msg shared.TransitionToSummaryMsg) (
 
 func (u *UnifiedScreen) delegateToActiveScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	// During sync phase, update analysis screen with live status on each tick
+	if u.phase == PhaseSync && u.hasAnalysis {
+		if _, ok := msg.(shared.TickMsg); ok && u.engine != nil {
+			status := u.engine.GetStatus()
+			u.analysis.UpdateLiveStatus(status)
+		}
+	}
 
 	// Delegate to the screen for the current phase
 	switch u.phase {

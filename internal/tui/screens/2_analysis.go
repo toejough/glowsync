@@ -46,6 +46,13 @@ type AnalysisScreen struct {
 	sourceFileCount   int                  // Source file count from ScanComplete event
 	destFileCount     int                  // Dest file count from ScanComplete event
 	syncPlan          *syncengine.SyncPlan // Plan from CompareComplete event
+
+	// Live sync tracking (populated during sync phase)
+	isLiveMode            bool               // True when sync is in progress
+	liveStatus            *syncengine.Status // Live status from sync engine
+	originalFilesToCopy   int                // Original FilesOnlyInSource at sync start
+	originalFilesToDelete int                // Original FilesOnlyInDest at sync start
+	originalFilesInBoth   int                // Original FilesInBoth at sync start
 }
 
 // CurrentScanTarget returns "source" or "dest" if that target is active, empty otherwise.
@@ -73,6 +80,23 @@ func (s AnalysisScreen) DestFileCount() int {
 // SyncPlan returns the sync plan from CompareComplete event.
 func (s AnalysisScreen) SyncPlan() *syncengine.SyncPlan {
 	return s.syncPlan
+}
+
+// EnableLiveMode activates live count updates during sync.
+// Call this when transitioning to sync phase.
+func (s *AnalysisScreen) EnableLiveMode() {
+	s.isLiveMode = true
+	if s.syncPlan != nil {
+		s.originalFilesToCopy = s.syncPlan.FilesOnlyInSource
+		s.originalFilesToDelete = s.syncPlan.FilesOnlyInDest
+		s.originalFilesInBoth = s.syncPlan.FilesInBoth
+	}
+}
+
+// UpdateLiveStatus updates the live status during sync.
+// Called by UnifiedScreen on each tick during sync phase.
+func (s *AnalysisScreen) UpdateLiveStatus(status *syncengine.Status) {
+	s.liveStatus = status
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -429,10 +453,7 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 
 	// Show "missing from dest" (to copy) - highlighted since it's an action item
 	if s.syncPlan != nil && s.syncPlan.FilesOnlyInSource > 0 {
-		builder.WriteString("  ")
-		builder.WriteString(shared.RenderActionItem(fmt.Sprintf("Missing from dest: %d files (%s) — to copy",
-			s.syncPlan.FilesOnlyInSource, shared.FormatBytes(s.syncPlan.BytesOnlyInSource))))
-		builder.WriteString("\n")
+		s.renderMissingFromDestLine(&builder)
 	}
 
 	// Show dest section - both scan in parallel so no waiting needed
@@ -440,17 +461,12 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 
 	// Show "missing from source" (to delete) - highlighted since it's an action item
 	if s.syncPlan != nil && s.syncPlan.FilesOnlyInDest > 0 {
-		builder.WriteString("  ")
-		builder.WriteString(shared.RenderActionItem(fmt.Sprintf("Missing from source: %d files (%s) — to delete",
-			s.syncPlan.FilesOnlyInDest, shared.FormatBytes(s.syncPlan.BytesOnlyInDest))))
-		builder.WriteString("\n")
+		s.renderMissingFromSourceLine(&builder)
 	}
 
 	// Comparison results section - files in both locations (no action needed, so dim)
 	if s.syncPlan != nil && s.syncPlan.FilesInBoth > 0 {
-		builder.WriteString(shared.RenderDim(fmt.Sprintf("In both: %d files (%s) — no action needed",
-			s.syncPlan.FilesInBoth, shared.FormatBytes(s.syncPlan.BytesInBoth))))
-		builder.WriteString("\n")
+		s.renderInBothLine(&builder)
 	}
 
 	// Other completed phases (if any remaining)
@@ -611,4 +627,113 @@ func (s AnalysisScreen) renderProcessingProgress(
 		progress.TimePercent)
 
 	return builder.String()
+}
+
+// ============================================================================
+// Live Mode Count Rendering
+// ============================================================================
+
+// renderMissingFromDestLine renders the "Missing from dest" count with live updates.
+func (s AnalysisScreen) renderMissingFromDestLine(builder *strings.Builder) {
+	builder.WriteString("  ")
+
+	if s.isLiveMode && s.liveStatus != nil {
+		// Live mode: show "original → current" with progress
+		remaining := s.originalFilesToCopy - s.liveStatus.ProcessedFiles
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		if remaining != s.originalFilesToCopy {
+			// Count has changed - show transition
+			builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+				"Missing from dest: %d %s %d files (copying...)",
+				s.originalFilesToCopy, shared.RightArrow(), remaining)))
+		} else {
+			// No change yet
+			builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+				"Missing from dest: %d files — to copy",
+				s.originalFilesToCopy)))
+		}
+
+		// Show completed count if any files copied
+		if s.liveStatus.ProcessedFiles > 0 {
+			builder.WriteString("\n    ")
+			builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
+				"%d copied %s", s.liveStatus.ProcessedFiles, shared.SuccessSymbol())))
+		}
+	} else {
+		// Analysis mode: static count
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+			"Missing from dest: %d files (%s) — to copy",
+			s.syncPlan.FilesOnlyInSource,
+			shared.FormatBytes(s.syncPlan.BytesOnlyInSource))))
+	}
+	builder.WriteString("\n")
+}
+
+// renderMissingFromSourceLine renders the "Missing from source" count with live updates.
+func (s AnalysisScreen) renderMissingFromSourceLine(builder *strings.Builder) {
+	builder.WriteString("  ")
+
+	if s.isLiveMode && s.liveStatus != nil {
+		// Live mode: show "original → current" with progress
+		remaining := s.originalFilesToDelete - s.liveStatus.FilesDeleted
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		if remaining != s.originalFilesToDelete {
+			// Count has changed - show transition
+			builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+				"Missing from source: %d %s %d files (cleaning...)",
+				s.originalFilesToDelete, shared.RightArrow(), remaining)))
+		} else {
+			// No change yet (deletion happens during analysis, so usually already complete)
+			builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+				"Missing from source: %d files — to delete",
+				s.originalFilesToDelete)))
+		}
+
+		// Show completed count if any files deleted
+		if s.liveStatus.FilesDeleted > 0 {
+			builder.WriteString("\n    ")
+			builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
+				"%d deleted %s", s.liveStatus.FilesDeleted, shared.SuccessSymbol())))
+		}
+	} else {
+		// Analysis mode: static count
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+			"Missing from source: %d files (%s) — to delete",
+			s.syncPlan.FilesOnlyInDest,
+			shared.FormatBytes(s.syncPlan.BytesOnlyInDest))))
+	}
+	builder.WriteString("\n")
+}
+
+// renderInBothLine renders the "In both" count with live updates.
+func (s AnalysisScreen) renderInBothLine(builder *strings.Builder) {
+	if s.isLiveMode && s.liveStatus != nil {
+		// "In both" increases as copies complete
+		currentInBoth := s.originalFilesInBoth + s.liveStatus.ProcessedFiles
+
+		if currentInBoth != s.originalFilesInBoth {
+			// Count has changed - show transition
+			builder.WriteString(shared.RenderDim(fmt.Sprintf(
+				"In both: %d %s %d files — synced",
+				s.originalFilesInBoth, shared.RightArrow(), currentInBoth)))
+		} else {
+			// No change yet
+			builder.WriteString(shared.RenderDim(fmt.Sprintf(
+				"In both: %d files — no action needed",
+				s.originalFilesInBoth)))
+		}
+	} else {
+		// Analysis mode: static count
+		builder.WriteString(shared.RenderDim(fmt.Sprintf(
+			"In both: %d files (%s) — no action needed",
+			s.syncPlan.FilesInBoth,
+			shared.FormatBytes(s.syncPlan.BytesInBoth))))
+	}
+	builder.WriteString("\n")
 }
