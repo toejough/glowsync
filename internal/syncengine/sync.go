@@ -88,6 +88,10 @@ type Engine struct {
 	desiredWorkers  int32         // Target worker count for adaptive scaling (atomic)
 	sourceResizable filesystem.ResizablePool
 	destResizable   filesystem.ResizablePool
+
+	// File maps from analysis phase (stored for deletion during sync)
+	analysisSourceFiles map[string]*fileops.FileInfo
+	analysisDestFiles   map[string]*fileops.FileInfo
 }
 
 // NewEngine creates a new sync engine.
@@ -215,11 +219,12 @@ func (e *Engine) Analyze() error {
 		return err
 	}
 
-	// Delete orphaned files and directories from destination
-	err = e.deleteOrphanedItems(sourceFiles, destFiles)
-	if err != nil {
-		return err
-	}
+	// Store file maps for deletion during sync phase
+	e.analysisSourceFiles = sourceFiles
+	e.analysisDestFiles = destFiles
+
+	// Count orphaned items (for plan display) but don't delete yet - deletion happens during sync
+	e.countOrphanedItemsForPlan(sourceFiles, destFiles)
 
 	e.finalizeAnalysis()
 
@@ -905,6 +910,17 @@ func (e *Engine) countAndLogOrphanedItems(sourceFiles, destFiles map[string]*fil
 	return filesToDelete, dirsToDelete
 }
 
+// countOrphanedItemsForPlan counts orphaned items during analysis (for plan display)
+// without actually deleting them. Deletion happens during sync phase.
+func (e *Engine) countOrphanedItemsForPlan(sourceFiles, destFiles map[string]*fileops.FileInfo) {
+	e.Status.mu.Lock()
+	e.Status.AnalysisPhase = "planning"
+	e.Status.mu.Unlock()
+
+	// Count and log orphaned items (sets status fields for plan display)
+	e.countAndLogOrphanedItems(sourceFiles, destFiles)
+}
+
 // createProgressCallback creates a progress callback for file copying with throttling
 //
 //nolint:funlen // Complex progress tracking logic requires multiple state updates
@@ -1194,15 +1210,49 @@ func (e *Engine) deleteOrphanedFiles(sourceFiles, destFiles map[string]*fileops.
 }
 
 // deleteOrphanedItems deletes files and directories from destination that don't exist in source
-func (e *Engine) deleteOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) error {
-	e.Status.mu.Lock()
-	e.Status.AnalysisPhase = "deleting"
-	e.Status.ScannedFiles = 0
-	e.Status.TotalFilesToScan = len(destFiles)
-	e.Status.mu.Unlock()
 
-	// Count and log orphaned items
-	filesToDelete, dirsToDelete := e.countAndLogOrphanedItems(sourceFiles, destFiles)
+// Count and log orphaned items
+
+// Delete files first (before directories)
+
+// Delete directories (in reverse depth order, deepest first)
+
+// performDeletionsDuringSync deletes orphaned files/directories during sync phase
+// Uses file maps stored during analysis phase.
+func (e *Engine) performDeletionsDuringSync() error {
+	sourceFiles := e.analysisSourceFiles
+	destFiles := e.analysisDestFiles
+
+	// If no file maps available (shouldn't happen), skip deletion
+	if sourceFiles == nil || destFiles == nil {
+		return nil
+	}
+
+	// Get file count from status (set during analysis)
+	e.Status.mu.RLock()
+	filesToDelete := e.Status.FilesToDelete
+	e.Status.mu.RUnlock()
+
+	// Count directories to delete
+	dirsToDelete := 0
+	for relPath, dstFile := range destFiles {
+		if dstFile.IsDir {
+			if _, exists := sourceFiles[relPath]; !exists {
+				dirsToDelete++
+			}
+		}
+	}
+
+	// Skip if nothing to delete
+	if filesToDelete == 0 && dirsToDelete == 0 {
+		e.Status.mu.Lock()
+		e.Status.DeletionComplete = true
+		e.Status.mu.Unlock()
+
+		return nil
+	}
+
+	e.logToFile(fmt.Sprintf("Starting deletion phase: %d files, %d directories", filesToDelete, dirsToDelete))
 
 	// Delete files first (before directories)
 	err := e.deleteOrphanedFiles(sourceFiles, destFiles, filesToDelete)
@@ -1927,6 +1977,12 @@ func (e *Engine) startWorkerControl(wg *sync.WaitGroup, jobs <-chan *FileToSync,
 //nolint:funlen // Complex adaptive scaling logic requires sequential steps
 func (e *Engine) syncAdaptive() error {
 	e.logToFile("Starting sync phase (adaptive mode)...")
+
+	// Perform deletions first (before copying)
+	if err := e.performDeletionsDuringSync(); err != nil {
+		return err
+	}
+
 	e.logToFile(fmt.Sprintf("Files to sync: %d", len(e.Status.FilesToSync)))
 
 	e.Status.mu.Lock()
@@ -2074,6 +2130,12 @@ func (e *Engine) syncFile(fileToSync *FileToSync) error {
 // syncFixed uses a fixed number of workers
 func (e *Engine) syncFixed() error {
 	e.logToFile("Starting sync phase...")
+
+	// Perform deletions first (before copying)
+	if err := e.performDeletionsDuringSync(); err != nil {
+		return err
+	}
+
 	e.logToFile(fmt.Sprintf("Files to sync: %d", len(e.Status.FilesToSync)))
 
 	e.Status.mu.Lock()
@@ -2467,17 +2529,17 @@ type Status struct {
 	BytesOnlyInDest   int64 // Bytes to delete
 
 	// Deletion progress tracking
-	FilesToDelete      int      // Total orphaned files to delete
-	FilesDeleted       int      // Files successfully deleted so far
-	BytesToDelete      int64    // Total bytes to delete
-	BytesDeleted       int64    // Bytes deleted so far
-	CurrentlyDeleting  []string // Files currently being deleted
-	DeletionComplete   bool     // Whether deletion phase is complete
-	DeletionErrors     int      // Number of deletion errors
+	FilesToDelete     int      // Total orphaned files to delete
+	FilesDeleted      int      // Files successfully deleted so far
+	BytesToDelete     int64    // Total bytes to delete
+	BytesDeleted      int64    // Bytes deleted so far
+	CurrentlyDeleting []string // Files currently being deleted
+	DeletionComplete  bool     // Whether deletion phase is complete
+	DeletionErrors    int      // Number of deletion errors
 
 	// Analysis progress
 	//nolint:lll // Inline comment listing all possible phase values
-	AnalysisPhase    string   // "counting_source", "scanning_source", "counting_dest", "scanning_dest", "comparing", "deleting", "complete"
+	AnalysisPhase    string   // "counting_source", "scanning_source", "counting_dest", "scanning_dest", "comparing", "planning", "complete"
 	ScannedFiles     int      // Number of files scanned/compared so far
 	TotalFilesToScan int      // Total files to scan/compare (0 if unknown/counting)
 	CurrentPath      string   // Current path being analyzed

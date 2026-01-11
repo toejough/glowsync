@@ -713,10 +713,7 @@ const sectionIndent = "  "
 // renderCopyingSection renders the full copying progress section during live sync.
 func (s AnalysisScreen) renderCopyingSection(builder *strings.Builder) {
 	// Show remaining count with transition arrow
-	remaining := s.originalFilesToCopy - s.liveStatus.ProcessedFiles
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(s.originalFilesToCopy-s.liveStatus.ProcessedFiles, 0)
 
 	if remaining != s.originalFilesToCopy {
 		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
@@ -837,8 +834,8 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 	boxOverhead := 6
 	contentWidth := s.width - boxOverhead
 	progressBarWidth := s.fileProgress.Width
-	percentageWidth := 8  // " (100.0%)"
-	spacing := 4          // spaces between components
+	percentageWidth := 8 // " (100.0%)"
+	spacing := 4         // spaces between components
 	fixedWidth := progressBarWidth + percentageWidth + spacing
 	maxPathWidth := max(contentWidth-fixedWidth, 20) //nolint:mnd // Minimum path width
 
@@ -898,10 +895,7 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 // This is symmetric with renderCopyingSection for the Source section.
 func (s AnalysisScreen) renderCleaningSection(builder *strings.Builder) {
 	// Show remaining count with transition arrow
-	remaining := s.originalFilesToDelete - s.liveStatus.FilesDeleted
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(s.originalFilesToDelete-s.liveStatus.FilesDeleted, 0)
 
 	if remaining != s.originalFilesToDelete && remaining > 0 {
 		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(

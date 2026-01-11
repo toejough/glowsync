@@ -388,16 +388,24 @@ func TestEngineDeleteOrphanedDirectories(t *testing.T) {
 	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
-	// Run Analyze - this will delete orphaned directories
+	// Run Analyze - this identifies orphaned items but doesn't delete them
 	err = engine.Analyze()
 
 	// Verify results
 	g := NewWithT(t)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	// Verify orphan directory was deleted
+	// Orphan directory should still exist after Analyze (deletion happens during Sync)
 	_, err = os.Stat(orphanDir)
-	g.Expect(os.IsNotExist(err)).Should(BeTrue(), "Orphaned directory should be deleted during Analyze")
+	g.Expect(err).ShouldNot(HaveOccurred(), "Orphaned directory should still exist after Analyze")
+
+	// Run Sync - this deletes orphaned items
+	err = engine.Sync()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Verify orphan directory was deleted during Sync
+	_, err = os.Stat(orphanDir)
+	g.Expect(os.IsNotExist(err)).Should(BeTrue(), "Orphaned directory should be deleted during Sync")
 }
 
 func TestEngineDeleteOrphanedFiles(t *testing.T) {
@@ -435,16 +443,24 @@ func TestEngineDeleteOrphanedFiles(t *testing.T) {
 	engine := mustNewEngine(t, sourceDir, destDir)
 	engine.FileOps = fileops.NewRealFileOps()
 
-	// Run Analyze - this will delete orphaned files
+	// Run Analyze - this identifies orphaned items but doesn't delete them
 	err = engine.Analyze()
 
 	// Verify results
 	g := NewWithT(t)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	// Verify orphan file was deleted
+	// Orphan file should still exist after Analyze (deletion happens during Sync)
 	_, err = os.Stat(orphanFile)
-	g.Expect(os.IsNotExist(err)).Should(BeTrue(), "Orphaned file should be deleted during Analyze")
+	g.Expect(err).ShouldNot(HaveOccurred(), "Orphaned file should still exist after Analyze")
+
+	// Run Sync - this deletes orphaned items
+	err = engine.Sync()
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// Verify orphan file was deleted during Sync
+	_, err = os.Stat(orphanFile)
+	g.Expect(os.IsNotExist(err)).Should(BeTrue(), "Orphaned file should be deleted during Sync")
 }
 
 func TestEngineDeviousContentMode(t *testing.T) {
