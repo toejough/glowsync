@@ -54,6 +54,13 @@ type AnalysisScreen struct {
 	originalFilesToCopy   int                // Original FilesOnlyInSource at sync start
 	originalFilesToDelete int                // Original FilesOnlyInDest at sync start
 	originalFilesInBoth   int                // Original FilesInBoth at sync start
+
+	// Buffer zones to prevent jitter when worker counts change
+	maxCopyingLines  int // High water mark for copying section line count
+	maxCleaningLines int // High water mark for cleaning section line count
+
+	// Deletion timing (tracked by TUI since engine StartTime is for copying)
+	deletionStartTime time.Time
 }
 
 // CurrentScanTarget returns "source" or "dest" if that target is active, empty otherwise.
@@ -98,6 +105,75 @@ func (s *AnalysisScreen) EnableLiveMode() {
 // Called by UnifiedScreen on each tick during sync phase.
 func (s *AnalysisScreen) UpdateLiveStatus(status *syncengine.Status) {
 	s.liveStatus = status
+
+	// Track deletion start time (first time we see deletion in progress)
+	if s.deletionStartTime.IsZero() && status.FilesToDelete > 0 && !status.DeletionComplete {
+		s.deletionStartTime = time.Now()
+	}
+
+	// Track high-water mark for copying section lines (prevents jitter)
+	activeFiles := 0
+	for _, file := range status.FilesToSync {
+		if file.Status == "copying" || file.Status == "opening" || file.Status == "finalizing" {
+			activeFiles++
+		}
+	}
+
+	copyingLines := s.calculateCopyingSectionLines(activeFiles, status)
+	if copyingLines > s.maxCopyingLines {
+		s.maxCopyingLines = copyingLines
+	}
+
+	// Track high-water mark for cleaning section lines
+	cleaningLines := s.calculateCleaningSectionLines(status)
+	if cleaningLines > s.maxCleaningLines {
+		s.maxCleaningLines = cleaningLines
+	}
+}
+
+// calculateCopyingSectionLines returns the number of lines the copying section will use.
+func (s AnalysisScreen) calculateCopyingSectionLines(activeFiles int, status *syncengine.Status) int {
+	lines := 0
+	if activeFiles > 0 {
+		lines = 1  // Header
+		lines++    // Progress bar
+		lines += 3 // Files, Bytes, Time lines
+		lines++    // Blank line
+		// Speed line (if present)
+		if status.Workers.TotalRate > 0 {
+			lines++
+		}
+		lines++    // Blank line after stats
+		lines++    // "Currently Copying" header
+		lines += min(activeFiles, 5)
+		if activeFiles > 5 {
+			lines++ // Overflow
+		}
+	}
+	lines++ // "X copied" line
+	return lines
+}
+
+// calculateCleaningSectionLines returns the number of lines the cleaning section will use.
+func (s AnalysisScreen) calculateCleaningSectionLines(status *syncengine.Status) int {
+	if status.FilesToDelete == 0 {
+		return 0
+	}
+
+	lines := 1     // Header
+	lines++        // Progress bar
+	lines += 3     // Files, Bytes, Time lines
+	lines++        // Blank line
+	deletingFiles := len(status.CurrentlyDeleting)
+	if deletingFiles > 0 {
+		lines++ // "Currently Deleting" header
+		lines += min(deletingFiles, 3)
+		if deletingFiles > 3 {
+			lines++ // Overflow
+		}
+	}
+	lines++ // "X deleted" line
+	return lines
 }
 
 // NewAnalysisScreen creates a new analysis screen
@@ -735,11 +811,23 @@ func (s AnalysisScreen) renderCopyingSection(builder *strings.Builder) {
 	// Currently copying files with progress bars
 	s.renderCurrentlyCopying(builder)
 
-	// Show completed count
+	// Show completed count (always at same position for stability)
+	builder.WriteString(sectionIndent)
 	if s.liveStatus.ProcessedFiles > 0 {
-		builder.WriteString(sectionIndent)
 		builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
 			"%d copied %s", s.liveStatus.ProcessedFiles, shared.SuccessSymbol())))
+	}
+	builder.WriteString("\n")
+
+	// Add padding to reach high-water mark (prevents jitter when worker count changes)
+	activeFiles := 0
+	for _, file := range s.liveStatus.FilesToSync {
+		if file.Status == "copying" || file.Status == "opening" || file.Status == "finalizing" {
+			activeFiles++
+		}
+	}
+	currentLines := s.calculateCopyingSectionLines(activeFiles, s.liveStatus)
+	for range s.maxCopyingLines - currentLines {
 		builder.WriteString("\n")
 	}
 }
@@ -894,18 +982,16 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 // renderCleaningSection renders the full cleaning progress section during live sync.
 // This is symmetric with renderCopyingSection for the Source section.
 func (s AnalysisScreen) renderCleaningSection(builder *strings.Builder) {
-	// Show remaining count with transition arrow
+	// Show remaining count with transition arrow (mirrors copying section format)
 	remaining := max(s.originalFilesToDelete-s.liveStatus.FilesDeleted, 0)
 
-	if remaining != s.originalFilesToDelete && remaining > 0 {
+	if remaining != s.originalFilesToDelete {
+		// Count has changed - show transition
 		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
 			"Cleaning: %d %s %d files remaining",
 			s.originalFilesToDelete, shared.RightArrow(), remaining)))
-	} else if s.liveStatus.DeletionComplete || remaining == 0 {
-		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
-			"Cleaning: %d files",
-			s.originalFilesToDelete)))
 	} else {
+		// No change yet
 		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
 			"Cleaning: %d files",
 			s.originalFilesToDelete)))
@@ -918,11 +1004,17 @@ func (s AnalysisScreen) renderCleaningSection(builder *strings.Builder) {
 	// Currently deleting files (if any)
 	s.renderCurrentlyDeleting(builder)
 
-	// Show completed count
+	// Show completed count (always at same position for stability)
+	builder.WriteString(sectionIndent)
 	if s.liveStatus.FilesDeleted > 0 {
-		builder.WriteString(sectionIndent)
 		builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
 			"%d deleted %s", s.liveStatus.FilesDeleted, shared.SuccessSymbol())))
+	}
+	builder.WriteString("\n")
+
+	// Add padding to reach high-water mark (prevents jitter when deletion count changes)
+	currentLines := s.calculateCleaningSectionLines(s.liveStatus)
+	for range s.maxCleaningLines - currentLines {
 		builder.WriteString("\n")
 	}
 }
@@ -967,6 +1059,29 @@ func (s AnalysisScreen) renderDeletionProgress(builder *strings.Builder) {
 		shared.FormatBytes(s.liveStatus.BytesDeleted),
 		shared.FormatBytes(s.liveStatus.BytesToDelete),
 		bytesPercent*shared.ProgressPercentageScale)
+	builder.WriteString("\n")
+
+	// Time line: elapsed / estimated (percentage)
+	var elapsed time.Duration
+	if !s.deletionStartTime.IsZero() {
+		elapsed = time.Since(s.deletionStartTime)
+	}
+
+	// Estimate remaining time based on progress
+	var totalEstimated time.Duration
+	if progressPercent > 0 && progressPercent < 1.0 {
+		totalEstimated = time.Duration(float64(elapsed) / progressPercent)
+	} else if s.liveStatus.DeletionComplete {
+		totalEstimated = elapsed
+	} else {
+		totalEstimated = elapsed // Can't estimate yet
+	}
+
+	builder.WriteString(sectionIndent)
+	fmt.Fprintf(builder, "Time: %s / %s (%.1f%%)",
+		shared.FormatDuration(elapsed),
+		shared.FormatDuration(totalEstimated),
+		progressPercent*shared.ProgressPercentageScale)
 	builder.WriteString("\n\n")
 }
 
