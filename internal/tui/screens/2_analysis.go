@@ -659,42 +659,21 @@ func (s AnalysisScreen) renderMissingFromDestLine(builder *strings.Builder) {
 }
 
 // renderMissingFromSourceLine renders the "Missing from source" count with live updates.
+// During live sync mode, this expands to show the full cleaning section with progress.
 func (s AnalysisScreen) renderMissingFromSourceLine(builder *strings.Builder) {
 	builder.WriteString("  ")
 
 	if s.isLiveMode && s.liveStatus != nil {
-		// Live mode: show "original → current" with progress
-		remaining := s.originalFilesToDelete - s.liveStatus.FilesDeleted
-		if remaining < 0 {
-			remaining = 0
-		}
-
-		if remaining != s.originalFilesToDelete {
-			// Count has changed - show transition
-			builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
-				"Missing from source: %d %s %d files (cleaning...)",
-				s.originalFilesToDelete, shared.RightArrow(), remaining)))
-		} else {
-			// No change yet (deletion happens during analysis, so usually already complete)
-			builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
-				"Missing from source: %d files — to delete",
-				s.originalFilesToDelete)))
-		}
-
-		// Show completed count if any files deleted
-		if s.liveStatus.FilesDeleted > 0 {
-			builder.WriteString("\n    ")
-			builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
-				"%d deleted %s", s.liveStatus.FilesDeleted, shared.SuccessSymbol())))
-		}
+		// Live mode: show full cleaning section (symmetric with copying section)
+		s.renderCleaningSection(builder)
 	} else {
 		// Analysis mode: static count
 		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
 			"Missing from source: %d files (%s) — to delete",
 			s.syncPlan.FilesOnlyInDest,
 			shared.FormatBytes(s.syncPlan.BytesOnlyInDest))))
+		builder.WriteString("\n")
 	}
-	builder.WriteString("\n")
 }
 
 // renderInBothLine renders the "In both" count with live updates.
@@ -908,5 +887,133 @@ func (s AnalysisScreen) renderCurrentlyCopying(builder *strings.Builder) {
 	if len(activeFiles) > filesDisplayed {
 		builder.WriteString(sectionIndent)
 		builder.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", len(activeFiles)-filesDisplayed)))
+	}
+}
+
+// ============================================================================
+// Live Sync Cleaning Section (symmetric with Copying Section)
+// ============================================================================
+
+// renderCleaningSection renders the full cleaning progress section during live sync.
+// This is symmetric with renderCopyingSection for the Source section.
+func (s AnalysisScreen) renderCleaningSection(builder *strings.Builder) {
+	// Show remaining count with transition arrow
+	remaining := s.originalFilesToDelete - s.liveStatus.FilesDeleted
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	if remaining != s.originalFilesToDelete && remaining > 0 {
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+			"Cleaning: %d %s %d files remaining",
+			s.originalFilesToDelete, shared.RightArrow(), remaining)))
+	} else if s.liveStatus.DeletionComplete || remaining == 0 {
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+			"Cleaning: %d files",
+			s.originalFilesToDelete)))
+	} else {
+		builder.WriteString(shared.RenderActionItem(fmt.Sprintf(
+			"Cleaning: %d files",
+			s.originalFilesToDelete)))
+	}
+	builder.WriteString("\n\n")
+
+	// Progress bar and stats
+	s.renderDeletionProgress(builder)
+
+	// Currently deleting files (if any)
+	s.renderCurrentlyDeleting(builder)
+
+	// Show completed count
+	if s.liveStatus.FilesDeleted > 0 {
+		builder.WriteString(sectionIndent)
+		builder.WriteString(shared.RenderSuccess(fmt.Sprintf(
+			"%d deleted %s", s.liveStatus.FilesDeleted, shared.SuccessSymbol())))
+		builder.WriteString("\n")
+	}
+}
+
+// renderDeletionProgress renders progress bar with files and bytes for deletion.
+func (s AnalysisScreen) renderDeletionProgress(builder *strings.Builder) {
+	// Calculate progress percentage
+	var progressPercent float64
+	if s.liveStatus.FilesToDelete > 0 {
+		progressPercent = float64(s.liveStatus.FilesDeleted) / float64(s.liveStatus.FilesToDelete)
+	} else if s.liveStatus.DeletionComplete {
+		progressPercent = 1.0
+	}
+
+	// Progress bar
+	builder.WriteString(sectionIndent)
+	builder.WriteString(shared.RenderProgress(s.overallProgress, progressPercent))
+	builder.WriteString("\n")
+
+	// Files line with percentage
+	builder.WriteString(sectionIndent)
+	fmt.Fprintf(builder, "Files: %d / %d (%.1f%%)",
+		s.liveStatus.FilesDeleted,
+		s.liveStatus.FilesToDelete,
+		progressPercent*shared.ProgressPercentageScale)
+
+	if s.liveStatus.DeletionErrors > 0 {
+		fmt.Fprintf(builder, " • %d failed", s.liveStatus.DeletionErrors)
+	}
+	builder.WriteString("\n")
+
+	// Bytes line with percentage
+	var bytesPercent float64
+	if s.liveStatus.BytesToDelete > 0 {
+		bytesPercent = float64(s.liveStatus.BytesDeleted) / float64(s.liveStatus.BytesToDelete)
+	} else if s.liveStatus.DeletionComplete {
+		bytesPercent = 1.0
+	}
+
+	builder.WriteString(sectionIndent)
+	fmt.Fprintf(builder, "Bytes: %s / %s (%.1f%%)",
+		shared.FormatBytes(s.liveStatus.BytesDeleted),
+		shared.FormatBytes(s.liveStatus.BytesToDelete),
+		bytesPercent*shared.ProgressPercentageScale)
+	builder.WriteString("\n\n")
+}
+
+// renderCurrentlyDeleting renders files currently being deleted (if any).
+func (s AnalysisScreen) renderCurrentlyDeleting(builder *strings.Builder) {
+	if len(s.liveStatus.CurrentlyDeleting) == 0 {
+		return
+	}
+
+	builder.WriteString(sectionIndent)
+	builder.WriteString(shared.RenderLabel(fmt.Sprintf("Currently Deleting (%d):", len(s.liveStatus.CurrentlyDeleting))))
+	builder.WriteString("\n")
+
+	// Calculate available width for path display
+	boxOverhead := 6
+	contentWidth := s.width - boxOverhead
+	maxPathWidth := max(contentWidth-len(sectionIndent)-4, 20) //nolint:mnd // Minimum path width
+
+	// Display up to 5 files
+	maxFilesToShow := 5 //nolint:mnd // Reasonable limit for file list
+	filesDisplayed := 0
+
+	for _, filePath := range s.liveStatus.CurrentlyDeleting {
+		if filesDisplayed >= maxFilesToShow {
+			break
+		}
+
+		truncPath := shared.TruncatePath(filePath, maxPathWidth)
+
+		builder.WriteString(sectionIndent)
+		builder.WriteString(shared.FileItemErrorStyle().Render("✗ " + truncPath))
+		builder.WriteString(" ")
+		builder.WriteString(shared.RenderDim("deleting"))
+		builder.WriteString("\n")
+
+		filesDisplayed++
+	}
+
+	// Show overflow message
+	if len(s.liveStatus.CurrentlyDeleting) > filesDisplayed {
+		builder.WriteString(sectionIndent)
+		builder.WriteString(shared.RenderDim(fmt.Sprintf("... and %d more files\n", len(s.liveStatus.CurrentlyDeleting)-filesDisplayed)))
 	}
 }
