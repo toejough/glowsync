@@ -87,10 +87,10 @@ func TestEventTypes_SyncEvents(t *testing.T) {
 
 	// SyncComplete should have Result field
 	result := &syncengine.SyncResult{
-		FilesCopied:   100,
-		FilesDeleted:  5,
-		BytesCopied:   10240,
-		Errors:        []error{},
+		FilesCopied:  100,
+		FilesDeleted: 5,
+		BytesCopied:  10240,
+		Errors:       []error{},
 	}
 	syncComplete := syncengine.SyncComplete{Result: result}
 	g.Expect(syncComplete.Result).To(Equal(result))

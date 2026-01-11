@@ -400,6 +400,26 @@ func (e *Engine) GetStatus() *Status {
 	status.AnalysisStartTime = e.Status.AnalysisStartTime
 	status.AnalysisRate = e.Status.AnalysisRate
 
+	// Copy comparison result fields
+	status.FilesInBoth = e.Status.FilesInBoth
+	status.FilesOnlyInSource = e.Status.FilesOnlyInSource
+	status.FilesOnlyInDest = e.Status.FilesOnlyInDest
+	status.BytesInBoth = e.Status.BytesInBoth
+	status.BytesOnlyInSource = e.Status.BytesOnlyInSource
+	status.BytesOnlyInDest = e.Status.BytesOnlyInDest
+
+	// Copy deletion progress tracking fields
+	status.FilesToDelete = e.Status.FilesToDelete
+	status.FilesDeleted = e.Status.FilesDeleted
+	status.BytesToDelete = e.Status.BytesToDelete
+	status.BytesDeleted = e.Status.BytesDeleted
+	status.DeletionComplete = e.Status.DeletionComplete
+	status.DeletionErrors = e.Status.DeletionErrors
+
+	// Copy CurrentlyDeleting slice
+	status.CurrentlyDeleting = make([]string, len(e.Status.CurrentlyDeleting))
+	copy(status.CurrentlyDeleting, e.Status.CurrentlyDeleting)
+
 	// Only copy recently active files from FilesToSync to reduce lock time
 	// PRIORITY: Always include files in CurrentFiles (actively being worked on)
 	// THEN: Fill remaining slots with recently completed files for context
@@ -861,10 +881,17 @@ func (e *Engine) compareFilesWithHash(relPath string, comparedCount int) bool {
 func (e *Engine) countAndLogOrphanedItems(sourceFiles, destFiles map[string]*fileops.FileInfo) (int, int) {
 	filesToDelete, dirsToDelete, bytesToDelete := countOrphanedItems(sourceFiles, destFiles)
 
-	// Store orphan count and bytes in Status for CompareComplete event
+	// Store orphan count and bytes in Status for CompareComplete event and deletion tracking
 	e.Status.mu.Lock()
 	e.Status.FilesOnlyInDest = filesToDelete
 	e.Status.BytesOnlyInDest = bytesToDelete
+	e.Status.FilesToDelete = filesToDelete
+	e.Status.BytesToDelete = bytesToDelete
+	e.Status.FilesDeleted = 0
+	e.Status.BytesDeleted = 0
+	e.Status.CurrentlyDeleting = nil
+	e.Status.DeletionComplete = false
+	e.Status.DeletionErrors = 0
 	e.Status.mu.Unlock()
 
 	if filesToDelete == 0 && dirsToDelete == 0 {
@@ -1011,8 +1038,8 @@ func (e *Engine) deleteDirectory(relPath string, deletedCount int) error {
 	return nil
 }
 
-// deleteOrphanedFiles deletes files from destination that don't exist in source
-func (e *Engine) deleteFile(relPath string, deletedCount int) error {
+// deleteFile deletes a single file from destination and tracks progress
+func (e *Engine) deleteFile(relPath string, fileSize int64, deletedCount int) error {
 	dstPath := filepath.Join(e.DestPath, relPath)
 
 	// Log first 10 deletions for debugging
@@ -1020,7 +1047,24 @@ func (e *Engine) deleteFile(relPath string, deletedCount int) error {
 		e.logAnalysis(fmt.Sprintf("  → Deleting: %s (not in source)", relPath))
 	}
 
+	// Track currently deleting file
+	e.Status.mu.Lock()
+	e.Status.CurrentlyDeleting = append(e.Status.CurrentlyDeleting, relPath)
+	e.Status.mu.Unlock()
+
 	err := e.FileOps.RemoveFromDest(dstPath)
+
+	// Remove from currently deleting list
+	e.Status.mu.Lock()
+	for i, f := range e.Status.CurrentlyDeleting {
+		if f == relPath {
+			e.Status.CurrentlyDeleting = append(e.Status.CurrentlyDeleting[:i], e.Status.CurrentlyDeleting[i+1:]...)
+
+			break
+		}
+	}
+	e.Status.mu.Unlock()
+
 	if err != nil {
 		// Track error instead of failing
 		e.Status.mu.Lock()
@@ -1028,6 +1072,7 @@ func (e *Engine) deleteFile(relPath string, deletedCount int) error {
 			FilePath: relPath,
 			Error:    fmt.Errorf("failed to delete: %w", err),
 		})
+		e.Status.DeletionErrors++
 		errorCount := len(e.Status.Errors)
 		e.Status.mu.Unlock()
 
@@ -1040,6 +1085,12 @@ func (e *Engine) deleteFile(relPath string, deletedCount int) error {
 
 		return ErrDeleteFailed // Signal error but continue
 	}
+
+	// Track successful deletion
+	e.Status.mu.Lock()
+	e.Status.FilesDeleted++
+	e.Status.BytesDeleted += fileSize
+	e.Status.mu.Unlock()
 
 	return nil
 }
@@ -1088,6 +1139,11 @@ func (e *Engine) deleteOrphanedDirectories(sourceFiles, destFiles map[string]*fi
 
 func (e *Engine) deleteOrphanedFiles(sourceFiles, destFiles map[string]*fileops.FileInfo, filesToDelete int) error {
 	if filesToDelete == 0 {
+		// Mark deletion as complete even when there's nothing to delete
+		e.Status.mu.Lock()
+		e.Status.DeletionComplete = true
+		e.Status.mu.Unlock()
+
 		return nil
 	}
 
@@ -1115,7 +1171,7 @@ func (e *Engine) deleteOrphanedFiles(sourceFiles, destFiles map[string]*fileops.
 
 		var err error
 
-		deletedCount, deleteErrorCount, err = e.processOrphanedFile(relPath, sourceFiles, deletedCount, deleteErrorCount)
+		deletedCount, deleteErrorCount, err = e.processOrphanedFile(relPath, sourceFiles, dstFile.Size, deletedCount, deleteErrorCount)
 		if err != nil {
 			return err
 		}
@@ -1125,6 +1181,11 @@ func (e *Engine) deleteOrphanedFiles(sourceFiles, destFiles map[string]*fileops.
 			e.notifyStatusUpdate()
 		}
 	}
+
+	// Mark file deletion as complete
+	e.Status.mu.Lock()
+	e.Status.DeletionComplete = true
+	e.Status.mu.Unlock()
 
 	// Summary of file deletion phase
 	e.logFileDeletionSummary(deletedCount, deleteErrorCount)
@@ -1542,8 +1603,8 @@ func (e *Engine) prepareNeedSyncLogMessage(needSyncCount int, relPath string, sr
 }
 
 // processFileDeletion handles the deletion of a single orphaned file.
-func (e *Engine) processFileDeletion(relPath string, deletedCount int) (deleted bool, err error) {
-	err = e.deleteFile(relPath, deletedCount)
+func (e *Engine) processFileDeletion(relPath string, fileSize int64, deletedCount int) (deleted bool, err error) {
+	err = e.deleteFile(relPath, fileSize, deletedCount)
 	if err != nil {
 		if errors.Is(err, ErrDeleteFailed) {
 			return false, nil // Count as error but continue
@@ -1558,10 +1619,10 @@ func (e *Engine) processFileDeletion(relPath string, deletedCount int) (deleted 
 // processOrphanedFile processes a single file for deletion if it's orphaned.
 //
 //nolint:lll // Long function signature with map parameter and multiple return values
-func (e *Engine) processOrphanedFile(relPath string, sourceFiles map[string]*fileops.FileInfo, deletedCount, deleteErrorCount int) (newDeletedCount, newDeleteErrorCount int, err error) {
+func (e *Engine) processOrphanedFile(relPath string, sourceFiles map[string]*fileops.FileInfo, fileSize int64, deletedCount, deleteErrorCount int) (newDeletedCount, newDeleteErrorCount int, err error) {
 	if _, exists := sourceFiles[relPath]; !exists {
 		// Delete this file from destination
-		deleted, err := e.processFileDeletion(relPath, deletedCount)
+		deleted, err := e.processFileDeletion(relPath, fileSize, deletedCount)
 		if err != nil {
 			return deletedCount, deleteErrorCount, err
 		}
@@ -2404,6 +2465,15 @@ type Status struct {
 	BytesInBoth       int64 // Bytes of files in both (no action needed)
 	BytesOnlyInSource int64 // Bytes to copy
 	BytesOnlyInDest   int64 // Bytes to delete
+
+	// Deletion progress tracking
+	FilesToDelete      int      // Total orphaned files to delete
+	FilesDeleted       int      // Files successfully deleted so far
+	BytesToDelete      int64    // Total bytes to delete
+	BytesDeleted       int64    // Bytes deleted so far
+	CurrentlyDeleting  []string // Files currently being deleted
+	DeletionComplete   bool     // Whether deletion phase is complete
+	DeletionErrors     int      // Number of deletion errors
 
 	// Analysis progress
 	//nolint:lll // Inline comment listing all possible phase values

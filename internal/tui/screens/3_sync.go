@@ -592,6 +592,17 @@ func (s SyncScreen) renderSyncingView() string {
 func (s SyncScreen) renderSyncingContent() string {
 	var builder strings.Builder
 
+	// Header showing source → dest relationship
+	if s.engine != nil {
+		builder.WriteString(shared.RenderLabel("Syncing: "))
+		builder.WriteString(shared.TruncatePath(s.engine.SourcePath, s.getMaxPathWidth()/2)) //nolint:mnd // Half width for each path
+		builder.WriteString(" ")
+		builder.WriteString(shared.RightArrow())
+		builder.WriteString(" ")
+		builder.WriteString(shared.TruncatePath(s.engine.DestPath, s.getMaxPathWidth()/2)) //nolint:mnd // Half width for each path
+		builder.WriteString("\n\n")
+	}
+
 	// Show finalization message when in that phase
 	if s.status != nil && s.status.FinalizationPhase == statusComplete {
 		builder.WriteString(shared.RenderLabel("Finalizing: "))
@@ -621,14 +632,14 @@ func (s SyncScreen) renderSyncingContent() string {
 		return builder.String()
 	}
 
-	// Unified progress (replaces separate overall and session progress)
-	s.renderUnifiedProgress(&builder)
+	// === COPYING SECTION ===
+	s.renderCopyingSection(&builder)
 
-	// Statistics
-	s.renderStatistics(&builder)
+	// === CLEANING SECTION (deletion results from analysis phase) ===
+	s.renderCleaningSection(&builder)
 
-	// File list
-	s.renderFileList(&builder)
+	// === UNCHANGED SECTION ===
+	s.renderUnchangedSection(&builder)
 
 	// Errors
 	s.renderSyncingErrors(&builder)
@@ -677,6 +688,70 @@ func (s SyncScreen) renderUnifiedProgress(builder *strings.Builder) {
 		shared.FormatDuration(totalEstimated),
 		s.status.Progress.TimePercent*shared.ProgressPercentageScale)
 
+	builder.WriteString("\n\n")
+}
+
+// renderCopyingSection renders the "Copying" grouped operation section.
+func (s SyncScreen) renderCopyingSection(builder *strings.Builder) {
+	// Section header: "Copying (from source)"
+	builder.WriteString(shared.RenderLabel("Copying"))
+	builder.WriteString(shared.RenderDim(" (from source)"))
+	builder.WriteString("\n")
+
+	// Progress bar and stats
+	s.renderUnifiedProgress(builder)
+
+	// Statistics (workers, speed)
+	s.renderStatistics(builder)
+
+	// File list (currently copying files with progress)
+	s.renderFileList(builder)
+}
+
+// renderCleaningSection renders the "Cleaning" grouped operation section (deletion results).
+func (s SyncScreen) renderCleaningSection(builder *strings.Builder) {
+	// Only show if there were files to delete
+	if s.status.FilesToDelete == 0 {
+		return
+	}
+
+	// Section header: "Cleaning (dest)"
+	builder.WriteString(shared.RenderLabel("Cleaning"))
+	builder.WriteString(shared.RenderDim(" (dest)"))
+	builder.WriteString("\n")
+
+	// Deletion is done during analysis, show results
+	if s.status.DeletionComplete {
+		// Show completed deletion summary
+		builder.WriteString(shared.SuccessSymbol())
+		fmt.Fprintf(builder, " Deleted %d files (%s)",
+			s.status.FilesDeleted,
+			shared.FormatBytes(s.status.BytesDeleted))
+
+		if s.status.DeletionErrors > 0 {
+			fmt.Fprintf(builder, " • %d failed", s.status.DeletionErrors)
+		}
+
+		builder.WriteString("\n\n")
+	} else {
+		// Still in progress (shouldn't happen on sync screen, but handle gracefully)
+		builder.WriteString(s.spinner.View())
+		fmt.Fprintf(builder, " Deleting %d / %d files...\n\n",
+			s.status.FilesDeleted,
+			s.status.FilesToDelete)
+	}
+}
+
+// renderUnchangedSection renders the "Unchanged" count section.
+func (s SyncScreen) renderUnchangedSection(builder *strings.Builder) {
+	// Only show if there are unchanged files
+	if s.status.FilesInBoth == 0 {
+		return
+	}
+
+	builder.WriteString(shared.RenderDim(fmt.Sprintf("Unchanged: %d files (%s) — already in sync",
+		s.status.FilesInBoth,
+		shared.FormatBytes(s.status.BytesInBoth))))
 	builder.WriteString("\n\n")
 }
 

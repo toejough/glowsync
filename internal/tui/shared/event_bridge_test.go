@@ -68,7 +68,7 @@ func TestEventBridge_MultipleEvents(t *testing.T) {
 
 	// Receive all three
 	events := make([]syncengine.Event, 0, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		select {
 		case msg := <-eventChan:
 			eventMsg := msg.(shared.EngineEventMsg)

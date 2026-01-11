@@ -140,8 +140,8 @@ func TestIntegration_LargerFileSet_CountsMatch(t *testing.T) {
 	// Create 100 files in nested directories
 	numDirs := 10
 	numFilesPerDir := 10
-	expectedFileCount := numDirs * numFilesPerDir           // 100 files
-	expectedScanCount := expectedFileCount + numDirs        // files + directories
+	expectedFileCount := numDirs * numFilesPerDir    // 100 files
+	expectedScanCount := expectedFileCount + numDirs // files + directories
 	for i := 0; i < numDirs; i++ {
 		subdir := filepath.Join(sourceDir, "subdir"+string(rune('0'+i)))
 		err := os.MkdirAll(subdir, 0755)
