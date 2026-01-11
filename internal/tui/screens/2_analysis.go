@@ -539,6 +539,9 @@ func (s AnalysisScreen) renderAnalyzingContent() string {
 		s.renderMissingFromDestLine(&builder)
 	}
 
+	// Buffer line between Source and Dest sections
+	builder.WriteString("\n")
+
 	// Show dest section - both scan in parallel so no waiting needed
 	s.renderPathSection(&builder, "Dest", s.config.DestPath, s.destPhases, s.isDestPhaseActive(), false)
 
